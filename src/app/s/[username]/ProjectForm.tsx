@@ -2,8 +2,13 @@
 
 import { useActionState, useState } from "react";
 import { createProject, updateProject } from "@/app/actions/projects";
+import { suggestProjectPitch, suggestProjectDescription } from "@/app/actions/ai-content";
+import { AISuggestButton } from "@/components/AISuggestButton";
+import { ImagePickerField } from "@/components/ImagePickerField";
+import { MarkdownField } from "@/components/MarkdownField";
 
 const MAX_LINKS = 10;
+const MAX_GALLERY_IMAGES = 12;
 
 type ProjectFormProject = {
   id: string;
@@ -17,6 +22,8 @@ type ProjectFormProject = {
   startedAt: Date | null;
   completedAt: Date | null;
   externalLinksJson: string | null;
+  coverImageUrl: string | null;
+  galleryJson: string | null;
   skillIds?: string[];
 };
 
@@ -37,6 +44,10 @@ export function ProjectForm({ project, ownSkills = [] }: { project?: ProjectForm
     ? JSON.parse(project.externalLinksJson)
     : [];
   const [links, setLinks] = useState(initialLinks);
+  const initialGalleryUrls: string[] = project?.galleryJson ? JSON.parse(project.galleryJson) : [];
+
+  const [summaryValue, setSummaryValue] = useState(project?.summary ?? "");
+  const [descriptionValue, setDescriptionValue] = useState(project?.description ?? "");
 
   function updateLink(index: number, field: "label" | "url", value: string) {
     setLinks((prev) => prev.map((l, i) => (i === index ? { ...l, [field]: value } : l)));
@@ -77,21 +88,55 @@ export function ProjectForm({ project, ownSkills = [] }: { project?: ProjectForm
       </div>
       <div className="field">
         <label htmlFor={`projectSummary-${idSuffix}`}>Summary</label>
-        <input id={`projectSummary-${idSuffix}`} name="summary" defaultValue={project?.summary} maxLength={280} />
+        <input
+          id={`projectSummary-${idSuffix}`}
+          name="summary"
+          value={summaryValue}
+          onChange={(e) => setSummaryValue(e.target.value)}
+          maxLength={280}
+        />
       </div>
-      <div className="field">
-        <label htmlFor={`projectDescription-${idSuffix}`}>Description</label>
-        <textarea id={`projectDescription-${idSuffix}`} name="description" defaultValue={project?.description} rows={5} />
-      </div>
+      <AISuggestButton
+        label="AI: Suggest a pitch"
+        contextLabel="What's this project about? (optional)"
+        contextPlaceholder="e.g. a habit tracker with streaks"
+        generate={suggestProjectPitch}
+        onInsert={setSummaryValue}
+      />
+
+      <MarkdownField
+        id={`projectDescription-${idSuffix}`}
+        name="description"
+        label="Description"
+        value={descriptionValue}
+        onChange={setDescriptionValue}
+        rows={5}
+      />
+      <AISuggestButton
+        label="AI: Suggest a description"
+        contextLabel="What's this project about? (optional)"
+        contextPlaceholder="e.g. a habit tracker with streaks"
+        generate={suggestProjectDescription}
+        onInsert={setDescriptionValue}
+      />
+
       <div className="fieldRow">
-        <div className="field">
-          <label htmlFor={`projectCover-${idSuffix}`}>Cover image</label>
-          <input id={`projectCover-${idSuffix}`} name="coverImage" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-        </div>
-        <div className="field">
-          <label htmlFor={`projectGallery-${idSuffix}`}>Gallery (up to 12)</label>
-          <input id={`projectGallery-${idSuffix}`} name="gallery" type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" />
-        </div>
+        <ImagePickerField
+          id={`projectCover-${idSuffix}`}
+          name="coverImage"
+          label="Cover image"
+          mode="single"
+          initialUrls={project?.coverImageUrl ? [project.coverImageUrl] : []}
+        />
+        <ImagePickerField
+          id={`projectGallery-${idSuffix}`}
+          name="gallery"
+          label={`Gallery (up to ${MAX_GALLERY_IMAGES})`}
+          mode="multiple"
+          max={MAX_GALLERY_IMAGES}
+          initialUrls={initialGalleryUrls}
+          keepFieldName="keepGalleryUrls"
+        />
       </div>
       <div className="fieldRow">
         <div className="field">

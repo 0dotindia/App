@@ -155,11 +155,16 @@ export async function createProject(_prevState: ActionState, formData: FormData)
     galleryUrls.push(result.url);
   }
 
+  // New projects land at the end of the manual order, same "count of
+  // existing siblings" convention addSkill/addWorkExperience already use.
+  const projectCount = await db.project.count({ where: { ownerId: user.id } });
+
   const project = await db.project.create({
     data: {
       ownerId: user.id,
       slug,
       ...fields,
+      position: projectCount,
       coverImageUrl,
       galleryJson: galleryUrls.length > 0 ? JSON.stringify(galleryUrls) : null,
     },
@@ -190,22 +195,32 @@ export async function updateProject(_prevState: ActionState, formData: FormData)
     coverImageUrl = result.url;
   }
 
-  // Only replaces the gallery when new files are submitted — same
-  // "optional replace" posture updateOffering already established.
-  let galleryJson = project.galleryJson;
+  // Merges kept-existing + newly-uploaded instead of the old "any new file
+  // submitted wholesale-replaces the whole gallery" behavior — that silently
+  // deleted every other existing image the moment you added one more.
+  // ImagePickerField (gallery mode) always reports the full current keep
+  // set as `keepGalleryUrls`, one hidden input per URL; each is checked
+  // against the project's actual current gallery rather than trusted
+  // outright, since it arrives as ordinary form input.
+  const currentGalleryUrls: string[] = project.galleryJson ? JSON.parse(project.galleryJson) : [];
+  const keepGalleryUrls = formData
+    .getAll("keepGalleryUrls")
+    .filter((v): v is string => typeof v === "string")
+    .filter((url) => currentGalleryUrls.includes(url));
+
   const galleryFiles = formData
     .getAll("gallery")
     .filter((entry): entry is File => entry instanceof File && entry.size > 0)
-    .slice(0, MAX_GALLERY_IMAGES);
-  if (galleryFiles.length > 0) {
-    const galleryUrls: string[] = [];
-    for (const file of galleryFiles) {
-      const result = await saveUploadedImage(file, { maxBytes: MAX_IMAGE_BYTES, uploadedById: user.id });
-      if ("error" in result) return { error: result.error };
-      galleryUrls.push(result.url);
-    }
-    galleryJson = JSON.stringify(galleryUrls);
+    .slice(0, Math.max(0, MAX_GALLERY_IMAGES - keepGalleryUrls.length));
+  const newGalleryUrls: string[] = [];
+  for (const file of galleryFiles) {
+    const result = await saveUploadedImage(file, { maxBytes: MAX_IMAGE_BYTES, uploadedById: user.id });
+    if ("error" in result) return { error: result.error };
+    newGalleryUrls.push(result.url);
   }
+
+  const mergedGalleryUrls = [...keepGalleryUrls, ...newGalleryUrls];
+  const galleryJson = mergedGalleryUrls.length > 0 ? JSON.stringify(mergedGalleryUrls) : null;
 
   await db.project.update({
     where: { id: project.id },
@@ -216,6 +231,43 @@ export async function updateProject(_prevState: ActionState, formData: FormData)
   if (user.username) revalidatePath(`/${user.username.handle}`);
   revalidatePath(`/p/${project.slug}`);
   return undefined;
+}
+
+// Same shape as moveSkill (src/app/actions/skills.ts) with one addition:
+// Project.position defaults to 0 with no backfill (every pre-existing row
+// starts tied), so a plain two-row swap on tied values would be a same-
+// value no-op the first time any legacy project gets reordered. Every
+// sibling is renumbered to its current sequential display index first —
+// index and swapIndex are then guaranteed-distinct integers, so swapping
+// them always produces a real, visible reorder, and every other project's
+// position collapses onto real, distinct values as a side effect (so this
+// degrades to a plain two-row swap on every move after the first).
+export async function moveProject(formData: FormData): Promise<void> {
+  const user = await requireVerifiedUser();
+  const projectId = String(formData.get("projectId") ?? "");
+  const direction = String(formData.get("direction") ?? "");
+  if (direction !== "up" && direction !== "down") return;
+
+  const project = await db.project.findUnique({ where: { id: projectId } });
+  if (!project || project.ownerId !== user.id) return;
+
+  const siblings = await db.project.findMany({
+    where: { ownerId: project.ownerId },
+    orderBy: [{ position: "asc" }, { createdAt: "desc" }],
+  });
+  const index = siblings.findIndex((p) => p.id === projectId);
+  const swapIndex = direction === "up" ? index - 1 : index + 1;
+  if (swapIndex < 0 || swapIndex >= siblings.length) return;
+
+  const positions = siblings.map((_, i) => i);
+  [positions[index], positions[swapIndex]] = [positions[swapIndex], positions[index]];
+
+  await db.$transaction(
+    siblings.map((sibling, i) => db.project.update({ where: { id: sibling.id }, data: { position: positions[i] } })),
+  );
+
+  if (user.username) revalidatePath(`/s/${user.username.handle}`);
+  if (user.username) revalidatePath(`/${user.username.handle}`);
 }
 
 export async function archiveProject(formData: FormData): Promise<void> {

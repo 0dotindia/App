@@ -37,6 +37,12 @@ export default async function PodcastSettingsPage() {
           <div className="settingsGroup" style={{ marginBottom: "var(--space-6)" }}>
             <SettingsRow
               icon={Mic}
+              thumbnail={
+                podcast.coverUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- small settings-list thumbnail, not an optimizable static asset
+                  <img src={podcast.coverUrl} alt="" />
+                ) : undefined
+              }
               label={podcast.title}
               description={podcast.description ?? undefined}
               trailing={

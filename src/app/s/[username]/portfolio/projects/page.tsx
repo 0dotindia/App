@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { FolderGit2, Pencil, Plus, UserPlus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, FolderGit2, Pencil, Plus, UserPlus, X } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { archiveProject, removeCollaborator } from "@/app/actions/projects";
+import { archiveProject, moveProject, removeCollaborator } from "@/app/actions/projects";
 import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -19,7 +19,7 @@ export default async function ProjectsSettingsPage() {
 
   const myProjects = await db.project.findMany({
     where: { ownerId: currentUser.id },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ position: "asc" }, { createdAt: "desc" }],
     include: {
       collaborators: { include: { user: { include: { username: true } } } },
       skills: { select: { skillId: true } },
@@ -34,14 +34,30 @@ export default async function ProjectsSettingsPage() {
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Projects</h2>
       {myProjects.length === 0 && <EmptyState message="No projects yet." />}
-      {myProjects.map((project) => (
+      {myProjects.map((project, index) => (
         <div key={project.id} id={`project-${project.id}`} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow
             icon={FolderGit2}
+            thumbnail={
+              project.coverImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- small settings-list thumbnail, not an optimizable static asset
+                <img src={project.coverImageUrl} alt="" />
+              ) : undefined
+            }
             label={project.title}
             description={`${project.status} · ${project.visibility}`}
             trailing={
               <>
+                <form action={moveProject}>
+                  <input type="hidden" name="projectId" value={project.id} />
+                  <input type="hidden" name="direction" value="up" />
+                  <button type="submit" className="button buttonSecondary iconButton" disabled={index === 0} aria-label="Move up"><ChevronUp size={16} aria-hidden="true" /></button>
+                </form>
+                <form action={moveProject}>
+                  <input type="hidden" name="projectId" value={project.id} />
+                  <input type="hidden" name="direction" value="down" />
+                  <button type="submit" className="button buttonSecondary iconButton" disabled={index === myProjects.length - 1} aria-label="Move down"><ChevronDown size={16} aria-hidden="true" /></button>
+                </form>
                 <Link href={`/p/${project.slug}`} className="button buttonSecondary buttonSmall">View</Link>
                 {project.status !== "archived" && (
                   <form action={archiveProject}>

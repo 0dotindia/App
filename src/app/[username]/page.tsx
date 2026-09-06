@@ -32,6 +32,7 @@ import { NewsletterSubscribeForm } from "@/components/NewsletterSubscribeForm";
 import { BecomeAffiliateForm } from "@/components/BecomeAffiliateForm";
 import { endorseSkill } from "@/app/actions/skills";
 import { parsePortfolioLayout } from "@/lib/portfolio-layout";
+import { renderWikiMarkdown } from "@/lib/wiki-markdown";
 
 // Fallback cover photo for any profile that hasn't set its own (replaces
 // the plain gradient .profileCoverPlaceholder). Served from /public/defaults,
@@ -643,7 +644,7 @@ async function ProfileMonetizationAndPortfolio({
             ...(isOwner ? {} : { visibility: "public" }),
           },
           select: { id: true, slug: true, title: true, summary: true, likeCount: true },
-          orderBy: { createdAt: "desc" },
+          orderBy: [{ position: "asc" }, { createdAt: "desc" }],
         })
       : Promise.resolve([]),
     canViewFullProfile
@@ -983,6 +984,21 @@ async function ProfileMonetizationAndPortfolio({
             Podcast
           </summary>
           <div style={{ marginTop: "0.6rem", maxWidth: "32ch" }}>
+            {(podcast.coverUrl || podcast.description) && (
+              <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-start", marginBottom: "0.6rem" }}>
+                {podcast.coverUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element -- user-supplied URL, not an optimizable static asset
+                  <img
+                    src={podcast.coverUrl}
+                    alt=""
+                    style={{ width: 56, height: 56, borderRadius: "10px", objectFit: "cover", flexShrink: 0 }}
+                  />
+                )}
+                {podcast.description && (
+                  <div className="mutedText" style={{ fontSize: "0.85rem" }}>{renderWikiMarkdown(podcast.description)}</div>
+                )}
+              </div>
+            )}
             <PodcastEpisodesList
               podcastId={podcast.id}
               rssSlug={podcast.rssSlug}

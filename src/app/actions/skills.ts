@@ -36,6 +36,15 @@ export async function addSkill(_prevState: ActionState, formData: FormData): Pro
   return undefined;
 }
 
+// Thin adapter so AISuggestChipsButton (a plain (item: string) => Promise
+// callback, not a <form action>) can call the real addSkill action —
+// AISuggestChipsButton passes a name directly, addSkill wants FormData.
+export async function addSkillFromSuggestion(name: string): Promise<ActionState> {
+  const formData = new FormData();
+  formData.set("name", name);
+  return addSkill(undefined, formData);
+}
+
 export async function deleteSkill(formData: FormData): Promise<void> {
   const user = await requireOwnProfile();
   const skillId = String(formData.get("skillId") ?? "");

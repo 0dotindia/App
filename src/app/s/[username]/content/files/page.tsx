@@ -30,6 +30,12 @@ export default async function FilesSettingsPage() {
         <div key={file.id} id={`file-${file.id}`} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow
             icon={FileIcon}
+            thumbnail={
+              file.coverImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- small settings-list thumbnail, not an optimizable static asset
+                <img src={file.coverImageUrl} alt="" />
+              ) : undefined
+            }
             label={file.title}
             description={`${file.visibility} · ${file.downloadCount} downloads`}
             trailing={

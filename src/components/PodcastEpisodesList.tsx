@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { requestEpisodeAudioUrl, issuePrivateFeedUrl } from "@/app/actions/podcasts";
+import { renderWikiMarkdown } from "@/lib/wiki-markdown";
 
 export type EpisodeData = {
   id: string;
@@ -63,6 +64,11 @@ export function PodcastEpisodesList({
               Play
             </button>
           </div>
+          {ep.description && (
+            <div className="mutedText" style={{ fontSize: "0.85rem", marginTop: "0.15rem" }}>
+              {renderWikiMarkdown(ep.description)}
+            </div>
+          )}
           {errors[ep.id] && <p className="errorText" style={{ margin: "0.2rem 0" }}>{errors[ep.id]}</p>}
         </div>
       ))}

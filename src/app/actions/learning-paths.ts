@@ -27,6 +27,34 @@ export async function createLearningPath(_prevState: ActionState, formData: Form
   return undefined;
 }
 
+// Previously didn't exist at all — a learning path could be created but
+// never edited afterward. Mirrors createLearningPath's validation against
+// an existing row instead.
+export async function updateLearningPath(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireVerifiedUser();
+  const pathId = String(formData.get("pathId") ?? "");
+
+  const path = await db.learningPath.findUnique({ where: { id: pathId } });
+  if (!path || path.creatorId !== user.id) return { error: "Learning path not found." };
+
+  const title = String(formData.get("title") ?? "").trim();
+  if (title.length < 1 || title.length > 160) return { error: "Title must be 1-160 characters." };
+
+  const courseIds = formData.getAll("courseIds").map(String).filter(Boolean);
+  if (courseIds.length === 0) return { error: "Select at least one course." };
+
+  const ownedCount = await db.course.count({ where: { id: { in: courseIds }, creatorId: user.id } });
+  if (ownedCount !== courseIds.length) return { error: "You can only add your own courses to a learning path." };
+
+  await db.learningPath.update({
+    where: { id: path.id },
+    data: { title, courseIdsJson: JSON.stringify(courseIds) },
+  });
+
+  revalidatePath(`/s/${user.username!.handle}/content/learning-paths`);
+  return undefined;
+}
+
 export async function deleteLearningPath(formData: FormData): Promise<void> {
   const user = await requireVerifiedUser();
   const id = String(formData.get("pathId") ?? "");

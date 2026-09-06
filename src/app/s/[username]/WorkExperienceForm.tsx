@@ -1,7 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { addWorkExperience, updateWorkExperience } from "@/app/actions/resume";
+import { suggestWorkExperienceBullets } from "@/app/actions/ai-content";
+import { AISuggestButton } from "@/components/AISuggestButton";
+import { MarkdownField } from "@/components/MarkdownField";
 
 type WorkExperienceFormItem = {
   id: string;
@@ -21,6 +24,7 @@ export function WorkExperienceForm({ item }: { item?: WorkExperienceFormItem }) 
   const action = item ? updateWorkExperience : addWorkExperience;
   const [state, formAction, pending] = useActionState(action, undefined);
   const idSuffix = item?.id ?? "new";
+  const [descriptionValue, setDescriptionValue] = useState(item?.description ?? "");
 
   return (
     <form action={formAction} className="settingsForm">
@@ -47,10 +51,22 @@ export function WorkExperienceForm({ item }: { item?: WorkExperienceFormItem }) 
           <input id={`weEnd-${idSuffix}`} name="endDate" type="date" defaultValue={toDateInputValue(item?.endDate ?? null)} />
         </div>
       </div>
-      <div className="field">
-        <label htmlFor={`weDescription-${idSuffix}`}>Description</label>
-        <textarea id={`weDescription-${idSuffix}`} name="description" defaultValue={item?.description} maxLength={2000} rows={3} />
-      </div>
+      <MarkdownField
+        id={`weDescription-${idSuffix}`}
+        name="description"
+        label="Description"
+        value={descriptionValue}
+        onChange={setDescriptionValue}
+        maxLength={2000}
+        rows={3}
+      />
+      <AISuggestButton
+        label="AI: Suggest bullet points"
+        contextLabel="Company & title (optional)"
+        contextPlaceholder="e.g. Acme Inc — Senior Engineer"
+        generate={suggestWorkExperienceBullets}
+        onInsert={setDescriptionValue}
+      />
       {state?.error && <p className="errorText">{state.error}</p>}
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Saving…" : item ? "Save changes" : "Add work experience"}

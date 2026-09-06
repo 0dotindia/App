@@ -1,7 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createBookChapter, updateBookChapter } from "@/app/actions/knowledge-pages";
+import { suggestWikiPageDraft } from "@/app/actions/ai-content";
+import { AISuggestButton } from "@/components/AISuggestButton";
+import { MarkdownField } from "@/components/MarkdownField";
 
 type BookChapterFormChapter = {
   id: string;
@@ -10,13 +13,14 @@ type BookChapterFormChapter = {
   body: string;
   visibility: string;
   parentPageId: string | null;
-  position: number;
 };
 
 // Mirrors WikiPageForm.tsx (the profile-owned equivalent) exactly, scoped
 // to a book via a hidden bookId field instead of implicit profile
 // ownership — same underlying WikiPage table and revision mechanics,
-// spec §6.1.
+// spec §6.1. Reordering among sibling chapters happens via the up/down
+// buttons on the book's chapter list (moveWikiPage), not a raw position
+// field here.
 export function BookChapterForm({
   bookId,
   chapter,
@@ -29,6 +33,7 @@ export function BookChapterForm({
   const action = chapter ? updateBookChapter : createBookChapter;
   const [state, formAction, pending] = useActionState(action, undefined);
   const idSuffix = chapter?.id ?? "new";
+  const [bodyValue, setBodyValue] = useState(chapter?.body ?? "");
 
   return (
     <form action={formAction} className="settingsForm">
@@ -44,10 +49,21 @@ export function BookChapterForm({
         <label htmlFor={`chapterTitle-${idSuffix}`}>Title</label>
         <input id={`chapterTitle-${idSuffix}`} name="title" defaultValue={chapter?.title} maxLength={120} required />
       </div>
-      <div className="field">
-        <label htmlFor={`chapterBody-${idSuffix}`}>Content</label>
-        <textarea id={`chapterBody-${idSuffix}`} name="body" defaultValue={chapter?.body} rows={10} required />
-      </div>
+      <MarkdownField
+        id={`chapterBody-${idSuffix}`}
+        name="body"
+        label="Content"
+        value={bodyValue}
+        onChange={setBodyValue}
+        rows={10}
+      />
+      <AISuggestButton
+        label="AI: Draft this chapter"
+        contextLabel="Topic or working title"
+        contextPlaceholder="e.g. Chapter 1: Getting started"
+        generate={suggestWikiPageDraft}
+        onInsert={(text) => setBodyValue((current) => (current.trim().length > 0 ? `${current}\n\n${text}` : text))}
+      />
       <div className="fieldRow">
         <div className="field">
           <label htmlFor={`chapterVisibility-${idSuffix}`}>Visibility</label>
@@ -65,10 +81,6 @@ export function BookChapterForm({
               <option key={c.id} value={c.id}>{c.title}</option>
             ))}
           </select>
-        </div>
-        <div className="field">
-          <label htmlFor={`chapterPosition-${idSuffix}`}>Position</label>
-          <input id={`chapterPosition-${idSuffix}`} name="position" type="number" defaultValue={chapter?.position ?? 0} className="textInput" />
         </div>
       </div>
 

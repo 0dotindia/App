@@ -1,17 +1,29 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createPublishedFile, updatePublishedFile } from "@/app/actions/published-files";
+import { suggestFileDescription } from "@/app/actions/ai-content";
+import { AISuggestButton } from "@/components/AISuggestButton";
+import { ImagePickerField } from "@/components/ImagePickerField";
+import { MarkdownField } from "@/components/MarkdownField";
 
-type PublishedFileFormFile = { id: string; slug: string; title: string; description: string; visibility: string };
+type PublishedFileFormFile = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  visibility: string;
+  coverImageUrl: string | null;
+};
 
 export function PublishedFileForm({ file }: { file?: PublishedFileFormFile }) {
   const action = file ? updatePublishedFile : createPublishedFile;
   const [state, formAction, pending] = useActionState(action, undefined);
   const idSuffix = file?.id ?? "new";
+  const [descriptionValue, setDescriptionValue] = useState(file?.description ?? "");
 
   return (
-    <form action={formAction} className="settingsForm">
+    <form action={formAction} className="settingsForm" encType="multipart/form-data">
       {file && <input type="hidden" name="fileId" value={file.id} />}
       {!file && (
         <div className="field">
@@ -23,15 +35,30 @@ export function PublishedFileForm({ file }: { file?: PublishedFileFormFile }) {
         <label htmlFor={`fileTitle-${idSuffix}`}>Title</label>
         <input id={`fileTitle-${idSuffix}`} name="title" defaultValue={file?.title} maxLength={200} required />
       </div>
-      <div className="field">
-        <label htmlFor={`fileDescription-${idSuffix}`}>Description</label>
-        <textarea id={`fileDescription-${idSuffix}`} name="description" defaultValue={file?.description} rows={4} maxLength={2000} />
-      </div>
+      <MarkdownField
+        id={`fileDescription-${idSuffix}`}
+        name="description"
+        label="Description"
+        value={descriptionValue}
+        onChange={setDescriptionValue}
+        rows={4}
+        maxLength={2000}
+      />
+      <AISuggestButton
+        label="AI: Suggest a description"
+        contextLabel="What's this file? (optional)"
+        contextPlaceholder="e.g. a printable budgeting worksheet"
+        generate={suggestFileDescription}
+        onInsert={setDescriptionValue}
+      />
       <div className="fieldRow">
-        <div className="field">
-          <label htmlFor={`fileCover-${idSuffix}`}>Cover image</label>
-          <input id={`fileCover-${idSuffix}`} name="coverImage" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-        </div>
+        <ImagePickerField
+          id={`fileCover-${idSuffix}`}
+          name="coverImage"
+          label="Cover image"
+          mode="single"
+          initialUrls={file?.coverImageUrl ? [file.coverImageUrl] : []}
+        />
         <div className="field">
           <label htmlFor={`filePdf-${idSuffix}`}>PDF{file ? " (leave blank to keep current)" : ""}</label>
           <input id={`filePdf-${idSuffix}`} name="file" type="file" accept="application/pdf" required={!file} />

@@ -3,10 +3,12 @@ import { redirect } from "next/navigation";
 import { ChevronUp, ChevronDown, Sparkles, X } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { deleteSkill, moveSkill } from "@/app/actions/skills";
+import { deleteSkill, moveSkill, addSkillFromSuggestion } from "@/app/actions/skills";
+import { suggestSkills } from "@/app/actions/ai-content";
 import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { AISuggestChipsButton } from "@/components/AISuggestChipsButton";
 import { AddSkillForm } from "../../AddSkillForm";
 
 export const metadata: Metadata = { title: "Skills" };
@@ -15,10 +17,22 @@ export default async function SkillsSettingsPage() {
   const currentUser = await getCurrentUser();
   if (!currentUser) redirect("/login");
 
-  const mySkills = await db.skill.findMany({
-    where: { profile: { userId: currentUser.id } },
-    orderBy: { position: "asc" },
-  });
+  const [mySkills, profileRow, myProjects] = await Promise.all([
+    db.skill.findMany({ where: { profile: { userId: currentUser.id } }, orderBy: { position: "asc" } }),
+    db.profile.findUnique({ where: { userId: currentUser.id } }),
+    db.project.findMany({ where: { ownerId: currentUser.id }, select: { title: true, summary: true }, take: 5 }),
+  ]);
+
+  // Assembled server-side (not typed by the user in the AI button's own
+  // context field, unlike every other AISuggestButton use) so the
+  // suggestion reflects the owner's actual portfolio without a second
+  // round-trip to collect input.
+  const skillSuggestionContext = [
+    profileRow?.bio ? `Bio: ${profileRow.bio}` : null,
+    myProjects.length > 0 ? `Projects: ${myProjects.map((p) => `${p.title} — ${p.summary}`).join("; ")}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   return (
     <div className="settingsSection">
@@ -67,6 +81,13 @@ export default async function SkillsSettingsPage() {
       <div className="settingsGroup">
         <div className="settingsAddPanelBody">
           <AddSkillForm />
+          <div style={{ marginTop: "0.5rem" }}>
+            <AISuggestChipsButton
+              label="AI: Suggest skills"
+              generate={suggestSkills.bind(null, skillSuggestionContext)}
+              onPick={addSkillFromSuggestion}
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -2,6 +2,9 @@
 
 import { useActionState, useRef, useState } from "react";
 import { createEpisode } from "@/app/actions/podcasts";
+import { suggestPodcastShowNotes } from "@/app/actions/ai-content";
+import { AISuggestButton } from "@/components/AISuggestButton";
+import { MarkdownField } from "@/components/MarkdownField";
 
 // spec §9.1: episode audio + optional tier gate, uploaded to
 // protected-storage.ts (never a public URL, even for ungated episodes —
@@ -12,6 +15,7 @@ import { createEpisode } from "@/app/actions/podcasts";
 export function EpisodeForm({ podcastId, ownTiers }: { podcastId: string; ownTiers: { id: string; name: string }[] }) {
   const [state, formAction, pending] = useActionState(createEpisode, undefined);
   const [durationS, setDurationS] = useState<number | null>(null);
+  const [descriptionValue, setDescriptionValue] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -29,10 +33,22 @@ export function EpisodeForm({ podcastId, ownTiers }: { podcastId: string; ownTie
         <label htmlFor={`epTitle-${podcastId}`}>Title</label>
         <input id={`epTitle-${podcastId}`} name="title" maxLength={120} required />
       </div>
-      <div className="field">
-        <label htmlFor={`epDescription-${podcastId}`}>Description</label>
-        <textarea id={`epDescription-${podcastId}`} name="description" maxLength={2000} rows={2} />
-      </div>
+      <MarkdownField
+        id={`epDescription-${podcastId}`}
+        name="description"
+        label="Description"
+        value={descriptionValue}
+        onChange={setDescriptionValue}
+        maxLength={2000}
+        rows={2}
+      />
+      <AISuggestButton
+        label="AI: Suggest show notes"
+        contextLabel="What's this episode about? (optional)"
+        contextPlaceholder="e.g. interview with a solo developer"
+        generate={suggestPodcastShowNotes}
+        onInsert={setDescriptionValue}
+      />
       <div className="field">
         <label htmlFor={`epFile-${podcastId}`}>Audio file</label>
         <input id={`epFile-${podcastId}`} name="file" type="file" accept="audio/mpeg,audio/mp4" onChange={handleFileChange} required />

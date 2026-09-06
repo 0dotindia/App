@@ -5,12 +5,14 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
+import { saveUploadedImage } from "@/lib/uploads";
 import { getCurrentUser } from "@/lib/session";
 import { hasTierAccess } from "@/lib/tier-access";
 import { generateFeedToken } from "@/lib/podcasts";
 import type { ActionState } from "@/app/actions/auth";
 
 const MAX_AUDIO_BYTES = 300 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 function slugify(title: string): string {
   return (
@@ -36,7 +38,15 @@ export async function createPodcast(_prevState: ActionState, formData: FormData)
 
   const rssSlug = `${slugify(title)}-${randomBytes(4).toString("hex")}`;
 
-  await db.podcast.create({ data: { creatorId: user.id, title, description, rssSlug } });
+  let coverUrl: string | undefined;
+  const coverFile = formData.get("coverImage");
+  if (coverFile instanceof File && coverFile.size > 0) {
+    const result = await saveUploadedImage(coverFile, { maxBytes: MAX_IMAGE_BYTES, uploadedById: user.id });
+    if ("error" in result) return { error: result.error };
+    coverUrl = result.url;
+  }
+
+  await db.podcast.create({ data: { creatorId: user.id, title, description, rssSlug, coverUrl } });
 
   if (user.username) revalidatePath(`/s/${user.username.handle}`);
   return undefined;
@@ -55,7 +65,15 @@ export async function updatePodcast(_prevState: ActionState, formData: FormData)
   const description = String(formData.get("description") ?? "").trim();
   if (description.length > 2000) return { error: "Description must be 2000 characters or fewer." };
 
-  await db.podcast.update({ where: { id: podcast.id }, data: { title, description } });
+  let coverUrl = podcast.coverUrl;
+  const coverFile = formData.get("coverImage");
+  if (coverFile instanceof File && coverFile.size > 0) {
+    const result = await saveUploadedImage(coverFile, { maxBytes: MAX_IMAGE_BYTES, uploadedById: user.id });
+    if ("error" in result) return { error: result.error };
+    coverUrl = result.url;
+  }
+
+  await db.podcast.update({ where: { id: podcast.id }, data: { title, description, coverUrl } });
 
   if (user.username) revalidatePath(`/s/${user.username.handle}`);
   return undefined;

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Route } from "lucide-react";
+import { Pencil, Route } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { deleteLearningPath } from "@/app/actions/learning-paths";
@@ -40,12 +40,11 @@ export default async function LearningPathsSettingsPage() {
       {paths.length === 0 ? (
         <EmptyState message="No learning paths yet." />
       ) : (
-        <div className="settingsGroup" style={{ marginTop: "1.5rem" }}>
-          {paths.map((path) => {
-            const courseIds = JSON.parse(path.courseIdsJson) as string[];
-            return (
+        paths.map((path) => {
+          const courseIds = JSON.parse(path.courseIdsJson) as string[];
+          return (
+            <div key={path.id} className="settingsGroup" style={{ marginTop: "1.5rem", marginBottom: "var(--space-3)" }}>
               <SettingsRow
-                key={path.id}
                 icon={Route}
                 label={path.title}
                 description={`${courseIds.length} courses`}
@@ -64,9 +63,22 @@ export default async function LearningPathsSettingsPage() {
                   </form>
                 }
               />
-            );
-          })}
-        </div>
+              <details>
+                <summary className="settingsRow settingsAddTrigger">
+                  <span className="settingsRowIcon" aria-hidden="true">
+                    <Pencil size={16} />
+                  </span>
+                  <span className="settingsRowText">
+                    <span className="settingsRowLabel">Edit courses</span>
+                  </span>
+                </summary>
+                <div className="settingsAddPanelBody">
+                  <LearningPathForm courses={courses} path={{ id: path.id, title: path.title, courseIds }} />
+                </div>
+              </details>
+            </div>
+          );
+        })
       )}
     </div>
   );

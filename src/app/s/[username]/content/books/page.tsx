@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Book as BookIcon, FileText, Pencil, Plus, X } from "lucide-react";
+import { Book as BookIcon, ChevronDown, ChevronUp, FileText, Pencil, Plus, X } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { listAllBookChapters } from "@/lib/wiki";
 import { deleteBook } from "@/app/actions/books";
-import { deleteBookChapter } from "@/app/actions/knowledge-pages";
+import { deleteBookChapter, moveWikiPage } from "@/app/actions/knowledge-pages";
 import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -46,6 +46,12 @@ export default async function BooksSettingsPage() {
           <div key={book.id} id={`book-${book.id}`} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
             <SettingsRow
               icon={BookIcon}
+              thumbnail={
+                book.coverImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- small settings-list thumbnail, not an optimizable static asset
+                  <img src={book.coverImageUrl} alt="" />
+                ) : undefined
+              }
               label={book.title}
               description={`${book.status} · ${book.visibility}`}
               trailing={
@@ -68,27 +74,46 @@ export default async function BooksSettingsPage() {
               }
             />
 
-            {chapters.map((chapter) => (
+            {chapters.map((chapter) => {
+              // Same per-parent scoping as content/wiki/page.tsx — chapters
+              // is already grouped by parentPageId (listAllBookChapters),
+              // but index/isFirst/isLast still need computing per group.
+              const siblings = chapters.filter((c) => c.parentPageId === chapter.parentPageId);
+              const siblingIndex = siblings.findIndex((c) => c.id === chapter.id);
+              return (
               <SettingsRow
                 key={chapter.id}
                 icon={FileText}
                 label={`${chapter.parentPageId ? "— " : ""}${chapter.title}`}
                 trailing={
-                  <form action={deleteBookChapter}>
-                    <input type="hidden" name="pageId" value={chapter.id} />
-                    <ConfirmButton
-                      className="button buttonSecondary iconButton"
-                      title="Delete this chapter?"
-                      description="This can't be undone."
-                      confirmLabel="Delete"
-                      aria-label="Delete chapter"
-                    >
-                      <X size={16} aria-hidden="true" />
-                    </ConfirmButton>
-                  </form>
+                  <>
+                    <form action={moveWikiPage}>
+                      <input type="hidden" name="pageId" value={chapter.id} />
+                      <input type="hidden" name="direction" value="up" />
+                      <button type="submit" className="button buttonSecondary iconButton" disabled={siblingIndex === 0} aria-label="Move up"><ChevronUp size={16} aria-hidden="true" /></button>
+                    </form>
+                    <form action={moveWikiPage}>
+                      <input type="hidden" name="pageId" value={chapter.id} />
+                      <input type="hidden" name="direction" value="down" />
+                      <button type="submit" className="button buttonSecondary iconButton" disabled={siblingIndex === siblings.length - 1} aria-label="Move down"><ChevronDown size={16} aria-hidden="true" /></button>
+                    </form>
+                    <form action={deleteBookChapter}>
+                      <input type="hidden" name="pageId" value={chapter.id} />
+                      <ConfirmButton
+                        className="button buttonSecondary iconButton"
+                        title="Delete this chapter?"
+                        description="This can't be undone."
+                        confirmLabel="Delete"
+                        aria-label="Delete chapter"
+                      >
+                        <X size={16} aria-hidden="true" />
+                      </ConfirmButton>
+                    </form>
+                  </>
                 }
               />
-            ))}
+              );
+            })}
 
             <details>
               <summary className="settingsRow settingsAddTrigger">

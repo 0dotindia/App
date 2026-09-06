@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { EngagementSection } from "@/components/EngagementSection";
 import { PublishedFileDownloadButton } from "@/components/PublishedFileDownloadButton";
+import { renderWikiMarkdown } from "@/lib/wiki-markdown";
 
 function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -62,7 +63,7 @@ export default async function PublishedFilePage({ params }: { params: Promise<{ 
         </div>
       )}
 
-      {file.description && <p style={{ marginTop: "0.75rem" }}>{file.description}</p>}
+      {file.description && <div style={{ marginTop: "0.75rem" }}>{renderWikiMarkdown(file.description)}</div>}
 
       <div style={{ marginTop: "0.75rem" }}>
         {file.visibility === "public" && file.fileUrl ? (

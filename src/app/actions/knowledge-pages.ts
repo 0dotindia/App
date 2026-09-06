@@ -20,12 +20,7 @@ import type { ActionState } from "@/app/actions/auth";
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 const VISIBILITY_VALUES = new Set(["public", "unlisted", "private"]);
 
-function parsePosition(raw: FormDataEntryValue | null): number {
-  const n = Number(raw);
-  return Number.isFinite(n) ? Math.trunc(n) : 0;
-}
-
-type PageFields = { slug: string; title: string; body: string; visibility: string; parentPageId: string | null; position: number };
+type PageFields = { slug: string; title: string; body: string; visibility: string; parentPageId: string | null };
 
 function parseAndValidatePageFields(formData: FormData): { error: string } | PageFields {
   const slug = String(formData.get("slug") ?? "").trim().toLowerCase();
@@ -41,9 +36,16 @@ function parseAndValidatePageFields(formData: FormData): { error: string } | Pag
   const visibility = VISIBILITY_VALUES.has(visibilityRaw) ? visibilityRaw : "public";
 
   const parentPageId = String(formData.get("parentPageId") ?? "").trim() || null;
-  const position = parsePosition(formData.get("position"));
 
-  return { slug, title, body, visibility, parentPageId, position };
+  return { slug, title, body, visibility, parentPageId };
+}
+
+// New pages/chapters land at the end of their parent's sibling order — same
+// "count of existing siblings" convention addSkill/createProject use.
+// Reordering itself happens only through moveWikiPage below, never a
+// hand-typed position field.
+function nextPositionUnder(owner: { profileId: string | null; bookId: string | null }, parentPageId: string | null) {
+  return db.wikiPage.count({ where: { profileId: owner.profileId, bookId: owner.bookId, parentPageId } });
 }
 
 // ---------------------------------------------------------------------
@@ -70,6 +72,8 @@ export async function createProfileWikiPage(_prevState: ActionState, formData: F
     if (!parent || parent.profileId !== profile.id) return { error: "Invalid parent page." };
   }
 
+  const position = await nextPositionUnder({ profileId: profile.id, bookId: null }, fields.parentPageId);
+
   // Nested create + currentRevisionId two-step — same chicken-and-egg
   // resolution as createWikiPage (wiki.ts), unchanged by ownership type.
   const page = await db.wikiPage.create({
@@ -79,7 +83,7 @@ export async function createProfileWikiPage(_prevState: ActionState, formData: F
       title: fields.title,
       kind,
       parentPageId: fields.parentPageId,
-      position: fields.position,
+      position,
       visibility: fields.visibility,
       revisions: { create: [{ body: fields.body, editedBy: user.id }] },
     },
@@ -111,6 +115,16 @@ export async function updateProfileWikiPage(_prevState: ActionState, formData: F
     if (!parent || parent.profileId !== profile.id) return { error: "Invalid parent page." };
   }
 
+  // Reordering within a parent happens only through moveWikiPage — this
+  // form no longer collects a position at all. Moving to a *different*
+  // parent still needs a real position under that parent though (its old
+  // number belongs to a different sibling list), so it's recomputed only
+  // when parentPageId actually changed; otherwise position is left as-is.
+  const position =
+    fields.parentPageId !== page.parentPageId
+      ? await nextPositionUnder({ profileId: profile.id, bookId: null }, fields.parentPageId)
+      : page.position;
+
   const revision = await db.wikiRevision.create({ data: { wikiPageId: page.id, body: fields.body, editedBy: user.id } });
   await db.wikiPage.update({
     where: { id: page.id },
@@ -118,7 +132,7 @@ export async function updateProfileWikiPage(_prevState: ActionState, formData: F
       title: fields.title,
       kind,
       parentPageId: fields.parentPageId,
-      position: fields.position,
+      position,
       visibility: fields.visibility,
       currentRevisionId: revision.id,
     },
@@ -175,6 +189,8 @@ export async function createBookChapter(_prevState: ActionState, formData: FormD
     if (!parent || parent.bookId !== bookId) return { error: "Invalid parent chapter." };
   }
 
+  const position = await nextPositionUnder({ profileId: null, bookId }, fields.parentPageId);
+
   const page = await db.wikiPage.create({
     data: {
       bookId,
@@ -182,7 +198,7 @@ export async function createBookChapter(_prevState: ActionState, formData: FormD
       title: fields.title,
       kind: "book_chapter",
       parentPageId: fields.parentPageId,
-      position: fields.position,
+      position,
       visibility: fields.visibility,
       revisions: { create: [{ body: fields.body, editedBy: user.id }] },
     },
@@ -211,13 +227,21 @@ export async function updateBookChapter(_prevState: ActionState, formData: FormD
     if (!parent || parent.bookId !== page.bookId) return { error: "Invalid parent chapter." };
   }
 
+  // Same posture as updateProfileWikiPage: reordering under an unchanged
+  // parent happens only through moveWikiPage; a real parent change still
+  // needs a fresh position under the new sibling list.
+  const position =
+    fields.parentPageId !== page.parentPageId
+      ? await nextPositionUnder({ profileId: null, bookId: page.bookId }, fields.parentPageId)
+      : page.position;
+
   const revision = await db.wikiRevision.create({ data: { wikiPageId: page.id, body: fields.body, editedBy: user.id } });
   await db.wikiPage.update({
     where: { id: page.id },
     data: {
       title: fields.title,
       parentPageId: fields.parentPageId,
-      position: fields.position,
+      position,
       visibility: fields.visibility,
       currentRevisionId: revision.id,
     },
@@ -244,4 +268,42 @@ export async function deleteBookChapter(formData: FormData): Promise<void> {
   ]);
 
   if (user.username) revalidatePath(`/${user.username.handle}/books/${page.book.slug}`);
+}
+
+// One shared reorder action for both owner types (same table). Same
+// tie-safe renumber-then-swap approach as moveProject (src/app/actions/
+// projects.ts): position defaults to 0 with no backfill for pre-existing
+// rows, so a plain two-row swap would no-op the first time any legacy page
+// is reordered. Siblings are scoped to the same owner *and* the same
+// parentPageId — unlike Project's flat list, a wiki page only ever competes
+// for order with its actual siblings in the hierarchy.
+export async function moveWikiPage(formData: FormData): Promise<void> {
+  const user = await requireOwnProfile();
+  const profile = user.profile!;
+  const pageId = String(formData.get("pageId") ?? "");
+  const direction = String(formData.get("direction") ?? "");
+  if (direction !== "up" && direction !== "down") return;
+
+  const page = await db.wikiPage.findUnique({ where: { id: pageId }, include: { book: true } });
+  if (!page) return;
+  const owns = page.profileId === profile.id || page.book?.profileId === profile.id;
+  if (!owns) return;
+
+  const siblings = await db.wikiPage.findMany({
+    where: { profileId: page.profileId, bookId: page.bookId, parentPageId: page.parentPageId },
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+  });
+  const index = siblings.findIndex((p) => p.id === pageId);
+  const swapIndex = direction === "up" ? index - 1 : index + 1;
+  if (swapIndex < 0 || swapIndex >= siblings.length) return;
+
+  const positions = siblings.map((_, i) => i);
+  [positions[index], positions[swapIndex]] = [positions[swapIndex], positions[index]];
+
+  await db.$transaction(
+    siblings.map((sibling, i) => db.wikiPage.update({ where: { id: sibling.id }, data: { position: positions[i] } })),
+  );
+
+  if (page.profileId && user.username) revalidatePath(`/${user.username.handle}/wiki`);
+  if (page.book && user.username) revalidatePath(`/${user.username.handle}/books/${page.book.slug}`);
 }

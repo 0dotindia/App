@@ -9,6 +9,7 @@ import { ChevronRight, type LucideIcon } from "lucide-react";
 // <div> for hosting an inline control like a switch.
 export function SettingsRow({
   icon: Icon,
+  thumbnail,
   label,
   description,
   trailing,
@@ -16,6 +17,10 @@ export function SettingsRow({
   chevron,
 }: {
   icon?: LucideIcon;
+  // A real image (e.g. a project's cover) in place of the icon slot —
+  // additive, every existing icon-only call site is unaffected. Takes
+  // priority over `icon` when both are given.
+  thumbnail?: ReactNode;
   label: ReactNode;
   description?: ReactNode;
   trailing?: ReactNode;
@@ -26,10 +31,16 @@ export function SettingsRow({
 
   const content = (
     <>
-      {Icon && (
-        <span className="settingsRowIcon" aria-hidden="true">
-          <Icon size={18} />
+      {thumbnail ? (
+        <span className="settingsRowThumbnail" aria-hidden="true">
+          {thumbnail}
         </span>
+      ) : (
+        Icon && (
+          <span className="settingsRowIcon" aria-hidden="true">
+            <Icon size={18} />
+          </span>
+        )
       )}
       <span className="settingsRowText">
         <span className="settingsRowLabel">{label}</span>

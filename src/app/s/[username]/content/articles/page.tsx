@@ -49,6 +49,12 @@ export default async function ArticlesSettingsPage() {
         <div key={article.id} id={`article-${article.id}`} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow
             icon={FileText}
+            thumbnail={
+              article.coverImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- small settings-list thumbnail, not an optimizable static asset
+                <img src={article.coverImageUrl} alt="" />
+              ) : undefined
+            }
             label={article.title}
             description={`${FORMAT_LABEL[article.format]} · ${article.status} · ${article.visibility}`}
             trailing={

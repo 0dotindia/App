@@ -88,6 +88,61 @@ class StubAIProvider implements AIProvider {
         modelName: STUB_MODEL_NAME,
       };
     }
+    if (kind === "project_pitch") {
+      const subject = trimmed.length > 0 ? trimmed : "this project";
+      return { text: `A focused take on ${subject}, built to solve a real problem for its users.`, costTokens, modelName: STUB_MODEL_NAME };
+    }
+    if (kind === "project_description") {
+      const title = trimmed.length > 0 ? trimmed : "This project";
+      return {
+        text: `${title} started as a way to explore a problem worth solving. Replace this paragraph with the real story, then expand below.\n\n- What it does\n- Why it matters\n- What's next`,
+        costTokens,
+        modelName: STUB_MODEL_NAME,
+      };
+    }
+    if (kind === "work_experience_bullets") {
+      const role = trimmed.length > 0 ? trimmed : "this role";
+      return {
+        text: `- Contributed to ${role} across its core responsibilities\n- Collaborated with the team to ship meaningful improvements\n- Replace these with your own real accomplishments`,
+        costTokens,
+        modelName: STUB_MODEL_NAME,
+      };
+    }
+    if (kind === "skill_suggestions") {
+      return { text: "Communication, Problem solving, Project management", costTokens, modelName: STUB_MODEL_NAME };
+    }
+    if (kind === "book_description") {
+      const title = trimmed.length > 0 ? trimmed : "This book";
+      return {
+        text: `${title} explores a subject worth understanding, written for readers who want the real depth. Replace this paragraph with the real pitch.`,
+        costTokens,
+        modelName: STUB_MODEL_NAME,
+      };
+    }
+    if (kind === "wiki_page_draft") {
+      const title = trimmed.length > 0 ? trimmed : "this topic";
+      return {
+        text: `# ${title}\n\nHere's a first draft to get you started. Replace this paragraph with your own introduction, then expand on the key points below.\n\n- Key point one\n- Key point two\n- Key point three`,
+        costTokens,
+        modelName: STUB_MODEL_NAME,
+      };
+    }
+    if (kind === "file_description") {
+      const title = trimmed.length > 0 ? trimmed : "This file";
+      return {
+        text: `${title} is a focused, practical resource — replace this paragraph with what's actually inside and who it's for.`,
+        costTokens,
+        modelName: STUB_MODEL_NAME,
+      };
+    }
+    if (kind === "podcast_show_notes") {
+      const title = trimmed.length > 0 ? trimmed : "this episode";
+      return {
+        text: `In ${title}, we dig into the real story behind the topic. Replace this paragraph with your own show notes.\n\n- Key moment one\n- Key moment two`,
+        costTokens,
+        modelName: STUB_MODEL_NAME,
+      };
+    }
     return { text: trimmed.length > 0 ? `${trimmed} — expanded with a bit more detail.` : "", costTokens, modelName: STUB_MODEL_NAME };
   }
 
@@ -160,6 +215,30 @@ function suggestTextSystemPrompt(kind: string): string {
   if (kind === "article_draft") {
     return "You write a short first-draft outline for an article, in Markdown, given a topic. Return only the draft, no preamble.";
   }
+  if (kind === "project_pitch") {
+    return "You write a short, punchy 1-2 sentence pitch for a portfolio project, given its title/topic as context. Return only the pitch, no preamble, no quotes.";
+  }
+  if (kind === "project_description") {
+    return "You write a short first-draft project description, in Markdown, given its title/topic as context. Return only the draft, no preamble.";
+  }
+  if (kind === "work_experience_bullets") {
+    return "You write 2-4 short first-person resume bullet points for a work experience entry, given the company/title as context. Return only the bullets as a Markdown list, no preamble.";
+  }
+  if (kind === "skill_suggestions") {
+    return "Given a person's bio and project titles/summaries as context, suggest 5-8 plausible professional skills for their portfolio. Return only a comma-separated list of skill names, no preamble, no numbering.";
+  }
+  if (kind === "book_description") {
+    return "You write a short, punchy first-draft description/pitch for a book, given its title/topic as context. Return only the description, no preamble, no quotes.";
+  }
+  if (kind === "wiki_page_draft") {
+    return "You write a short first-draft outline for a wiki/documentation page, in Markdown, given a topic. Return only the draft, no preamble.";
+  }
+  if (kind === "file_description") {
+    return "You write a short first-draft description for a downloadable file/resource, given its title/topic as context. Return only the description, no preamble, no quotes.";
+  }
+  if (kind === "podcast_show_notes") {
+    return "You write short first-draft show notes for a podcast episode, in Markdown, given its title/topic as context. Return only the draft, no preamble.";
+  }
   return "You expand on the given text with a bit more detail, in the same voice. Return only the expanded text, no preamble.";
 }
 
@@ -173,7 +252,8 @@ class ClaudeAIProvider implements AIProvider {
   private readonly client = new Anthropic();
 
   async suggestText({ kind, context }: { kind: string; context: string }) {
-    const maxTokens = kind === "article_draft" ? 800 : 300;
+    const LONG_FORM_KINDS = new Set(["article_draft", "project_description", "wiki_page_draft", "podcast_show_notes"]);
+    const maxTokens = LONG_FORM_KINDS.has(kind) ? 800 : 300;
     const response = await this.client.messages.create(
       {
         model: GENERATION_MODEL,

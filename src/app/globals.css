@@ -2101,6 +2101,16 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   border-radius: 8px;
 }
 
+/* Selected state for a .buttonSecondary used as a tab/toggle (MarkdownField's
+   Write/Preview pair) — aria-pressed is already the correct semantic for a
+   two-state toggle button, so it doubles as the style hook instead of a
+   separate "active" class to keep in sync. */
+.button.buttonSecondary[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 /* Formalizes a size that was previously repeated as an inline
    style={{fontSize:"0.85rem", padding:"0.4rem 0.7rem"}} object literal
    across several pages (DESIGN_SYSTEM.md's "known inconsistency to fix,
@@ -2918,7 +2928,13 @@ body.hasBottomNav .iosInstallBanner {
   margin-top: var(--space-3);
 }
 
-.profileHeaderRow .profileAvatar {
+/* Child combinator, not descendant: the lift belongs to whichever element
+   is the row's direct flex child (the bare avatar on public profile pages,
+   or .settingsAvatarWrap on Edit Profile, which wraps the avatar together
+   with its edit badge). A descendant selector would also match the avatar
+   nested *inside* that wrapper and double-apply the negative margin. */
+.profileHeaderRow > .profileAvatar,
+.profileHeaderRow > .settingsAvatarWrap {
   margin-top: calc(-1 * var(--profile-avatar-lift, 3.25rem));
 }
 
@@ -5256,6 +5272,91 @@ body.hasBottomNav .mobileNavPanel {
   margin-bottom: 1rem;
 }
 
+/* Edit Profile's hero — settings form-density pass (phase-0-redesign.md
+   §6, "still open"). Reuses .profileCover/.profileHeaderRow/.profileAvatar
+   verbatim (public profile header) so the very first settings page mirrors
+   what a visitor actually sees, instead of two small floating thumbnails.
+   Each edit affordance is the same invisible-input-over-styled-sibling
+   trick as .switch: a real <input type="file"> sized to fill its label,
+   opacity 0, so it stays keyboard/tap accessible while the visible pill/
+   dot renders on a sibling span. */
+.settingsCoverEdit {
+  position: absolute;
+  z-index: 2;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, black 55%, transparent);
+  color: #fff;
+  font-size: var(--text-xs-plus);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settingsCoverEdit input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.settingsAvatarRow {
+  margin-bottom: var(--space-4);
+}
+
+.settingsAvatarWrap {
+  position: relative;
+}
+
+.settingsAvatarEdit {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 2px solid var(--surface);
+  cursor: pointer;
+}
+
+.settingsAvatarEdit input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Groups .field text inputs (display name, bio) into the same card shell
+   as .settingsGroup below, instead of them floating unbordered directly in
+   .settingsContent — .field's own input styling (globals.css ~1696,
+   Phase 1b) is untouched, only the surrounding density changes. */
+.settingsFieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
 /* Android-Settings-style primitives (SettingsRow.tsx + hand-written markup
    for existing toggles) — grouped card of rows instead of each row being
    its own floating .profileLinkItem, real toggle switches instead of bare
@@ -5319,6 +5420,23 @@ a.settingsRow:focus-visible {
   border-radius: var(--radius-md);
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* Same footprint as .settingsRowIcon, an <img> instead of an icon glyph —
+   a real thumbnail (a project's cover) in the same slot. */
+.settingsRowThumbnail {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.settingsRowThumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .settingsRowText {

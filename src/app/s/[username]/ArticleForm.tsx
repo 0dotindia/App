@@ -4,6 +4,8 @@ import { useActionState, useState } from "react";
 import { createArticle, updateArticle } from "@/app/actions/articles";
 import { suggestArticleDraft } from "@/app/actions/ai-content";
 import { AISuggestButton } from "@/components/AISuggestButton";
+import { ImagePickerField } from "@/components/ImagePickerField";
+import { MarkdownField } from "@/components/MarkdownField";
 
 type ArticleFormArticle = {
   id: string;
@@ -14,6 +16,7 @@ type ArticleFormArticle = {
   body: string;
   status: string;
   visibility: string;
+  coverImageUrl: string | null;
   tags?: string[];
 };
 
@@ -26,7 +29,7 @@ export function ArticleForm({ article }: { article?: ArticleFormArticle }) {
   const [bodyValue, setBodyValue] = useState(article?.body ?? "");
 
   return (
-    <form action={formAction} className="settingsForm">
+    <form action={formAction} className="settingsForm" encType="multipart/form-data">
       {article && <input type="hidden" name="articleId" value={article.id} />}
       {!article && (
         <div className="field">
@@ -42,16 +45,14 @@ export function ArticleForm({ article }: { article?: ArticleFormArticle }) {
         <label htmlFor={`articleSubtitle-${idSuffix}`}>Subtitle</label>
         <input id={`articleSubtitle-${idSuffix}`} name="subtitle" defaultValue={article?.subtitle ?? ""} maxLength={300} />
       </div>
-      <div className="field">
-        <label htmlFor={`articleBody-${idSuffix}`}>Body</label>
-        <textarea
-          id={`articleBody-${idSuffix}`}
-          name="body"
-          value={bodyValue}
-          onChange={(e) => setBodyValue(e.target.value)}
-          rows={10}
-        />
-      </div>
+      <MarkdownField
+        id={`articleBody-${idSuffix}`}
+        name="body"
+        label="Body"
+        value={bodyValue}
+        onChange={setBodyValue}
+        rows={10}
+      />
 
       <AISuggestButton
         label="AI: Draft this article"
@@ -73,10 +74,13 @@ export function ArticleForm({ article }: { article?: ArticleFormArticle }) {
             <option value="note">Note</option>
           </select>
         </div>
-        <div className="field">
-          <label htmlFor={`articleCover-${idSuffix}`}>Cover image</label>
-          <input id={`articleCover-${idSuffix}`} name="coverImage" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-        </div>
+        <ImagePickerField
+          id={`articleCover-${idSuffix}`}
+          name="coverImage"
+          label="Cover image"
+          mode="single"
+          initialUrls={article?.coverImageUrl ? [article.coverImageUrl] : []}
+        />
       </div>
       <div className="fieldRow">
         <div className="field">

@@ -2314,6 +2314,11 @@ model Project {
   externalLinksJson String? // JSON array of {label, url}; each url validated by isSafeUrl at write time (no javascript:/data:)
   visibility        String    @default("public") // public | unlisted — see spec §3.3: unlisted is obscurity, not access control
   featuredOnResume  Boolean   @default(false)
+  // Manual reorder, same convention as Skill.position/Link.position — an
+  // up/down swap (moveProject), not real drag-and-drop. Default 0 for every
+  // pre-existing row needs no backfill: the createdAt desc tiebreaker below
+  // keeps today's visual order until an owner first reorders one.
+  position          Int       @default(0)
   likeCount         Int       @default(0)
   commentCount      Int       @default(0)
   createdAt         DateTime  @default(now())
@@ -2327,6 +2332,7 @@ model Project {
   researchPapers  ResearchPaper[]
 
   @@index([ownerId])
+  @@index([ownerId, position])
   @@index([visibility, createdAt])
 }
 

@@ -1,17 +1,30 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createBook, updateBook } from "@/app/actions/books";
+import { suggestBookDescription } from "@/app/actions/ai-content";
+import { AISuggestButton } from "@/components/AISuggestButton";
+import { ImagePickerField } from "@/components/ImagePickerField";
+import { MarkdownField } from "@/components/MarkdownField";
 
-type BookFormBook = { id: string; slug: string; title: string; description: string; status: string; visibility: string };
+type BookFormBook = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  status: string;
+  visibility: string;
+  coverImageUrl: string | null;
+};
 
 export function BookForm({ book }: { book?: BookFormBook }) {
   const action = book ? updateBook : createBook;
   const [state, formAction, pending] = useActionState(action, undefined);
   const idSuffix = book?.id ?? "new";
+  const [descriptionValue, setDescriptionValue] = useState(book?.description ?? "");
 
   return (
-    <form action={formAction} className="settingsForm">
+    <form action={formAction} className="settingsForm" encType="multipart/form-data">
       {book && <input type="hidden" name="bookId" value={book.id} />}
       {!book && (
         <div className="field">
@@ -23,15 +36,30 @@ export function BookForm({ book }: { book?: BookFormBook }) {
         <label htmlFor={`bookTitle-${idSuffix}`}>Title</label>
         <input id={`bookTitle-${idSuffix}`} name="title" defaultValue={book?.title} maxLength={200} required />
       </div>
-      <div className="field">
-        <label htmlFor={`bookDescription-${idSuffix}`}>Description</label>
-        <textarea id={`bookDescription-${idSuffix}`} name="description" defaultValue={book?.description} rows={4} maxLength={2000} />
-      </div>
+      <MarkdownField
+        id={`bookDescription-${idSuffix}`}
+        name="description"
+        label="Description"
+        value={descriptionValue}
+        onChange={setDescriptionValue}
+        rows={4}
+        maxLength={2000}
+      />
+      <AISuggestButton
+        label="AI: Suggest a description"
+        contextLabel="What's this book about? (optional)"
+        contextPlaceholder="e.g. a beginner's guide to sourdough"
+        generate={suggestBookDescription}
+        onInsert={setDescriptionValue}
+      />
       <div className="fieldRow">
-        <div className="field">
-          <label htmlFor={`bookCover-${idSuffix}`}>Cover image</label>
-          <input id={`bookCover-${idSuffix}`} name="coverImage" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
-        </div>
+        <ImagePickerField
+          id={`bookCover-${idSuffix}`}
+          name="coverImage"
+          label="Cover image"
+          mode="single"
+          initialUrls={book?.coverImageUrl ? [book.coverImageUrl] : []}
+        />
         <div className="field">
           <label htmlFor={`bookEbook-${idSuffix}`}>Ebook file (PDF/EPUB)</label>
           <input id={`bookEbook-${idSuffix}`} name="ebookFile" type="file" accept="application/pdf,application/epub+zip" />

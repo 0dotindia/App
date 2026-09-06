@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BookOpen, Pencil, Plus } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Pencil, Plus } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { listAllProfileWikiPages } from "@/lib/wiki";
-import { deleteProfileWikiPage } from "@/app/actions/knowledge-pages";
+import { deleteProfileWikiPage, moveWikiPage } from "@/app/actions/knowledge-pages";
 import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -31,7 +31,15 @@ export default async function WikiSettingsPage() {
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Wiki &amp; Documentation</h2>
       {pages.length === 0 && <EmptyState message="No pages yet." />}
-      {pages.map((page) => (
+      {pages.map((page) => {
+        // Reordering is scoped to siblings under the same parent (matches
+        // moveWikiPage's own scoping) — `pages` groups siblings contiguously
+        // already (listAllProfileWikiPages orders by [parentPageId, position])
+        // but index/isFirst/isLast still need to be computed per group, not
+        // over the whole flat list.
+        const siblings = pages.filter((p) => p.parentPageId === page.parentPageId);
+        const siblingIndex = siblings.findIndex((p) => p.id === page.id);
+        return (
         <div key={page.id} id={`wiki-${page.id}`} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow
             icon={BookOpen}
@@ -39,6 +47,16 @@ export default async function WikiSettingsPage() {
             description={`${KIND_LABEL[page.kind]} · ${page.visibility}${page.parentPageId ? " · sub-page" : ""}`}
             trailing={
               <>
+                <form action={moveWikiPage}>
+                  <input type="hidden" name="pageId" value={page.id} />
+                  <input type="hidden" name="direction" value="up" />
+                  <button type="submit" className="button buttonSecondary iconButton" disabled={siblingIndex === 0} aria-label="Move up"><ChevronUp size={16} aria-hidden="true" /></button>
+                </form>
+                <form action={moveWikiPage}>
+                  <input type="hidden" name="pageId" value={page.id} />
+                  <input type="hidden" name="direction" value="down" />
+                  <button type="submit" className="button buttonSecondary iconButton" disabled={siblingIndex === siblings.length - 1} aria-label="Move down"><ChevronDown size={16} aria-hidden="true" /></button>
+                </form>
                 {currentUser.username && (
                   <Link href={`/${currentUser.username.handle}/wiki/${page.slug}`} className="button buttonSecondary buttonSmall">View</Link>
                 )}
@@ -73,7 +91,8 @@ export default async function WikiSettingsPage() {
             </div>
           </details>
         </div>
-      ))}
+        );
+      })}
       <details className="settingsGroup">
         <summary className="settingsRow settingsAddTrigger">
           <span className="settingsRowIcon" aria-hidden="true">

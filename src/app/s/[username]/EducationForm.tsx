@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { addEducation, updateEducation } from "@/app/actions/resume";
+import { MarkdownField } from "@/components/MarkdownField";
 
 type EducationFormItem = {
   id: string;
@@ -21,6 +22,7 @@ export function EducationForm({ item }: { item?: EducationFormItem }) {
   const action = item ? updateEducation : addEducation;
   const [state, formAction, pending] = useActionState(action, undefined);
   const idSuffix = item?.id ?? "new";
+  const [descriptionValue, setDescriptionValue] = useState(item?.description ?? "");
 
   return (
     <form action={formAction} className="settingsForm">
@@ -49,10 +51,15 @@ export function EducationForm({ item }: { item?: EducationFormItem }) {
           <input id={`eduEnd-${idSuffix}`} name="endDate" type="date" defaultValue={toDateInputValue(item?.endDate ?? null)} />
         </div>
       </div>
-      <div className="field">
-        <label htmlFor={`eduDescription-${idSuffix}`}>Description</label>
-        <textarea id={`eduDescription-${idSuffix}`} name="description" defaultValue={item?.description} maxLength={1000} rows={3} />
-      </div>
+      <MarkdownField
+        id={`eduDescription-${idSuffix}`}
+        name="description"
+        label="Description"
+        value={descriptionValue}
+        onChange={setDescriptionValue}
+        maxLength={1000}
+        rows={3}
+      />
       {state?.error && <p className="errorText">{state.error}</p>}
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Saving…" : item ? "Save changes" : "Add education"}
