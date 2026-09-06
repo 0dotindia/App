@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { generateText, embed as aiEmbed, embedMany as aiEmbedMany } from "ai";
 
 // phase-11 spec: every AI feature (content writer, profile builder,
 // moderation, translation, accessibility captioning, search/recommendation
@@ -25,12 +26,16 @@ export interface AIProvider {
   }>;
   translate(params: { text: string; targetLanguage: string }): Promise<{ text: string; costTokens: number; modelName: string }>;
   describeMedia(params: { url: string; contentType: string }): Promise<{ altText: string; costTokens: number; modelName: string }>;
-  // A fixed-length numeric vector for cosine-similarity comparisons —
-  // backs both AI search re-ranking (§8) and AI recommendations (§7).
-  // Stays synchronous and hash-based even under ClaudeAIProvider — Claude
-  // has no embeddings endpoint, and a real one (Voyage AI) is a deliberate,
-  // separate follow-up rather than a second vendor bundled into this pass.
-  embed(text: string): number[];
+  // Fixed-length numeric vectors for cosine-similarity comparisons — back
+  // both AI search re-ranking (§8) and AI recommendations (§7). Async and
+  // batched (unlike a plain hash) because a real embedding call is a
+  // network request: embedBatch exists so a caller scoring N candidates
+  // issues one request instead of N. Every implementation returns vectors
+  // pre-normalized to unit length (see normalize() below), same invariant
+  // hashEmbed always held, so cosineSimilarity's plain dot product stays
+  // valid regardless of which provider or model actually ran.
+  embed(text: string): Promise<{ vector: number[]; costTokens: number; modelName: string }>;
+  embedBatch(texts: string[]): Promise<{ vectors: number[][]; costTokens: number; modelName: string }>;
 }
 
 const EMBED_DIMENSIONS = 64;
@@ -38,17 +43,26 @@ const SPAM_MARKERS = ["buy now", "click here", "free money", "act now", "limited
 const HARASSMENT_MARKERS = ["idiot", "shut up", "kill yourself", "worthless", "hate you"];
 
 const STUB_MODEL_NAME = "stub-heuristic-v1";
-// Logged by embed()'s two callers (ai-search.ts, suggested-users.ts)
-// instead of a provider-level modelName — the hash embedding never calls
-// a model under either provider, real or stub, so it gets its own name
-// rather than borrowing StubAIProvider's or ClaudeAIProvider's.
-export const HASH_EMBEDDING_MODEL_NAME = "hash-bow-embedding-v1";
+// Used by StubAIProvider's embed/embedBatch — the hash embedding never
+// calls a model, so it gets its own name rather than borrowing
+// StubAIProvider's shared STUB_MODEL_NAME or a real provider's model name.
+const HASH_EMBEDDING_MODEL_NAME = "hash-bow-embedding-v1";
+// Routed through the Vercel AI Gateway (OIDC-authenticated, same
+// zero-extra-key posture as GATEWAY_TEXT_MODEL below) rather than a
+// dedicated embeddings vendor SDK — Claude has no embeddings endpoint, and
+// the Gateway already gives every provider's embedding models through the
+// one connection this codebase already trusts for gatewaySuggestText.
+const GATEWAY_EMBEDDING_MODEL = "openai/text-embedding-3-small";
 
-// Deterministic bag-of-words hash embedding, not a learned model — shared
-// by StubAIProvider and ClaudeAIProvider (Claude has no embeddings
-// endpoint, and the user chose to keep this approximation rather than add
-// a second vendor for real embeddings in this pass). Cosine similarity
-// over this vector approximates shared-vocabulary overlap, nothing more.
+function normalize(vector: number[]): number[] {
+  const magnitude = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0)) || 1;
+  return vector.map((v) => v / magnitude);
+}
+
+// Deterministic bag-of-words hash embedding, not a learned model — the
+// StubAIProvider fallback whenever the real embedding call is unavailable
+// or fails. Cosine similarity over this vector approximates
+// shared-vocabulary overlap, nothing more.
 function hashEmbed(text: string): number[] {
   const vector = new Array<number>(EMBED_DIMENSIONS).fill(0);
   const words = text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
@@ -58,8 +72,7 @@ function hashEmbed(text: string): number[] {
     const sign = hash[4] % 2 === 0 ? 1 : -1;
     vector[bucket] += sign;
   }
-  const magnitude = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0)) || 1;
-  return vector.map((v) => v / magnitude);
+  return normalize(vector);
 }
 
 // Stub only — used whenever ANTHROPIC_API_KEY is unset (today: always in
@@ -226,8 +239,12 @@ class StubAIProvider implements AIProvider {
     return { altText: `${contentType} content (AI-generated description pending review)`, costTokens: 10, modelName: STUB_MODEL_NAME };
   }
 
-  embed(text: string): number[] {
-    return hashEmbed(text);
+  async embed(text: string) {
+    return { vector: hashEmbed(text), costTokens: 0, modelName: HASH_EMBEDDING_MODEL_NAME };
+  }
+
+  async embedBatch(texts: string[]) {
+    return { vectors: texts.map(hashEmbed), costTokens: 0, modelName: HASH_EMBEDDING_MODEL_NAME };
   }
 }
 
@@ -412,8 +429,93 @@ class ClaudeAIProvider implements AIProvider {
     };
   }
 
-  embed(text: string): number[] {
-    return hashEmbed(text);
+  async embed(text: string) {
+    const { embedding, usage } = await aiEmbed({ model: GATEWAY_EMBEDDING_MODEL, value: text });
+    return { vector: normalize(embedding), costTokens: usage?.tokens ?? 0, modelName: GATEWAY_EMBEDDING_MODEL };
+  }
+
+  async embedBatch(texts: string[]) {
+    if (texts.length === 0) return { vectors: [], costTokens: 0, modelName: GATEWAY_EMBEDDING_MODEL };
+    const { embeddings, usage } = await aiEmbedMany({ model: GATEWAY_EMBEDDING_MODEL, values: texts });
+    return { vectors: embeddings.map(normalize), costTokens: usage?.tokens ?? 0, modelName: GATEWAY_EMBEDDING_MODEL };
+  }
+}
+
+// Open-weight fallback for suggestText only — routed through Vercel AI
+// Gateway (OIDC-authenticated, no separate API key), drawing from the
+// account's free monthly Gateway credits. Reuses ClaudeAIProvider's own
+// suggestTextSystemPrompt() so the two providers write in the same voice.
+// Scoped to suggestText because that's the only path that was actually
+// failing in production; classifyModeration/translate/describeMedia keep
+// calling Claude directly.
+const GATEWAY_TEXT_MODEL = "meta/llama-3.3-70b";
+
+async function gatewaySuggestText({ kind, context }: { kind: string; context: string }) {
+  const LONG_FORM_KINDS = new Set(["article_draft", "project_description", "wiki_page_draft", "podcast_show_notes"]);
+  const maxOutputTokens = LONG_FORM_KINDS.has(kind) ? 800 : 300;
+  const result = await generateText({
+    model: GATEWAY_TEXT_MODEL,
+    maxOutputTokens,
+    system: suggestTextSystemPrompt(kind),
+    prompt: context.trim().length > 0 ? context : "(no context given)",
+  });
+  return {
+    text: result.text.trim(),
+    costTokens: (result.usage.inputTokens ?? 0) + (result.usage.outputTokens ?? 0),
+    modelName: GATEWAY_TEXT_MODEL,
+  };
+}
+
+// Wraps ClaudeAIProvider so a suggestText failure (key revoked, Anthropic
+// outage, rate limit) degrades to the open-weight gateway model instead of
+// surfacing "AI suggestions are temporarily unavailable" to the user.
+// embed/embedBatch get the same "never let this be why the page breaks"
+// treatment (search/recommendations degrade to the hash embedding instead
+// of failing outright) — same posture as redis-cache.ts's cached() falling
+// through to its fetcher on a cache miss/error. classifyModeration/
+// translate/describeMedia have no equivalent fallback path and still
+// delegate straight to Claude, unchanged.
+class FallbackAIProvider implements AIProvider {
+  readonly name: string;
+
+  constructor(private readonly primary: ClaudeAIProvider) {
+    this.name = primary.name;
+  }
+
+  async suggestText(params: { kind: string; context: string }) {
+    try {
+      return await this.primary.suggestText(params);
+    } catch {
+      return gatewaySuggestText(params);
+    }
+  }
+
+  classifyModeration(text: string) {
+    return this.primary.classifyModeration(text);
+  }
+
+  translate(params: { text: string; targetLanguage: string }) {
+    return this.primary.translate(params);
+  }
+
+  describeMedia(params: { url: string; contentType: string }) {
+    return this.primary.describeMedia(params);
+  }
+
+  async embed(text: string) {
+    try {
+      return await this.primary.embed(text);
+    } catch {
+      return { vector: hashEmbed(text), costTokens: 0, modelName: HASH_EMBEDDING_MODEL_NAME };
+    }
+  }
+
+  async embedBatch(texts: string[]) {
+    try {
+      return await this.primary.embedBatch(texts);
+    } catch {
+      return { vectors: texts.map(hashEmbed), costTokens: 0, modelName: HASH_EMBEDDING_MODEL_NAME };
+    }
   }
 }
 
@@ -432,6 +534,6 @@ export function getAIProvider(): AIProvider {
   // actually present, so an unset ANTHROPIC_API_KEY (today's default, and
   // every test/CI run) costs nothing and touches no network.
   if (!process.env.ANTHROPIC_API_KEY) return stubProvider;
-  if (!realProvider) realProvider = new ClaudeAIProvider();
+  if (!realProvider) realProvider = new FallbackAIProvider(new ClaudeAIProvider());
   return realProvider;
 }

@@ -1,5 +1,5 @@
 import "server-only";
-import { getAIProvider, cosineSimilarity, HASH_EMBEDDING_MODEL_NAME } from "@/lib/ai-provider";
+import { getAIProvider, cosineSimilarity } from "@/lib/ai-provider";
 import { logAIGeneration } from "@/lib/ai-generation";
 
 // phase-11 spec §8.1: an additional retrieval signal blended with the
@@ -15,6 +15,10 @@ import { logAIGeneration } from "@/lib/ai-generation";
 // embedding can never exist in one. This is a stronger guarantee than
 // "filtered at query time": there is nothing to filter, because nothing is
 // ever stored.
+//
+// The query and every fuzzy row go through one embedBatch call (not N+1
+// individual embed calls) — with a real embedding provider that's a real
+// network request, and search latency can't afford a round-trip per row.
 export async function semanticRerank<T>(params: {
   query: string;
   rows: T[];
@@ -31,9 +35,10 @@ export async function semanticRerank<T>(params: {
   if (fuzzy.length <= 1) return rows;
 
   const provider = getAIProvider();
-  const queryVector = provider.embed(query);
+  const { vectors, modelName, costTokens } = await provider.embedBatch([query, ...fuzzy.map(getText)]);
+  const [queryVector, ...rowVectors] = vectors;
   const scored = fuzzy
-    .map((row) => ({ row, score: cosineSimilarity(queryVector, provider.embed(getText(row))) }))
+    .map((row, i) => ({ row, score: cosineSimilarity(queryVector, rowVectors[i]) }))
     .sort((a, b) => b.score - a.score);
   const rerankedFuzzy = scored.map((s) => s.row);
 
@@ -42,10 +47,10 @@ export async function semanticRerank<T>(params: {
     requestedById: requestedById ?? null,
     subjectType: "search_query",
     subjectId: null,
-    modelName: HASH_EMBEDDING_MODEL_NAME,
+    modelName,
     input: { query },
     output: { topIds: rerankedFuzzy.slice(0, 10).map(getId) },
-    costTokens: fuzzy.length,
+    costTokens,
   });
 
   return [...exact, ...rerankedFuzzy];

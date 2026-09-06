@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { getFolloweeIds } from "@/lib/follow-graph";
-import { getAIProvider, cosineSimilarity, HASH_EMBEDDING_MODEL_NAME } from "@/lib/ai-provider";
+import { getAIProvider, cosineSimilarity } from "@/lib/ai-provider";
 import { logAIGeneration } from "@/lib/ai-generation";
 
 // phase-2 spec §3.3 — originally a placeholder heuristic "to revisit when
@@ -75,17 +75,22 @@ export async function getSuggestedUsers(viewerId: string, limit: number) {
   const eligible = candidates.filter((u) => u.username && u.profile);
 
   // phase-11 §7.2: bio-similarity to the viewer's own bio as a learned
-  // similarity stand-in — see ai-provider.ts's embed() for why this is a
-  // deterministic hash embedding rather than a real learned model, and why
-  // that's fine here (every score is a supplementary nudge, none of them
-  // gate visibility the way, say, a moderation confidence threshold would).
+  // similarity stand-in (every score here is a supplementary nudge, none
+  // of them gate visibility the way, say, a moderation confidence
+  // threshold would). One embedBatch call for the viewer + every candidate
+  // bio, not N+1 individual calls — see ai-provider.ts's embed/embedBatch
+  // for why that matters once this is a real network-backed embedding.
   const viewerProfile = await db.profile.findUnique({ where: { userId: viewerId }, select: { bio: true } });
   const provider = getAIProvider();
-  const viewerVector = provider.embed(viewerProfile?.bio ?? "");
+  const { vectors, modelName, costTokens } = await provider.embedBatch([
+    viewerProfile?.bio ?? "",
+    ...eligible.map((u) => u.profile!.bio),
+  ]);
+  const [viewerVector, ...candidateVectors] = vectors;
   const similarity = new Map<string, number>();
-  for (const u of eligible) {
-    similarity.set(u.id, cosineSimilarity(viewerVector, provider.embed(u.profile!.bio)));
-  }
+  eligible.forEach((u, i) => {
+    similarity.set(u.id, cosineSimilarity(viewerVector, candidateVectors[i]));
+  });
 
   const scored = eligible
     .map((u) => ({
@@ -104,10 +109,10 @@ export async function getSuggestedUsers(viewerId: string, limit: number) {
     requestedById: viewerId,
     subjectType: "user",
     subjectId: viewerId,
-    modelName: HASH_EMBEDDING_MODEL_NAME,
+    modelName,
     input: { candidateCount: eligible.length },
     output: { suggestedUserIds: scored.map((s) => s.user.id) },
-    costTokens: eligible.length,
+    costTokens,
   });
 
   return scored.map((s) => s.user);
