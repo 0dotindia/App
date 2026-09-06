@@ -21,7 +21,7 @@ export function DmcaNoticeForm() {
   const formRef = useRef<HTMLFormElement>(null);
 
   if (submitted && !state?.error) {
-    return <p className="profileCard">Notice submitted. Trust &amp; Safety staff will review it.</p>;
+    return <p className="card">Notice submitted. Trust &amp; Safety staff will review it.</p>;
   }
 
   return (
@@ -31,28 +31,30 @@ export function DmcaNoticeForm() {
         await formAction(formData);
         setSubmitted(true);
       }}
-      className="profileCard"
-      style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+      className="card stack-lg"
     >
-      <label>
-        Your name
-        <input type="text" name="complainantName" className="textInput" required />
-      </label>
-      <label>
-        Your contact information (email or address)
-        <input type="text" name="complainantContact" className="textInput" required />
-      </label>
-      <p className="mutedText" style={{ fontSize: "0.8rem" }}>
-        This contact information will be disclosed to the account whose content you&apos;re reporting, if they
-        file a counter-notice — this is a statutory requirement, not optional.
-      </p>
-      <label>
-        Description of the copyrighted work being infringed
-        <textarea name="copyrightedWorkDescription" className="textInput" rows={3} required />
-      </label>
-      <label>
-        Content type
-        <select name="infringingContentSubjectType" className="textInput" required defaultValue="">
+      <div className="field">
+        <label htmlFor="dmca-complainant-name">Your name</label>
+        <input id="dmca-complainant-name" type="text" name="complainantName" className="textInput" required />
+      </div>
+
+      <div className="field">
+        <label htmlFor="dmca-complainant-contact">Your contact information (email or address)</label>
+        <input id="dmca-complainant-contact" type="text" name="complainantContact" className="textInput" required />
+        <p className="mutedText text-xs">
+          Disclosed to the account whose content you&apos;re reporting, if they file a counter-notice — a
+          statutory requirement, not optional.
+        </p>
+      </div>
+
+      <div className="field">
+        <label htmlFor="dmca-work-description">Description of the copyrighted work being infringed</label>
+        <textarea id="dmca-work-description" name="copyrightedWorkDescription" className="textInput" rows={3} required />
+      </div>
+
+      <div className="field">
+        <label htmlFor="dmca-subject-type">Content type</label>
+        <select id="dmca-subject-type" name="infringingContentSubjectType" className="textInput" required defaultValue="">
           <option value="" disabled>
             Select one
           </option>
@@ -62,29 +64,45 @@ export function DmcaNoticeForm() {
             </option>
           ))}
         </select>
-      </label>
-      <label>
-        ID of the infringing content
-        <input type="text" name="infringingContentSubjectId" className="textInput" required />
-      </label>
-      <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+      </div>
+
+      <div className="field">
+        <label htmlFor="dmca-content-location">Link to the infringing content</label>
+        <input
+          id="dmca-content-location"
+          type="text"
+          name="infringingContentLocation"
+          className="textInput"
+          placeholder="https://0dot.in/username/status/…"
+          required
+        />
+        <p className="mutedText text-xs">
+          Paste the URL of the specific post, article, or listing — click its share/copy-link option, or copy it
+          from your browser&apos;s address bar.
+        </p>
+      </div>
+
+      <label className="checkboxField">
         <input type="checkbox" name="goodFaithStatementAccepted" required />
         <span>
           I have a good faith belief that use of the material in the manner complained of is not authorized by
           the copyright owner, its agent, or the law.
         </span>
       </label>
-      <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+
+      <label className="checkboxField">
         <input type="checkbox" name="accuracyPerjuryStatementAccepted" required />
         <span>
           Under penalty of perjury, I state that the information in this notice is accurate and that I am the
           copyright owner or authorized to act on their behalf.
         </span>
       </label>
-      <label>
-        Signature (type your full legal name)
-        <input type="text" name="signature" className="textInput" required />
-      </label>
+
+      <div className="field">
+        <label htmlFor="dmca-signature">Signature (type your full legal name)</label>
+        <input id="dmca-signature" type="text" name="signature" className="textInput" required />
+      </div>
+
       {state?.error && <p className="errorText">{state.error}</p>}
       <button type="submit" className="button" disabled={pending} style={{ alignSelf: "flex-start" }}>
         {pending ? "Submitting…" : "Submit notice"}

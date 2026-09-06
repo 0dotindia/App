@@ -5,20 +5,18 @@ import { requireVerifiedUser } from "@/lib/auth-guards";
 import { fileDmcaTakedownNotice, fileDmcaCounterNotice } from "@/lib/dmca";
 import type { ActionState } from "@/app/actions/auth";
 
-// phase-13 spec §4.1: filing a formal DMCA notice requires an authenticated,
-// verified account — same posture as every other write action in this
-// codebase (fileReport, createPost, ...). Real-world complainants without a
-// platform account are out of scope for this build; the statutory
-// attestation/contact fields still get recorded exactly as filed.
+// phase-13 spec §4.1/§4.4: a DMCA takedown notice must be acceptable from
+// any real-world rights holder, most of whom have no 0dot account — unlike
+// every other write action in this codebase, this one is deliberately
+// unauthenticated. The statutory attestation/contact fields are what
+// establish who's filing, not platform login.
 export async function fileDmcaTakedownNoticeAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
-  await requireVerifiedUser();
-
   const result = await fileDmcaTakedownNotice({
     complainantName: String(formData.get("complainantName") ?? ""),
     complainantContact: String(formData.get("complainantContact") ?? ""),
     copyrightedWorkDescription: String(formData.get("copyrightedWorkDescription") ?? ""),
     infringingContentSubjectType: String(formData.get("infringingContentSubjectType") ?? ""),
-    infringingContentSubjectId: String(formData.get("infringingContentSubjectId") ?? ""),
+    infringingContentLocation: String(formData.get("infringingContentLocation") ?? ""),
     goodFaithStatementAccepted: formData.get("goodFaithStatementAccepted") === "on",
     accuracyPerjuryStatementAccepted: formData.get("accuracyPerjuryStatementAccepted") === "on",
     signature: String(formData.get("signature") ?? ""),

@@ -43,6 +43,68 @@ async function getCopyrightNoticeRegime(region: string): Promise<CopyrightNotice
   return defaults;
 }
 
+// A real-world complainant only ever has a link to the content, never its
+// internal database id — the form used to ask for the raw id directly,
+// which no rights holder outside the codebase could ever supply. This
+// accepts either a full URL or a bare path for the subject types that have
+// a real permalink, and resolves it against the same routes those pages
+// use (article: authorId_slug, matching [username]/articles/[slug]/page.tsx;
+// post/marketplace_listing: id is the last path segment). Comments have no
+// permalink anywhere on the site today, so that case falls back to a raw
+// id (e.g. one shared by staff) — a real gap, but adding comment permalinks
+// platform-wide is out of scope for this page.
+export async function resolveDmcaSubject(subjectType: string, contentLocation: string): Promise<{ subjectId?: string; error?: string }> {
+  const trimmed = contentLocation.trim();
+  if (!trimmed) return { error: "Link to the infringing content is required." };
+
+  let segments: string[] = [];
+  try {
+    segments = new URL(trimmed, "https://0dot.in").pathname.split("/").filter(Boolean);
+  } catch {
+    // not a parseable URL — fall through and treat the raw input as an id below
+  }
+
+  const notFound = { error: "Couldn't find that content. Double-check the link and try again." };
+
+  if (subjectType === "post") {
+    const postId = segments.length >= 3 && segments[1] === "status" ? segments[2] : trimmed;
+    const post = await db.post.findUnique({ where: { id: postId }, select: { id: true, deletedAt: true } });
+    if (!post || post.deletedAt) return notFound;
+    return { subjectId: post.id };
+  }
+
+  if (subjectType === "marketplace_listing") {
+    const listingId = segments.length >= 2 && segments[0] === "m" ? segments[1] : trimmed;
+    const listing = await db.marketplaceListing.findUnique({ where: { id: listingId }, select: { id: true } });
+    if (!listing) return notFound;
+    return { subjectId: listing.id };
+  }
+
+  if (subjectType === "article") {
+    if (segments.length >= 3 && segments[1] === "articles") {
+      const handle = decodeURIComponent(segments[0]).toLowerCase();
+      const slug = decodeURIComponent(segments[2]).toLowerCase();
+      const username = await db.username.findUnique({ where: { handle }, select: { userId: true } });
+      const article = username
+        ? await db.article.findUnique({ where: { authorId_slug: { authorId: username.userId, slug } }, select: { id: true } })
+        : null;
+      if (!article) return notFound;
+      return { subjectId: article.id };
+    }
+    const article = await db.article.findUnique({ where: { id: trimmed }, select: { id: true } });
+    if (!article) return notFound;
+    return { subjectId: article.id };
+  }
+
+  if (subjectType === "comment") {
+    const comment = await db.comment.findUnique({ where: { id: trimmed }, select: { id: true, deletedAt: true } });
+    if (!comment || comment.deletedAt) return notFound;
+    return { subjectId: comment.id };
+  }
+
+  return { error: "Unsupported content type." };
+}
+
 // phase-13 spec §4.4: the heavier, statute-shaped formal notice — distinct
 // from Report(category=ip_infringement)'s casual flag. Always creates
 // exactly one TrustSafetyCase, reusing Phase 12's queue directly (§4.1)
@@ -52,7 +114,7 @@ export async function fileDmcaTakedownNotice(params: {
   complainantContact: string;
   copyrightedWorkDescription: string;
   infringingContentSubjectType: string;
-  infringingContentSubjectId: string;
+  infringingContentLocation: string;
   goodFaithStatementAccepted: boolean;
   accuracyPerjuryStatementAccepted: boolean;
   signature: string;
@@ -67,10 +129,14 @@ export async function fileDmcaTakedownNotice(params: {
     return { error: "Describe the copyrighted work being infringed." };
   }
 
+  const resolved = await resolveDmcaSubject(params.infringingContentSubjectType, params.infringingContentLocation);
+  if (resolved.error || !resolved.subjectId) return { error: resolved.error };
+  const subjectId = resolved.subjectId;
+
   const trustSafetyCase = await createTrustSafetyCase({
     caseType: "dmca_takedown",
     subjectType: params.infringingContentSubjectType,
-    subjectId: params.infringingContentSubjectId,
+    subjectId,
     reason: "dmca_takedown",
   });
 
@@ -81,14 +147,14 @@ export async function fileDmcaTakedownNotice(params: {
       complainantContact: params.complainantContact.trim(),
       copyrightedWorkDescription: params.copyrightedWorkDescription.trim(),
       infringingContentSubjectType: params.infringingContentSubjectType,
-      infringingContentSubjectId: params.infringingContentSubjectId,
+      infringingContentSubjectId: subjectId,
       goodFaithStatementAccepted: params.goodFaithStatementAccepted,
       accuracyPerjuryStatementAccepted: params.accuracyPerjuryStatementAccepted,
       signature: params.signature.trim(),
     },
   });
 
-  const ownerId = await resolveSubjectOwnerId(params.infringingContentSubjectType, params.infringingContentSubjectId);
+  const ownerId = await resolveSubjectOwnerId(params.infringingContentSubjectType, subjectId);
   if (ownerId) await notifyDmcaNoticeReceived({ recipientId: ownerId, noticeId: notice.id });
 
   return { noticeId: notice.id };

@@ -6352,3 +6352,42 @@ details:not([open]) > .settingsAddTrigger {
 .walletVipIcon {
   color: var(--premium-gold-start);
 }
+
+/* DMCA notice page (src/app/dmca). .checkboxField is the one genuinely
+   reusable piece — the "checkbox + wrapping label text" row shows up as an
+   inline flex object at ~19 other call sites across the codebase; adding it
+   here rather than one more ad hoc inline style, per opportunistic
+   migration (see DESIGN_SYSTEM.md's Components section) — not a retrofit of
+   those other 19. */
+/* .card (unlike .profileCard, which bakes in max-width: 640px; margin: 2rem
+   auto) is a bare surface with no width opinion — it's meant to be dropped
+   inside an already-constrained column, not to size the page itself. On a
+   wide viewport this page's main grid column is a flexible 1fr, so without
+   this wrapper the cards stretched edge-to-edge instead of sitting in a
+   readable column. --measure-prose is this file's own named token for
+   exactly that width (see "Layout measures" in DESIGN_SYSTEM.md) — reaching
+   for it here instead of copying .profileCard's hardcoded 640px literal. */
+.dmcaPage {
+  width: 100%;
+  max-width: var(--measure-prose);
+  margin: var(--space-8) auto;
+  padding: 0 var(--space-4);
+}
+
+.checkboxField {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.checkboxField input[type="checkbox"] {
+  margin-top: 0.2rem;
+}
+
+/* Postal-address-shaped text (name / street / email, one per line) — the
+   only spot on this page that needs --leading-body's roomier line height
+   instead of .mutedText's tighter default. */
+.dmcaAgentAddress {
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
