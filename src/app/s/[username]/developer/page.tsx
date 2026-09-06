@@ -42,6 +42,12 @@ export default async function DeveloperAppsPage() {
               key={app.id}
               href={`developer/${app.id}`}
               icon={AppWindow}
+              thumbnail={
+                app.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- small settings-list thumbnail, not an optimizable static asset
+                  <img src={app.logoUrl} alt="" />
+                ) : undefined
+              }
               label={app.name}
               description={`${app.ownerBusiness ? `Owned by ${app.ownerBusiness.name}` : "Owned by you"} · ${app.status}`}
             />

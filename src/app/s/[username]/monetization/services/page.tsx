@@ -15,6 +15,19 @@ export const metadata: Metadata = { title: "Freelance services" };
 
 const DAY_LABEL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const STATUS_LABEL: Record<string, string> = { draft: "Draft", active: "Active", archived: "Archived" };
+// Same shape as b/[slug]/store/page.tsx's own firstImage helper — this page
+// has its own local copy rather than a shared import, matching that file's
+// existing convention (not previously extracted).
+function firstImage(imagesJson: string | null): string | null {
+  if (!imagesJson) return null;
+  try {
+    const urls: unknown = JSON.parse(imagesJson);
+    return Array.isArray(urls) && typeof urls[0] === "string" ? urls[0] : null;
+  } catch {
+    return null;
+  }
+}
+
 const APPOINTMENT_STATUS_LABEL: Record<string, string> = {
   requested: "Requested",
   confirmed: "Confirmed",
@@ -62,6 +75,12 @@ export default async function FreelanceServicesSettingsPage() {
         <div key={offering.id} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow
             icon={Briefcase}
+            thumbnail={
+              firstImage(offering.imagesJson) ? (
+                // eslint-disable-next-line @next/next/no-img-element -- small settings-list thumbnail, not an optimizable static asset
+                <img src={firstImage(offering.imagesJson)!} alt="" />
+              ) : undefined
+            }
             label={offering.name}
             description={`${offering.kind === "product" ? "Product" : "Service"} · ${STATUS_LABEL[offering.status] ?? offering.status}${offering.price !== null ? ` · ${offering.currency} ${offering.price.toFixed(2)}` : " · contact for pricing"}`}
             trailing={
@@ -98,6 +117,7 @@ export default async function FreelanceServicesSettingsPage() {
                   stockStatus: offering.stockStatus,
                   isBookable: offering.isBookable,
                   durationMinutes: offering.durationMinutes,
+                  imageUrls: offering.imagesJson ? JSON.parse(offering.imagesJson) : [],
                 }}
               />
             </div>

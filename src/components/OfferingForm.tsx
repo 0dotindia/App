@@ -2,6 +2,11 @@
 
 import { useActionState, useState } from "react";
 import { createOffering, updateOffering } from "@/app/actions/offerings";
+import { suggestOfferingDescription } from "@/app/actions/ai-content";
+import { AISuggestButton } from "@/components/AISuggestButton";
+import { ImagePickerField } from "@/components/ImagePickerField";
+
+const MAX_IMAGES = 8;
 
 type OfferingValues = {
   id: string;
@@ -16,6 +21,7 @@ type OfferingValues = {
   stockStatus: string | null;
   isBookable: boolean | null;
   durationMinutes: number | null;
+  imageUrls: string[];
 };
 
 // phase-9 spec §3.2: owner is now business or "self" (an individual
@@ -36,9 +42,10 @@ export function OfferingForm({
   const [state, formAction, pending] = useActionState(isEdit ? updateOffering : createOffering, undefined);
   const [kind, setKind] = useState(offering?.kind ?? "product");
   const [isBookable, setIsBookable] = useState(offering?.isBookable ?? false);
+  const [descriptionValue, setDescriptionValue] = useState(offering?.description ?? "");
 
   return (
-    <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "36ch" }}>
+    <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "36ch" }} encType="multipart/form-data">
       {!isEdit && <input type="hidden" name="ownerType" value={owner.type === "business" ? "business" : "self"} />}
       {!isEdit && owner.type === "business" && <input type="hidden" name="businessId" value={owner.businessId} />}
       {isEdit && <input type="hidden" name="offeringId" value={offering!.id} />}
@@ -49,7 +56,22 @@ export function OfferingForm({
       </select>
 
       <input type="text" name="name" placeholder="Name" defaultValue={offering?.name} maxLength={120} required className="textInput" />
-      <textarea name="description" placeholder="Description" defaultValue={offering?.description} maxLength={2000} rows={3} className="textInput" />
+      <textarea
+        name="description"
+        placeholder="Description"
+        value={descriptionValue}
+        onChange={(e) => setDescriptionValue(e.target.value)}
+        maxLength={2000}
+        rows={3}
+        className="textInput"
+      />
+      <AISuggestButton
+        label="AI: Suggest a description"
+        contextLabel="What's this? (optional)"
+        contextPlaceholder="e.g. a logo design service for startups"
+        generate={suggestOfferingDescription}
+        onInsert={setDescriptionValue}
+      />
 
       <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
         <input
@@ -128,10 +150,15 @@ export function OfferingForm({
         <option value="archived">Archived</option>
       </select>
 
-      <label className="mutedText" style={{ fontSize: "0.8rem" }}>
-        Images (up to 8{isEdit ? " — uploading new ones replaces the current set" : ""})
-      </label>
-      <input type="file" name="images" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="textInput" />
+      <ImagePickerField
+        id="offeringImages"
+        name="images"
+        label={`Images (up to ${MAX_IMAGES})`}
+        mode="multiple"
+        max={MAX_IMAGES}
+        initialUrls={offering?.imageUrls ?? []}
+        keepFieldName="keepImageUrls"
+      />
 
       {state?.error && <p className="errorText">{state.error}</p>}
 

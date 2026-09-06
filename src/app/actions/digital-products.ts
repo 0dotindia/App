@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
+import { saveUploadedImage } from "@/lib/uploads";
 import { randomUUID } from "crypto";
 import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
@@ -13,9 +14,11 @@ import { getAppOrigin } from "@/lib/email";
 import { getAttributedAffiliateLink, creditAffiliateConversion } from "@/lib/affiliate";
 import { notifyAffiliateConversion } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const MAX_FILE_BYTES = 200 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const STATUS_VALUES = new Set(["draft", "active", "archived"]);
 
 // Same convention as tips.ts's checkTipRateLimit for this class of action.
@@ -57,12 +60,30 @@ export async function createProduct(_prevState: ActionState, formData: FormData)
   const saved = await saveProtectedFile(file, { maxBytes: MAX_FILE_BYTES });
   if ("error" in saved) return saved;
 
+  // Public thumbnail — distinct from the protected sellable file above
+  // (saveProtectedFile, never a public URL); this one goes through the
+  // ordinary public-image pipeline the same way a project cover does.
+  let coverImageUrl: string | undefined;
+  const coverFile = formData.get("coverImage");
+  if (coverFile instanceof File && coverFile.size > 0) {
+    const coverResult = await saveUploadedImage(coverFile, { maxBytes: MAX_IMAGE_BYTES, uploadedById: user.id });
+    if ("error" in coverResult) return { error: coverResult.error };
+    coverImageUrl = coverResult.url;
+  }
+
   try {
     await db.digitalProduct.create({
-      data: { creatorId: user.id, ...fields, fileKey: saved.key, fileMimeType: saved.mimeType, fileSizeBytes: saved.sizeBytes },
+      data: {
+        creatorId: user.id,
+        ...fields,
+        coverImageUrl,
+        fileKey: saved.key,
+        fileMimeType: saved.mimeType,
+        fileSizeBytes: saved.sizeBytes,
+      },
     });
   } catch (err) {
-    console.error("createProduct: db write failed", err);
+    logger.error("createProduct: db write failed", err);
     return { error: "Couldn't save this product. Please try again." };
   }
 
@@ -93,10 +114,18 @@ export async function updateProduct(_prevState: ActionState, formData: FormData)
     fileData = { fileKey: saved.key, fileMimeType: saved.mimeType, fileSizeBytes: saved.sizeBytes };
   }
 
+  let coverImageUrl = product.coverImageUrl;
+  const coverFile = formData.get("coverImage");
+  if (coverFile instanceof File && coverFile.size > 0) {
+    const coverResult = await saveUploadedImage(coverFile, { maxBytes: MAX_IMAGE_BYTES, uploadedById: user.id });
+    if ("error" in coverResult) return { error: coverResult.error };
+    coverImageUrl = coverResult.url;
+  }
+
   try {
-    await db.digitalProduct.update({ where: { id: product.id }, data: { ...fields, ...fileData } });
+    await db.digitalProduct.update({ where: { id: product.id }, data: { ...fields, coverImageUrl, ...fileData } });
   } catch (err) {
-    console.error("updateProduct: db write failed", err);
+    logger.error("updateProduct: db write failed", err);
     return { error: "Couldn't save this product. Please try again." };
   }
 
@@ -260,7 +289,7 @@ export async function activateDigitalPurchase(metadata: Record<string, string>, 
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      console.error(`activateDigitalPurchase: duplicate purchase race for product ${productId}, buyer ${payerId} — buyer was charged, no purchase row created.`);
+      logger.error("activateDigitalPurchase: duplicate purchase race — buyer was charged, no purchase row created", undefined, { productId, payerId });
       return;
     }
     throw err;

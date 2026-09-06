@@ -1,6 +1,7 @@
 import "server-only";
 import { randomBytes, createHmac, timingSafeEqual } from "crypto";
 import { put, get } from "@vercel/blob";
+import { logger } from "@/lib/logger";
 
 // spec §5.3: files are never served from a permanently public URL. Stored
 // as Vercel Blob objects with access:"private" under a protected/ prefix
@@ -53,7 +54,7 @@ export async function saveProtectedFile(file: File, { maxBytes }: { maxBytes: nu
     // the calling Server Action into a hard HTTP 500 instead of the
     // {error: string} shape createProduct/updateProduct (and courses.ts's
     // lesson upload) already know how to render as a normal form error.
-    console.error("saveProtectedFile: blob put() failed", err);
+    logger.error("saveProtectedFile: blob put() failed", err);
     return { error: "Upload failed. Please try again." };
   }
   return { key, mimeType: file.type, sizeBytes: file.size };

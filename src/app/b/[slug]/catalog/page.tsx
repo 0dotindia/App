@@ -224,6 +224,7 @@ export default async function CatalogPage({
                           stockStatus: offering.stockStatus,
                           isBookable: offering.isBookable,
                           durationMinutes: offering.durationMinutes,
+                          imageUrls: offering.imagesJson ? JSON.parse(offering.imagesJson) : [],
                         }}
                       />
                     </div>

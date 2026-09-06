@@ -1,6 +1,7 @@
 import "server-only";
 import { createChannel } from "@/lib/realtime/bus";
 import { realtimeRedisConfigured } from "@/lib/realtime/redis-config";
+import { logger } from "@/lib/logger";
 
 // Realtime addendum Phase E (docs/specs/addendum-realtime-community.md §8):
 // a live "N people viewing" count for a business, shown only to the owner
@@ -52,7 +53,7 @@ export async function recordViewer(businessId: string, viewerKey: string): Promi
       if (added[0]) broadcast(businessId);
       return;
     } catch (error) {
-      console.error("[business-viewers] recordViewer failed", error);
+      logger.error("business-viewers: recordViewer failed", error, { businessId });
       return;
     }
   }
@@ -72,7 +73,7 @@ export async function dropViewer(businessId: string, viewerKey: string): Promise
       const removed = await redis().zrem(key(businessId), viewerKey);
       if (removed) broadcast(businessId);
     } catch (error) {
-      console.error("[business-viewers] dropViewer failed", error);
+      logger.error("business-viewers: dropViewer failed", error, { businessId });
     }
     return;
   }
@@ -94,7 +95,7 @@ export async function countViewers(businessId: string): Promise<number> {
         .exec<[number, number]>();
       return card;
     } catch (error) {
-      console.error("[business-viewers] countViewers failed", error);
+      logger.error("business-viewers: countViewers failed", error, { businessId });
       return 0;
     }
   }

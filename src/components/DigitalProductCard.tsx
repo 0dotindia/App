@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { purchaseProduct, requestDownloadUrl } from "@/app/actions/digital-products";
+import { renderWikiMarkdown } from "@/lib/wiki-markdown";
 
 // spec §5: buy form for a non-owner, or a "Download" trigger for a buyer —
 // same useActionState pattern as SubscribeForm.tsx for the purchase side.
@@ -15,7 +16,7 @@ export function DigitalProductCard({
   cardAvailable,
   viewerCoins,
 }: {
-  product: { id: string; title: string; description: string; price: number; currency: string };
+  product: { id: string; title: string; description: string; price: number; currency: string; coverImageUrl: string | null };
   owned: boolean;
   cardAvailable: boolean;
   viewerCoins: number;
@@ -35,8 +36,18 @@ export function DigitalProductCard({
 
   return (
     <div>
+      {product.coverImageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element -- user-supplied URL, not an optimizable static asset
+        <img
+          src={product.coverImageUrl}
+          alt=""
+          style={{ width: "100%", maxHeight: "140px", objectFit: "cover", borderRadius: "8px", marginBottom: "0.4rem" }}
+        />
+      )}
       <p style={{ fontWeight: 600, fontSize: "0.9rem", margin: 0 }}>{product.title}</p>
-      {product.description && <p className="mutedText" style={{ fontSize: "0.8rem", margin: "0.15rem 0" }}>{product.description}</p>}
+      {product.description && (
+        <div className="mutedText" style={{ fontSize: "0.8rem", margin: "0.15rem 0" }}>{renderWikiMarkdown(product.description)}</div>
+      )}
       {owned ? (
         <>
           <button type="button" className="button buttonSmall" onClick={handleDownload} disabled={isPending}>

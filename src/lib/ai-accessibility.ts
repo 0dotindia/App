@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { getAIProvider } from "@/lib/ai-provider";
 import { logAIGeneration } from "@/lib/ai-generation";
+import { logger } from "@/lib/logger";
 
 export type FileAssetContentType = "image" | "video" | "audio" | "document";
 
@@ -68,7 +69,7 @@ async function processPendingAccessibilityJobs(): Promise<void> {
     } catch (err) {
       // One bad asset shouldn't stop the rest of the batch — the next
       // 60s interval retries it (it's still missing accessibilityMetadata).
-      console.error(`generateAccessibilityMetadataFor failed for file asset ${asset.id}`, err);
+      logger.error("generateAccessibilityMetadataFor failed", err, { fileAssetId: asset.id });
     }
   }
 }

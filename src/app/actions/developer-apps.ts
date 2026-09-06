@@ -5,11 +5,14 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { getAppOrigin } from "@/lib/email";
+import { saveUploadedImage } from "@/lib/uploads";
 import type { ActionState } from "@/app/actions/auth";
 import { resolveDeveloperAppOwner, generateClientCredentials, parseRedirectUris, requireOwnedDeveloperApp } from "@/lib/developer-apps";
 import { requestDeveloperAppScope, revokeOAuthAuthorization, seedOAuthScopes } from "@/lib/oauth";
 import { ALLOWED_WEBHOOK_EVENT_TYPES, generateWebhookSecret } from "@/lib/webhooks";
 import { createApiPlanCheckoutSession, downgradeApiPlanToFree, resolveAppPayerUserId } from "@/lib/api-usage-billing";
+
+const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 
 // spec §3.1: name/description length caps, same "1-100"/"0-1000" bounds
 // the spec's own data model literally specifies rather than this codebase's
@@ -33,10 +36,18 @@ export async function createDeveloperApp(_prevState: ActionState, formData: Form
   const redirectUris = parseRedirectUris(redirectUrisRaw);
   if ("error" in redirectUris) return { error: redirectUris.error };
 
+  let logoUrl: string | undefined;
+  const logoFile = formData.get("logo");
+  if (logoFile instanceof File && logoFile.size > 0) {
+    const logoResult = await saveUploadedImage(logoFile, { maxBytes: MAX_LOGO_BYTES, uploadedById: user.id });
+    if ("error" in logoResult) return { error: logoResult.error };
+    logoUrl = logoResult.url;
+  }
+
   const { clientId, clientSecret, clientSecretHash } = await generateClientCredentials();
 
   const app = await db.developerApp.create({
-    data: { name, description, ...owner, clientId, clientSecretHash, redirectUrisJson: JSON.stringify(redirectUris.redirectUris) },
+    data: { name, description, logoUrl, ...owner, clientId, clientSecretHash, redirectUrisJson: JSON.stringify(redirectUris.redirectUris) },
   });
 
   const handle = await handleFor(user.id);
@@ -51,6 +62,40 @@ export async function createDeveloperApp(_prevState: ActionState, formData: Form
 async function handleFor(userId: string): Promise<string> {
   const username = await db.username.findUnique({ where: { userId } });
   return username?.handle ?? "";
+}
+
+// The one edit path for an already-registered app. Unlike Form's title/
+// fields (locked post-creation because responses are keyed by field label),
+// name/description/logo here are just display copy shown on the OAuth
+// consent screen — nothing references them by value, so they're safe to
+// change anytime.
+export async function updateDeveloperApp(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireVerifiedUser();
+  const appId = String(formData.get("appId") ?? "");
+
+  const app = await requireOwnedDeveloperApp(appId, user.id);
+  if (!app) return { error: "App not found." };
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (name.length < 1 || name.length > 100) return { error: "Name must be 1-100 characters." };
+
+  const description = String(formData.get("description") ?? "").trim();
+  if (description.length > 1000) return { error: "Description must be at most 1000 characters." };
+
+  let logoUrl = app.logoUrl;
+  const logoFile = formData.get("logo");
+  if (logoFile instanceof File && logoFile.size > 0) {
+    const logoResult = await saveUploadedImage(logoFile, { maxBytes: MAX_LOGO_BYTES, uploadedById: user.id });
+    if ("error" in logoResult) return { error: logoResult.error };
+    logoUrl = logoResult.url;
+  }
+
+  await db.developerApp.update({ where: { id: app.id }, data: { name, description, logoUrl } });
+
+  const handle = await handleFor(user.id);
+  revalidatePath(`/s/${handle}/developer`);
+  revalidatePath(`/s/${handle}/developer/${app.id}`);
+  return undefined;
 }
 
 export async function rotateClientSecret(formData: FormData): Promise<void> {

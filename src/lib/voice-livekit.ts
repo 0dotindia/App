@@ -1,6 +1,7 @@
 import "server-only";
 import { RoomServiceClient } from "livekit-server-sdk";
 import { createLiveKitToken } from "@/lib/livestream-provider";
+import { logger } from "@/lib/logger";
 
 // LiveKit lifecycle + permission sync for community voice rooms
 // (docs/specs/addendum-voice-rooms-livekit.md — Realtime Phase D). The
@@ -50,7 +51,7 @@ export async function ensureVoiceRoom(roomId: string): Promise<void> {
       maxParticipants: MAX_PARTICIPANTS,
     });
   } catch (error) {
-    console.error("[voice-livekit] ensureVoiceRoom failed", error);
+    logger.error("voice-livekit: ensureVoiceRoom failed", error, { roomId });
   }
 }
 
@@ -61,7 +62,7 @@ export async function closeVoiceRoom(roomId: string): Promise<void> {
     await svc.deleteRoom(voiceRoomLkName(roomId));
   } catch (error) {
     // deleteRoom on an already-gone room is fine (empty-timeout beat us).
-    console.error("[voice-livekit] closeVoiceRoom failed (may be already closed)", error);
+    logger.error("voice-livekit: closeVoiceRoom failed (may be already closed)", error, { roomId });
   }
 }
 
@@ -79,7 +80,7 @@ export async function setVoicePublish(roomId: string, userId: string, canPublish
       permission: { canPublish, canSubscribe: true, canPublishData: false },
     });
   } catch (error) {
-    console.error(`[voice-livekit] setVoicePublish(${canPublish}) failed for ${userId}`, error);
+    logger.error("voice-livekit: setVoicePublish failed", error, { roomId, userId, canPublish });
   }
 }
 
@@ -92,7 +93,7 @@ export async function kickFromVoiceRoom(roomId: string, userId: string): Promise
   try {
     await svc.removeParticipant(voiceRoomLkName(roomId), userId);
   } catch (error) {
-    console.error("[voice-livekit] kickFromVoiceRoom failed", error);
+    logger.error("voice-livekit: kickFromVoiceRoom failed", error, { roomId, userId });
   }
 }
 

@@ -1,4 +1,5 @@
 import "server-only";
+import { logger } from "@/lib/logger";
 
 // addendum §2/§6: same "swappable interface, stub implementation" posture as
 // email.ts's EmailSender and payments.ts's PaymentProcessor — no SMS
@@ -16,7 +17,7 @@ class ConsoleSmsSender implements SmsSender {
   readonly name = "console-stub";
 
   async send(params: { to: string; body: string }): Promise<{ status: "sent" | "failed" }> {
-    console.log(`[sms stub] to=${params.to} body=${JSON.stringify(params.body)}`);
+    logger.info("sms stub: not actually sending", undefined, { to: params.to, body: params.body });
     return { status: "sent" };
   }
 }

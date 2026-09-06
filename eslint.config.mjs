@@ -31,13 +31,13 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
     },
   },
-  // Forces new server-side logging through src/lib/logger.ts (which tags a
+  // Forces server-side logging through src/lib/logger.ts (which tags a
   // level and forwards error/warning to Sentry) instead of scattering raw
-  // console calls that emit no consistent shape and never reach Sentry. A
-  // warning, not an error: ~50 pre-existing call sites (src/lib, src/app/
-  // actions, src/app/api) predate this rule and aren't migrated yet, so
-  // flipping this to "error" would fail every existing PR that touches
-  // those files. Tighten to "error" once that backlog is cleared.
+  // console calls that emit no consistent shape and never reach Sentry. The
+  // ~50 pre-existing call sites (src/lib, src/app/actions, src/app/api) that
+  // predated this rule are now migrated — tightened from "warn" to "error"
+  // per this rule's own original plan, so a new raw console call fails CI
+  // instead of silently reintroducing the backlog.
   {
     files: ["src/app/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}", "src/components/**/*.{ts,tsx}"],
     ignores: [
@@ -46,7 +46,7 @@ const eslintConfig = defineConfig([
       "**/__tests__/**",
     ],
     rules: {
-      "no-console": "warn",
+      "no-console": "error",
     },
   },
   // Expo config plugins (mobile/plugins/*.js) are CommonJS build-time

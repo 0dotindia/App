@@ -8,6 +8,7 @@ import { ALLOWED_WEBHOOK_EVENT_TYPES } from "@/lib/webhooks";
 import { rotateClientSecret, requestScope, deleteWebhookSubscription } from "@/app/actions/developer-apps";
 import { RedirectUrisForm } from "@/components/RedirectUrisForm";
 import { WebhookSubscriptionForm } from "@/components/WebhookSubscriptionForm";
+import { EditDeveloperAppForm } from "@/components/EditDeveloperAppForm";
 import { BillingPlanForm } from "./BillingPlanForm";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -57,7 +58,13 @@ export default async function DeveloperAppDetailPage({
 
   return (
     <div className="settingsSection">
-      <h2 className="settingsSectionHeading">{app.name}</h2>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        {app.logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- user-supplied URL, not an optimizable static asset
+          <img src={app.logoUrl} alt="" style={{ width: 32, height: 32, borderRadius: "8px", objectFit: "cover" }} />
+        )}
+        <h2 className="settingsSectionHeading" style={{ margin: 0 }}>{app.name}</h2>
+      </div>
 
       {newSecret && (
         <div className="profileLinkItem" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.3rem", marginBottom: "1rem", borderColor: "var(--danger)" }}>
@@ -65,6 +72,14 @@ export default async function DeveloperAppDetailPage({
           <code style={{ wordBreak: "break-all", fontSize: "0.85rem" }}>{newSecret}</code>
         </div>
       )}
+
+      <div style={{ marginBottom: "1.5rem" }}>
+        <p className="sectionHeading">App details</p>
+        <p className="mutedText" style={{ fontSize: "0.85rem", marginBottom: "0.5rem" }}>
+          Name, description, and logo are shown to users on the &quot;Sign in with 0dot&quot; consent screen.
+        </p>
+        <EditDeveloperAppForm appId={app.id} name={app.name} description={app.description} logoUrl={app.logoUrl} />
+      </div>
 
       <div style={{ marginBottom: "1.5rem" }}>
         <p className="sectionHeading">Credentials</p>

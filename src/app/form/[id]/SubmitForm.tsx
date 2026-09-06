@@ -43,6 +43,7 @@ export function SubmitForm({ formId, fields }: { formId: string; fields: FormFie
       {fields.map((field) => (
         <div key={field.label}>
           <label>{field.label}{field.required && " *"}</label>
+          {field.description && <p className="mutedText" style={{ fontSize: "0.8rem", margin: "0.1rem 0 0.3rem" }}>{field.description}</p>}
           <FieldInput field={field} />
         </div>
       ))}

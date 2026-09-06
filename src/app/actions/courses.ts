@@ -15,6 +15,7 @@ import { checkCourseCompletion } from "@/lib/learning-completion";
 import { getAttributedAffiliateLink, creditAffiliateConversion } from "@/lib/affiliate";
 import { notifyAffiliateConversion } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
@@ -341,7 +342,7 @@ export async function activateCoursePurchase(metadata: Record<string, string>, p
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      console.error(`activateCoursePurchase: duplicate webhook delivery for ${processorReference} — already recorded, no-op.`);
+      logger.error("activateCoursePurchase: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
       return;
     }
     throw err;

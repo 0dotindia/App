@@ -27,6 +27,12 @@ export default async function DigitalProductsSettingsPage() {
         <div key={product.id} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow
             icon={Package}
+            thumbnail={
+              product.coverImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- small settings-list thumbnail, not an optimizable static asset
+                <img src={product.coverImageUrl} alt="" />
+              ) : undefined
+            }
             label={product.title}
             description={`${product.price.toFixed(2)} ${product.currency.toUpperCase()} · ${product.status}`}
             trailing={

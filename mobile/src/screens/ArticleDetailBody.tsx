@@ -59,7 +59,7 @@ export function ArticleDetailBody({ username, slug }: { username: string; slug: 
       style={styles.screen}
       contentContainerStyle={[styles.content, maxWidth ? { maxWidth, alignSelf: "center", width: "100%" } : null]}
     >
-      {article.coverImageUrl ? <Image source={{ uri: article.coverImageUrl }} style={styles.cover} contentFit="cover" /> : null}
+      {article.coverImageUrl ? <Image source={{ uri: article.coverImageUrl }} style={styles.cover} contentFit="cover" alt="Cover photo" /> : null}
 
       <Text style={styles.title}>{article.title}</Text>
       {article.subtitle ? <Text style={styles.subtitle}>{article.subtitle}</Text> : null}

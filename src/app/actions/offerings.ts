@@ -13,6 +13,7 @@ import { coinActionKey } from "@/lib/wallet/limits";
 import { getAppOrigin } from "@/lib/email";
 import { recordCrmActivity } from "@/lib/crm";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const MAX_IMAGES = 8;
@@ -179,23 +180,32 @@ export async function updateOffering(
   const fields = parseAndValidateFields(formData);
   if ("error" in fields) return fields;
 
-  // Only replaces the image set when new files are submitted — same
-  // "optional replace" posture as avatar/cover uploads elsewhere
-  // (ManageBusinessForm etc.), not a per-image add/remove UI.
+  // Merges kept-existing + newly-uploaded instead of the old "any new file
+  // submitted wholesale-replaces the whole image set" behavior — that
+  // silently deleted every other existing image the moment you added one
+  // more (the same bug updateProject's gallery handling had). ImagePickerField
+  // (gallery mode) always reports the full current keep set as
+  // `keepImageUrls`, one hidden input per URL; each is checked against the
+  // offering's actual current images rather than trusted outright.
+  const currentImageUrls: string[] = offering.imagesJson ? JSON.parse(offering.imagesJson) : [];
+  const keepImageUrls = formData
+    .getAll("keepImageUrls")
+    .filter((v): v is string => typeof v === "string")
+    .filter((url) => currentImageUrls.includes(url));
+
   const imageFiles = formData
     .getAll("images")
     .filter((entry): entry is File => entry instanceof File && entry.size > 0)
-    .slice(0, MAX_IMAGES);
-  let imagesJson = offering.imagesJson;
-  if (imageFiles.length > 0) {
-    const imageUrls: string[] = [];
-    for (const file of imageFiles) {
-      const result = await saveUploadedImage(file, { maxBytes: MAX_IMAGE_BYTES, uploadedById: user.id });
-      if ("error" in result) return { error: result.error };
-      imageUrls.push(result.url);
-    }
-    imagesJson = JSON.stringify(imageUrls);
+    .slice(0, Math.max(0, MAX_IMAGES - keepImageUrls.length));
+  const newImageUrls: string[] = [];
+  for (const file of imageFiles) {
+    const result = await saveUploadedImage(file, { maxBytes: MAX_IMAGE_BYTES, uploadedById: user.id });
+    if ("error" in result) return { error: result.error };
+    newImageUrls.push(result.url);
   }
+
+  const mergedImageUrls = [...keepImageUrls, ...newImageUrls];
+  const imagesJson = mergedImageUrls.length > 0 ? JSON.stringify(mergedImageUrls) : null;
 
   await db.offering.update({
     where: { id: offering.id },
@@ -375,7 +385,7 @@ export async function activateOfferingPurchase(metadata: Record<string, string>,
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      console.error(`activateOfferingPurchase: duplicate webhook delivery for ${processorReference} — already recorded, no-op.`);
+      logger.error("activateOfferingPurchase: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
       return;
     }
     throw err;

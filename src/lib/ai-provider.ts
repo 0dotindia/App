@@ -143,6 +143,46 @@ class StubAIProvider implements AIProvider {
         modelName: STUB_MODEL_NAME,
       };
     }
+    if (kind === "product_description") {
+      const title = trimmed.length > 0 ? trimmed : "This product";
+      return {
+        text: `${title} is a focused digital product built to solve a real problem. Replace this paragraph with what's actually inside and who it's for.`,
+        costTokens,
+        modelName: STUB_MODEL_NAME,
+      };
+    }
+    if (kind === "offering_description") {
+      const title = trimmed.length > 0 ? trimmed : "This service";
+      return {
+        text: `${title} — a focused offering built around real client needs. Replace this with what you actually deliver and who it's for.`,
+        costTokens,
+        modelName: STUB_MODEL_NAME,
+      };
+    }
+    if (kind === "membership_tier_description") {
+      const title = trimmed.length > 0 ? trimmed : "this tier";
+      return {
+        text: `Members at ${title} get real, ongoing value — replace this with the actual perks included at this level.`,
+        costTokens,
+        modelName: STUB_MODEL_NAME,
+      };
+    }
+    if (kind === "form_description") {
+      const title = trimmed.length > 0 ? trimmed : "This form";
+      return {
+        text: `${title} takes just a couple of minutes — replace this with what you're actually asking for and why it matters.`,
+        costTokens,
+        modelName: STUB_MODEL_NAME,
+      };
+    }
+    if (kind === "cross_post_caption") {
+      const topic = trimmed.length > 0 ? trimmed : "what's new";
+      return { text: `Sharing ${topic} — replace this with your real caption.`, costTokens, modelName: STUB_MODEL_NAME };
+    }
+    if (kind === "developer_app_description") {
+      const title = trimmed.length > 0 ? trimmed : "This app";
+      return { text: `${title} integrates with 0dot to do something useful for its users — replace this with what it actually does.`, costTokens, modelName: STUB_MODEL_NAME };
+    }
     return { text: trimmed.length > 0 ? `${trimmed} — expanded with a bit more detail.` : "", costTokens, modelName: STUB_MODEL_NAME };
   }
 
@@ -238,6 +278,29 @@ function suggestTextSystemPrompt(kind: string): string {
   }
   if (kind === "podcast_show_notes") {
     return "You write short first-draft show notes for a podcast episode, in Markdown, given its title/topic as context. Return only the draft, no preamble.";
+  }
+  if (kind === "product_description") {
+    return "You write a short, punchy first-draft description for a digital product (an ebook, template, course file, etc.), given its title/topic as context. Return only the description, no preamble, no quotes.";
+  }
+  if (kind === "offering_description") {
+    return "You write a short, punchy first-draft description for a freelance product or service listing, given its name/topic as context. Return only the description, no preamble, no quotes.";
+  }
+  if (kind === "membership_tier_description") {
+    return "You write a short first-draft description of the perks included at a paid membership tier, given its name/level as context. Return only the description, no preamble, no quotes.";
+  }
+  if (kind === "form_description") {
+    return "You write a short, welcoming first-draft intro for a form or survey, in Markdown, given its title/topic as context — explain what it's for and roughly how long it takes. Return only the intro, no preamble.";
+  }
+  if (kind === "cross_post_caption") {
+    // Deliberately no Markdown instruction, unlike every other kind here —
+    // this text is posted verbatim to external platforms (Twitter/LinkedIn/
+    // etc.) that don't render **bold**/- lists as formatting.
+    return "You write a short, punchy plain-text social media caption (1-2 sentences, no Markdown formatting), given a topic as context. Return only the caption, no preamble, no quotes, no hashtags unless the topic implies them.";
+  }
+  if (kind === "developer_app_description") {
+    // Also deliberately plain — this is a consent-screen sentence fragment
+    // ("X wants to access..."), not a rendered content block.
+    return "You write a short, plain-text 1-2 sentence description of a developer app/integration, given its name/topic as context, suitable for showing to end users on an OAuth consent screen. Return only the description, no preamble, no quotes, no Markdown.";
   }
   return "You expand on the given text with a bit more detail, in the same voice. Return only the expanded text, no preamble.";
 }

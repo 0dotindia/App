@@ -10,6 +10,17 @@ import { RequestSlotButton } from "@/components/RequestSlotButton";
 
 const SLOT_WINDOW_DAYS = 14;
 
+// Same shape as b/[slug]/store/page.tsx's own firstImage helper.
+function firstImage(imagesJson: string | null): string | null {
+  if (!imagesJson) return null;
+  try {
+    const urls: unknown = JSON.parse(imagesJson);
+    return Array.isArray(urls) && typeof urls[0] === "string" ? urls[0] : null;
+  } catch {
+    return null;
+  }
+}
+
 // phase-9 spec §3.1/§3.2: the public "self" mirror of /b/[slug]/store +
 // /b/[slug]/appointments merged into one page — an individual seller's
 // scale doesn't need the two-tab split a business catalog does. Native
@@ -67,8 +78,13 @@ export default async function UserServicesPage({
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "0.75rem", marginBottom: "1.5rem" }}>
         {offerings.map((offering) => {
           const isPurchasable = offering.price !== null;
+          const image = firstImage(offering.imagesJson);
           return (
             <div key={offering.id} className="profileLinkItem" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.4rem" }}>
+              {image && (
+                // eslint-disable-next-line @next/next/no-img-element -- user-supplied URL, not an optimizable static asset
+                <img src={image} alt="" style={{ width: "100%", height: "120px", objectFit: "cover", borderRadius: "8px" }} />
+              )}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <strong>{offering.name}</strong>
                 <span className="mutedText" style={{ fontSize: "0.75rem" }}>

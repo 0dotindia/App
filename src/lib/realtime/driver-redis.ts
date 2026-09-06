@@ -2,6 +2,7 @@ import "server-only";
 import type { Redis } from "@upstash/redis";
 import type { RealtimeDriver } from "./bus";
 import { getRealtimeRedis } from "./redis-client";
+import { logger } from "@/lib/logger";
 
 // @upstash/redis doesn't export the Subscriber class, only its instances
 // (via redis.psubscribe). Recover the type from the method.
@@ -64,7 +65,7 @@ function ensureSubscriber(): void {
     // The upstream SSE connection dropped or Upstash returned an error.
     // @upstash/redis reconnects the pattern subscription on its own; log so
     // a persistent failure is visible rather than silent.
-    console.error("[realtime] redis subscriber error", error);
+    logger.error("realtime: redis subscriber error", error);
   });
 
   g.realtimeRedisSubscriber = subscriber;
@@ -78,7 +79,7 @@ export const redisDriver: RealtimeDriver = {
         // Fire-and-forget, same posture as the in-memory driver — a failed
         // publish means subscribers miss this one event and pick it up on
         // their next refetch. Not worth propagating to the caller.
-        console.error("[realtime] redis publish failed", error);
+        logger.error("realtime: redis publish failed", error, { channel });
       });
   },
 

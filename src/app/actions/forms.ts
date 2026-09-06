@@ -10,7 +10,7 @@ import type { ActionState } from "@/app/actions/auth";
 const FIELD_TYPES = new Set(["text", "choice", "rating", "date"]);
 const MODES = new Set(["form", "survey"]);
 
-export type FormFieldDef = { label: string; type: string; required: boolean; options?: string[] };
+export type FormFieldDef = { label: string; type: string; required: boolean; options?: string[]; description?: string };
 
 function parseFields(raw: string): FormFieldDef[] | null {
   let parsed: unknown;
@@ -24,7 +24,7 @@ function parseFields(raw: string): FormFieldDef[] | null {
   const fields: FormFieldDef[] = [];
   for (const item of parsed) {
     if (typeof item !== "object" || item === null) return null;
-    const { label, type, required, options } = item as Record<string, unknown>;
+    const { label, type, required, options, description } = item as Record<string, unknown>;
     if (typeof label !== "string" || label.trim().length < 1 || label.length > 160) return null;
     if (typeof type !== "string" || !FIELD_TYPES.has(type)) return null;
     fields.push({
@@ -32,6 +32,7 @@ function parseFields(raw: string): FormFieldDef[] | null {
       type,
       required: required === true,
       options: type === "choice" && Array.isArray(options) ? options.filter((o): o is string => typeof o === "string").slice(0, 20) : undefined,
+      description: typeof description === "string" && description.trim().length > 0 ? description.trim().slice(0, 300) : undefined,
     });
   }
   return fields;
@@ -49,6 +50,8 @@ export async function createForm(_prevState: ActionState, formData: FormData): P
   const title = String(formData.get("title") ?? "").trim();
   if (title.length < 1 || title.length > 160) return { error: "Title must be 1-160 characters." };
 
+  const description = String(formData.get("description") ?? "").trim().slice(0, 1000);
+
   const mode = String(formData.get("mode") ?? "form");
   if (!MODES.has(mode)) return { error: "Choose a valid mode." };
 
@@ -60,6 +63,7 @@ export async function createForm(_prevState: ActionState, formData: FormData): P
       ownerType: "profile",
       ownerProfileId: user.profile!.id,
       title,
+      description,
       mode,
       fieldsJson: JSON.stringify(fields),
       status: "draft",
@@ -68,6 +72,28 @@ export async function createForm(_prevState: ActionState, formData: FormData): P
 
   revalidatePath(`/s/${user.username!.handle}/forms`);
   redirect(`/s/${user.username!.handle}/forms/${form.id}`);
+}
+
+// The one safe edit path for an existing form. Title and fieldsJson are
+// deliberately locked after creation — every response is keyed by each
+// field's *label* (see SubmitForm.tsx / forms/[formId]/page.tsx's
+// `answers[field.label]`), so renaming, reordering, or removing a field
+// after responses exist would silently orphan or mis-map already-submitted
+// answers. description is new and additive — never used as a response key
+// — so it's the only field safe to change post-creation.
+export async function updateFormDescription(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireOwnProfile();
+  const formId = String(formData.get("formId") ?? "");
+
+  const form = await db.form.findUnique({ where: { id: formId } });
+  if (!form || form.ownerProfileId !== user.profile!.id) return { error: "Form not found." };
+
+  const description = String(formData.get("description") ?? "").trim().slice(0, 1000);
+  await db.form.update({ where: { id: form.id }, data: { description } });
+
+  revalidatePath(`/s/${user.username!.handle}/forms/${form.id}`);
+  revalidatePath(`/form/${form.id}`);
+  return undefined;
 }
 
 export async function publishForm(formData: FormData): Promise<void> {

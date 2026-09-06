@@ -1,7 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createTier, updateTier } from "@/app/actions/memberships";
+import { suggestTierDescription } from "@/app/actions/ai-content";
+import { AISuggestButton } from "@/components/AISuggestButton";
+import { ImagePickerField } from "@/components/ImagePickerField";
+import { MarkdownField } from "@/components/MarkdownField";
 
 // spec §4: owner-only tier create/edit, same useActionState client-form
 // pattern as EditProfileForm.tsx. One component for both modes (create vs.
@@ -19,13 +23,16 @@ export function TierForm({
     billingInterval: string;
     description: string;
     status: string;
+    coverImageUrl: string | null;
   };
 }) {
   const action = tier ? updateTier : createTier;
   const [state, formAction, pending] = useActionState(action, undefined);
+  const idSuffix = tier?.id ?? "new";
+  const [descriptionValue, setDescriptionValue] = useState(tier?.description ?? "");
 
   return (
-    <form action={formAction} className="settingsForm">
+    <form action={formAction} className="settingsForm" encType="multipart/form-data">
       {tier && <input type="hidden" name="tierId" value={tier.id} />}
       <div className="field">
         <label htmlFor={`tierName-${tier?.id ?? "new"}`}>Name</label>
@@ -52,10 +59,29 @@ export function TierForm({
           <option value="yearly">Yearly</option>
         </select>
       </div>
-      <div className="field">
-        <label htmlFor={`tierDescription-${tier?.id ?? "new"}`}>Description</label>
-        <textarea id={`tierDescription-${tier?.id ?? "new"}`} name="description" defaultValue={tier?.description} maxLength={1000} rows={2} />
-      </div>
+      <MarkdownField
+        id={`tierDescription-${idSuffix}`}
+        name="description"
+        label="Description"
+        value={descriptionValue}
+        onChange={setDescriptionValue}
+        maxLength={1000}
+        rows={2}
+      />
+      <AISuggestButton
+        label="AI: Suggest a description"
+        contextLabel="Tier name/level (optional)"
+        contextPlaceholder="e.g. Gold — top supporter tier"
+        generate={suggestTierDescription}
+        onInsert={setDescriptionValue}
+      />
+      <ImagePickerField
+        id={`tierCover-${idSuffix}`}
+        name="coverImage"
+        label="Cover image"
+        mode="single"
+        initialUrls={tier?.coverImageUrl ? [tier.coverImageUrl] : []}
+      />
       {tier && (
         <div className="field">
           <label htmlFor={`tierStatus-${tier.id}`}>Status</label>

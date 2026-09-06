@@ -1859,6 +1859,7 @@ model MembershipTier {
   currency        String   @default("usd")
   billingInterval String // monthly | yearly
   description     String   @default("") // 0-1000 chars, validated at the app layer
+  coverImageUrl   String? // public thumbnail
   status          String   @default("active") // active | archived
   createdAt       DateTime @default(now())
 
@@ -1909,6 +1910,7 @@ model DigitalProduct {
   creator       User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
   title         String // 1-120 chars, validated at the app layer
   description   String   @default("") // 0-2000 chars, validated at the app layer
+  coverImageUrl String? // public thumbnail, distinct from the protected sellable fileKey below
   price         Float
   currency      String   @default("usd")
   fileKey       String
@@ -3020,6 +3022,7 @@ model DeveloperApp {
   ownerBusiness     Business? @relation(fields: [ownerBusinessId], references: [id], onDelete: Cascade)
   name              String
   description       String    @default("")
+  logoUrl           String? // shown on the OAuth consent screen alongside name/description
   clientId          String    @unique
   clientSecretHash  String
   // phase-15 build plan step 3: RFC 8252 public-client posture — a client
@@ -3866,7 +3869,8 @@ model Form {
   ownerCommunityId    String?
   ownerCommunity      Community?    @relation(fields: [ownerCommunityId], references: [id], onDelete: Cascade)
   title               String // 1-160 chars, validated at the app layer
-  fieldsJson          String // JSON array: [{label, type: text|choice|rating|date, required, options}]
+  description         String        @default("") // intro text shown above the fields, 0-1000 chars — editable after creation (unlike title/fields, see updateFormDescription)
+  fieldsJson          String // JSON array: [{label, type: text|choice|rating|date, required, options, description}]
   mode                String        @default("form") // form | survey — presentation/analytics emphasis only
   status              String        @default("draft") // draft | published | closed
   createdAt           DateTime      @default(now())

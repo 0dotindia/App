@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getResume, ApiError } from "../api/client";
 import { Button } from "../components/Button";
 import { EmptyState } from "../components/EmptyState";

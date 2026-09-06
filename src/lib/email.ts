@@ -2,6 +2,7 @@ import "server-only";
 import nodemailer, { type Transporter } from "nodemailer";
 import { Resend } from "resend";
 import { db } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 // phase-5 spec §10: needs "a transactional email sending dependency (infra
 // concern outside any spec)" per the build plan. Same delegation pattern
@@ -21,7 +22,7 @@ class ConsoleEmailSender implements EmailSender {
   readonly name = "console-stub";
 
   async send(params: { to: string; subject: string; html: string }): Promise<{ status: "sent" | "failed" }> {
-    console.log(`[email stub] to=${params.to} subject=${JSON.stringify(params.subject)}`);
+    logger.info("email stub: not actually sending", undefined, { to: params.to, subject: params.subject });
     return { status: "sent" };
   }
 }
@@ -56,7 +57,7 @@ class SmtpEmailSender implements EmailSender {
       await this.transporter.sendMail({ from: this.from, to: params.to, subject: params.subject, html: params.html });
       return { status: "sent" };
     } catch (err) {
-      console.error(`[email] send to ${params.to} failed:`, err);
+      logger.error("email: smtp send failed", err, { to: params.to });
       return { status: "failed" };
     }
   }
@@ -90,7 +91,7 @@ class ResendEmailSender implements EmailSender {
       html: params.html,
     });
     if (error) {
-      console.error(`[email] Resend send to ${params.to} failed:`, error);
+      logger.error("email: Resend send failed", error, { to: params.to });
       return { status: "failed" };
     }
     return { status: "sent" };

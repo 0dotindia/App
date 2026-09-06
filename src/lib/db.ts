@@ -1,5 +1,6 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { logger } from "@/lib/logger";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -22,7 +23,7 @@ if (!url.startsWith("file:") && !url.startsWith("libsql:")) {
 if (url.startsWith("libsql:") && !authToken) {
   throw new Error("DATABASE_URL is a remote libsql: URL but DATABASE_AUTH_TOKEN is not set.");
 }
-console.log(`[db] connecting to ${url.startsWith("file:") ? url : new URL(url).host}`);
+logger.info("db: connecting", undefined, { target: url.startsWith("file:") ? url : new URL(url).host });
 
 const adapter = new PrismaLibSql({ url, authToken });
 

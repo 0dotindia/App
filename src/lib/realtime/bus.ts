@@ -1,6 +1,7 @@
 import "server-only";
 import { memoryDriver } from "./driver-memory";
 import { realtimeRedisConfigured } from "./redis-config";
+import { logger } from "@/lib/logger";
 
 // The shared realtime backplane. Every SSE surface in the app — DMs,
 // notifications, presence broadcasts, community live chat, livestream chat,
@@ -43,10 +44,10 @@ function resolveDriver(): RealtimeDriver {
   if (realtimeRedisConfigured()) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy: keeps @upstash/redis out of builds/tests that don't configure Redis
     driver = (require("./driver-redis") as typeof import("./driver-redis")).redisDriver;
-    console.log("[realtime] using Redis driver (cross-instance)");
+    logger.info("realtime: using Redis driver (cross-instance)");
   } else {
     driver = memoryDriver;
-    console.log("[realtime] using in-memory driver (single-process)");
+    logger.info("realtime: using in-memory driver (single-process)");
   }
 
   return driver;

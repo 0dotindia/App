@@ -68,7 +68,14 @@ export default async function AuthorizePage({
   return (
     <div className="authWrap">
       <div className="authCard">
-        <h1>Authorize {app.name}</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          {app.logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element -- user-supplied URL, not an optimizable static asset
+            <img src={app.logoUrl} alt="" style={{ width: 40, height: 40, borderRadius: "8px", objectFit: "cover" }} />
+          )}
+          <h1 style={{ margin: 0 }}>Authorize {app.name}</h1>
+        </div>
+        {app.description && <p className="mutedText">{app.description}</p>}
         <p className="mutedText">
           {app.name} wants to access your 0dot account ({user.email}). This will let it:
         </p>

@@ -38,6 +38,12 @@ export default async function MembershipsSettingsPage() {
         <div key={tier.id} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow
             icon={Layers}
+            thumbnail={
+              tier.coverImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- small settings-list thumbnail, not an optimizable static asset
+                <img src={tier.coverImageUrl} alt="" />
+              ) : undefined
+            }
             label={tier.name}
             description={`Level ${tier.level} · ${tier.price.toFixed(2)} ${tier.currency.toUpperCase()}/${tier.billingInterval === "yearly" ? "yr" : "mo"} · ${tier.status}`}
             trailing={

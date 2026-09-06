@@ -929,8 +929,18 @@ async function ProfileMonetizationAndPortfolio({
                 </p>
               ) : (
                 <div key={tier.id}>
+                  {tier.coverImageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element -- user-supplied URL, not an optimizable static asset
+                    <img
+                      src={tier.coverImageUrl}
+                      alt=""
+                      style={{ width: "100%", maxHeight: "100px", objectFit: "cover", borderRadius: "8px", marginBottom: "0.3rem" }}
+                    />
+                  )}
                   <p style={{ fontWeight: 600, fontSize: "0.9rem", margin: 0 }}>{tier.name}</p>
-                  {tier.description && <p className="mutedText" style={{ fontSize: "0.8rem", margin: "0.15rem 0" }}>{tier.description}</p>}
+                  {tier.description && (
+                    <div className="mutedText" style={{ fontSize: "0.8rem", margin: "0.15rem 0" }}>{renderWikiMarkdown(tier.description)}</div>
+                  )}
                   <SubscribeForm tier={tier} cardAvailable={cardAvailable} viewerCoins={viewerCoins} />
                 </div>
               )

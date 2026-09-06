@@ -4,6 +4,7 @@ import { getAIProvider } from "@/lib/ai-provider";
 import { logAIGeneration } from "@/lib/ai-generation";
 import { notifyModerationAction } from "@/lib/notifications";
 import { softDeletePostAndDecrementCounts } from "@/lib/post-moderation";
+import { logger } from "@/lib/logger";
 
 // phase-11 spec §4.2: content matching known CSAM hash-matching databases
 // (PhotoDNA/NCMEC) is categorically NOT handled by this file. It triggers a
@@ -38,7 +39,7 @@ export async function classifyAndFlag(params: { subjectType: string; subjectId: 
     // what getClassifiedSubjectIds' notIn filter uses to decide what still
     // needs classifying, so leaving this item unlogged means the next 60s
     // sweep retries it automatically, with no separate retry bookkeeping.
-    console.error(`classifyAndFlag failed for ${params.subjectType}:${params.subjectId}`, err);
+    logger.error("classifyAndFlag failed", err, { subjectType: params.subjectType, subjectId: params.subjectId });
     return;
   }
 

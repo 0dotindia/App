@@ -8,6 +8,7 @@ import { spendBusinessCoins, WalletError } from "@/lib/wallet/ledger";
 import { chargeWallet } from "@/lib/wallet/charge";
 import { SYSTEM_ACCOUNT_IDS } from "@/lib/wallet/accounts";
 import { coinsToUnits, coinActionKey } from "@/lib/wallet/limits";
+import { logger } from "@/lib/logger";
 
 // See payments.ts's checkoutIdempotencyKey for why: collapses a retried
 // subscribe() call (double-click, network retry) onto the same Checkout
@@ -294,7 +295,7 @@ export async function activateSubscriptionFromCheckout(params: {
     // on (processorReference, kind) is the DB-level backstop; treat it as
     // "already activated," not a real failure.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      console.error(`activateSubscriptionFromCheckout: duplicate webhook delivery for subscription ${params.processorSubscriptionId} — already recorded, no-op.`);
+      logger.error("activateSubscriptionFromCheckout: duplicate webhook delivery — already recorded, no-op", undefined, { processorSubscriptionId: params.processorSubscriptionId });
       return;
     }
     throw err;

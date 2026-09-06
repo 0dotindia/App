@@ -10,6 +10,7 @@ import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge"
 import { coinActionKey } from "@/lib/wallet/limits";
 import { getAppOrigin } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import { saveUploadedImage } from "@/lib/uploads";
 import type { ActionState } from "@/app/actions/auth";
 
@@ -212,7 +213,7 @@ export async function activateDonation(metadata: Record<string, string>, process
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      console.error(`activateDonation: duplicate webhook delivery for ${processorReference} — already recorded, no-op.`);
+      logger.error("activateDonation: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
       return;
     }
     throw err;

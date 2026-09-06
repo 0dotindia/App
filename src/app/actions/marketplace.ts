@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import {
   MARKETPLACE_CATEGORIES,
   type MarketplaceCategory,
@@ -301,7 +302,7 @@ export async function activateMarketplacePurchase(metadata: Record<string, strin
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      console.error(`activateMarketplacePurchase: duplicate webhook delivery for ${processorReference} — already recorded, no-op.`);
+      logger.error("activateMarketplacePurchase: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
       return;
     }
     throw err;

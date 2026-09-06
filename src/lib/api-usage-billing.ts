@@ -5,6 +5,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { recordPaymentTransaction } from "@/lib/payments";
 import { stripe, getOrCreateStripeCustomerId } from "@/lib/stripe";
+import { logger } from "@/lib/logger";
 
 // See payments.ts's checkoutIdempotencyKey for why: collapses a retried
 // createApiPlanCheckoutSession call onto the same Checkout Session instead
@@ -223,7 +224,7 @@ export async function recordApiUsageInvoicePaid(params: {
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      console.error(`recordApiUsageInvoicePaid: duplicate webhook delivery for invoice ${params.processorReference} — already recorded, no-op.`);
+      logger.error("recordApiUsageInvoicePaid: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference: params.processorReference });
       return;
     }
     throw err;

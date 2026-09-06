@@ -1,6 +1,6 @@
 "use server";
 
-import { requireOwnProfile } from "@/lib/auth-guards";
+import { requireOwnProfile, requireVerifiedUser } from "@/lib/auth-guards";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getAIProvider } from "@/lib/ai-provider";
 import { logAIGeneration, markAIGenerationAccepted } from "@/lib/ai-generation";
@@ -308,6 +308,178 @@ export async function suggestPodcastShowNotes(context: string): Promise<AISugges
     feature: "content_writer",
     requestedById: user.id,
     subjectType: "podcast",
+    subjectId: null,
+    modelName: result.modelName,
+    input: { context: trimmedContext },
+    output: { text: result.text },
+    costTokens: result.costTokens,
+  });
+
+  return { generationId: generation.id, text: result.text };
+}
+
+export async function suggestProductDescription(context: string): Promise<AISuggestionResult> {
+  const user = await requireOwnProfile();
+  const limited = await requireSuggestionRateLimit(user.id);
+  if (limited) return limited;
+
+  const trimmedContext = context.trim().slice(0, 300);
+  const provider = getAIProvider();
+  let result: Awaited<ReturnType<typeof provider.suggestText>>;
+  try {
+    result = await provider.suggestText({ kind: "product_description", context: trimmedContext });
+  } catch {
+    return { error: "AI suggestions are temporarily unavailable. Try again shortly." };
+  }
+
+  const generation = await logAIGeneration({
+    feature: "content_writer",
+    requestedById: user.id,
+    subjectType: "digital_product",
+    subjectId: null,
+    modelName: result.modelName,
+    input: { context: trimmedContext },
+    output: { text: result.text },
+    costTokens: result.costTokens,
+  });
+
+  return { generationId: generation.id, text: result.text };
+}
+
+export async function suggestOfferingDescription(context: string): Promise<AISuggestionResult> {
+  const user = await requireOwnProfile();
+  const limited = await requireSuggestionRateLimit(user.id);
+  if (limited) return limited;
+
+  const trimmedContext = context.trim().slice(0, 300);
+  const provider = getAIProvider();
+  let result: Awaited<ReturnType<typeof provider.suggestText>>;
+  try {
+    result = await provider.suggestText({ kind: "offering_description", context: trimmedContext });
+  } catch {
+    return { error: "AI suggestions are temporarily unavailable. Try again shortly." };
+  }
+
+  const generation = await logAIGeneration({
+    feature: "content_writer",
+    requestedById: user.id,
+    subjectType: "offering",
+    subjectId: null,
+    modelName: result.modelName,
+    input: { context: trimmedContext },
+    output: { text: result.text },
+    costTokens: result.costTokens,
+  });
+
+  return { generationId: generation.id, text: result.text };
+}
+
+export async function suggestTierDescription(context: string): Promise<AISuggestionResult> {
+  const user = await requireOwnProfile();
+  const limited = await requireSuggestionRateLimit(user.id);
+  if (limited) return limited;
+
+  const trimmedContext = context.trim().slice(0, 300);
+  const provider = getAIProvider();
+  let result: Awaited<ReturnType<typeof provider.suggestText>>;
+  try {
+    result = await provider.suggestText({ kind: "membership_tier_description", context: trimmedContext });
+  } catch {
+    return { error: "AI suggestions are temporarily unavailable. Try again shortly." };
+  }
+
+  const generation = await logAIGeneration({
+    feature: "content_writer",
+    requestedById: user.id,
+    subjectType: "membership_tier",
+    subjectId: null,
+    modelName: result.modelName,
+    input: { context: trimmedContext },
+    output: { text: result.text },
+    costTokens: result.costTokens,
+  });
+
+  return { generationId: generation.id, text: result.text };
+}
+
+export async function suggestFormDescription(context: string): Promise<AISuggestionResult> {
+  const user = await requireOwnProfile();
+  const limited = await requireSuggestionRateLimit(user.id);
+  if (limited) return limited;
+
+  const trimmedContext = context.trim().slice(0, 300);
+  const provider = getAIProvider();
+  let result: Awaited<ReturnType<typeof provider.suggestText>>;
+  try {
+    result = await provider.suggestText({ kind: "form_description", context: trimmedContext });
+  } catch {
+    return { error: "AI suggestions are temporarily unavailable. Try again shortly." };
+  }
+
+  const generation = await logAIGeneration({
+    feature: "content_writer",
+    requestedById: user.id,
+    subjectType: "form",
+    subjectId: null,
+    modelName: result.modelName,
+    input: { context: trimmedContext },
+    output: { text: result.text },
+    costTokens: result.costTokens,
+  });
+
+  return { generationId: generation.id, text: result.text };
+}
+
+export async function suggestCrossPostCaption(context: string): Promise<AISuggestionResult> {
+  const user = await requireOwnProfile();
+  const limited = await requireSuggestionRateLimit(user.id);
+  if (limited) return limited;
+
+  const trimmedContext = context.trim().slice(0, 300);
+  const provider = getAIProvider();
+  let result: Awaited<ReturnType<typeof provider.suggestText>>;
+  try {
+    result = await provider.suggestText({ kind: "cross_post_caption", context: trimmedContext });
+  } catch {
+    return { error: "AI suggestions are temporarily unavailable. Try again shortly." };
+  }
+
+  const generation = await logAIGeneration({
+    feature: "content_writer",
+    requestedById: user.id,
+    subjectType: "scheduled_cross_post",
+    subjectId: null,
+    modelName: result.modelName,
+    input: { context: trimmedContext },
+    output: { text: result.text },
+    costTokens: result.costTokens,
+  });
+
+  return { generationId: generation.id, text: result.text };
+}
+
+// requireVerifiedUser, not requireOwnProfile like every other suggester
+// above — a developer app can be owned by a business, and registering one
+// never requires the caller to have claimed a profile/username (see
+// createDeveloperApp, src/app/actions/developer-apps.ts).
+export async function suggestDeveloperAppDescription(context: string): Promise<AISuggestionResult> {
+  const user = await requireVerifiedUser();
+  const limited = await requireSuggestionRateLimit(user.id);
+  if (limited) return limited;
+
+  const trimmedContext = context.trim().slice(0, 300);
+  const provider = getAIProvider();
+  let result: Awaited<ReturnType<typeof provider.suggestText>>;
+  try {
+    result = await provider.suggestText({ kind: "developer_app_description", context: trimmedContext });
+  } catch {
+    return { error: "AI suggestions are temporarily unavailable. Try again shortly." };
+  }
+
+  const generation = await logAIGeneration({
+    feature: "content_writer",
+    requestedById: user.id,
+    subjectType: "developer_app",
     subjectId: null,
     modelName: result.modelName,
     input: { context: trimmedContext },

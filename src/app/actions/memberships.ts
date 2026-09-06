@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
+import { saveUploadedImage } from "@/lib/uploads";
 import { randomUUID } from "crypto";
 import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
 import { chargeWallet } from "@/lib/wallet/charge";
@@ -14,10 +15,12 @@ import { getAppOrigin } from "@/lib/email";
 import { notifyNewSubscriber, notifyAffiliateConversion } from "@/lib/notifications";
 import { getAttributedAffiliateLink, creditAffiliateConversion } from "@/lib/affiliate";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const BILLING_INTERVAL_VALUES = new Set(["monthly", "yearly"]);
 const STATUS_VALUES = new Set(["active", "archived"]);
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 // Same convention tips.ts's checkTipRateLimit established for this exact
 // class of action (repeated charge attempts against the payment
@@ -69,7 +72,15 @@ export async function createTier(_prevState: ActionState, formData: FormData): P
   const fields = parseAndValidateTierFields(formData);
   if ("error" in fields) return fields;
 
-  await db.membershipTier.create({ data: { creatorId: user.id, ...fields } });
+  let coverImageUrl: string | undefined;
+  const coverFile = formData.get("coverImage");
+  if (coverFile instanceof File && coverFile.size > 0) {
+    const result = await saveUploadedImage(coverFile, { maxBytes: MAX_IMAGE_BYTES, uploadedById: user.id });
+    if ("error" in result) return { error: result.error };
+    coverImageUrl = result.url;
+  }
+
+  await db.membershipTier.create({ data: { creatorId: user.id, ...fields, coverImageUrl } });
 
   if (user.username) revalidatePath(`/s/${user.username.handle}`);
   return undefined;
@@ -86,7 +97,15 @@ export async function updateTier(_prevState: ActionState, formData: FormData): P
   const fields = parseAndValidateTierFields(formData);
   if ("error" in fields) return fields;
 
-  await db.membershipTier.update({ where: { id: tier.id }, data: fields });
+  let coverImageUrl = tier.coverImageUrl;
+  const coverFile = formData.get("coverImage");
+  if (coverFile instanceof File && coverFile.size > 0) {
+    const result = await saveUploadedImage(coverFile, { maxBytes: MAX_IMAGE_BYTES, uploadedById: user.id });
+    if ("error" in result) return { error: result.error };
+    coverImageUrl = result.url;
+  }
+
+  await db.membershipTier.update({ where: { id: tier.id }, data: { ...fields, coverImageUrl } });
 
   if (user.username) revalidatePath(`/s/${user.username.handle}`);
   return undefined;
@@ -283,7 +302,7 @@ export async function activateMembershipSubscription(params: {
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      console.error(`activateMembershipSubscription: duplicate webhook delivery for ${params.processorSubscriptionId} — already recorded, no-op.`);
+      logger.error("activateMembershipSubscription: duplicate webhook delivery — already recorded, no-op", undefined, { processorSubscriptionId: params.processorSubscriptionId });
       return;
     }
     throw err;

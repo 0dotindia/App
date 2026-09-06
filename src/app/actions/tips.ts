@@ -11,6 +11,7 @@ import { coinActionKey } from "@/lib/wallet/limits";
 import { getAppOrigin } from "@/lib/email";
 import { notifyTipReceived } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const MIN_TIP_AMOUNT = 1;
@@ -166,7 +167,7 @@ export async function activateTip(metadata: Record<string, string>, processorRef
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      console.error(`activateTip: duplicate webhook delivery for ${processorReference} — already recorded, no-op.`);
+      logger.error("activateTip: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
       return;
     }
     throw err;

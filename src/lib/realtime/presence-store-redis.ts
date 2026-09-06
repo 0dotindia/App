@@ -1,6 +1,7 @@
 import "server-only";
 import type { PresenceStore } from "./presence-store";
 import { getRealtimeRedis } from "./redis-client";
+import { logger } from "@/lib/logger";
 
 // Redis-backed presence (spec §4.4). Lazily `require`d by presence-store.ts
 // only when Redis is configured, so @upstash/redis stays out of builds that
@@ -47,7 +48,7 @@ export const redisPresenceStore: PresenceStore = {
   disconnect(userId, connectionId) {
     getRealtimeRedis()
       .zrem(key(userId), connectionId)
-      .catch((error) => console.error("[realtime] presence disconnect failed", error));
+      .catch((error) => logger.error("realtime: presence disconnect failed", error, { userId }));
   },
 
   async isOnline(userId) {
@@ -56,7 +57,7 @@ export const redisPresenceStore: PresenceStore = {
     } catch (error) {
       // A read failure shouldn't blank out an inbox — fall back to "unknown
       // = show nothing" (false), same as a user with no presence key.
-      console.error("[realtime] presence isOnline failed", error);
+      logger.error("realtime: presence isOnline failed", error, { userId });
       return false;
     }
   },
@@ -79,7 +80,7 @@ export const redisPresenceStore: PresenceStore = {
       });
       return online;
     } catch (error) {
-      console.error("[realtime] presence getOnline failed", error);
+      logger.error("realtime: presence getOnline failed", error, { count: unique.length });
       return new Set();
     }
   },
@@ -93,6 +94,6 @@ async function addConnection(userId: string, connectionId: string): Promise<void
       .expire(key(userId), KEY_TTL_SECONDS)
       .exec();
   } catch (error) {
-    console.error("[realtime] presence connect/heartbeat failed", error);
+    logger.error("realtime: presence connect/heartbeat failed", error, { userId });
   }
 }

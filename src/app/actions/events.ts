@@ -7,6 +7,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import { saveUploadedImage } from "@/lib/uploads";
 import { validateEventSlugFormat } from "@/lib/reserved-event-slugs";
 import { isBusinessStaff } from "@/lib/businesses";
@@ -564,7 +565,7 @@ export async function activateTicketPurchase(metadata: Record<string, string>, p
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      console.error(`activateTicketPurchase: duplicate webhook delivery for ${processorReference} — already recorded, no-op.`);
+      logger.error("activateTicketPurchase: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
       return;
     }
     throw err;

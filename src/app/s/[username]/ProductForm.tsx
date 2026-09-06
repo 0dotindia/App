@@ -1,28 +1,61 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createProduct, updateProduct } from "@/app/actions/digital-products";
+import { suggestProductDescription } from "@/app/actions/ai-content";
+import { AISuggestButton } from "@/components/AISuggestButton";
+import { ImagePickerField } from "@/components/ImagePickerField";
+import { MarkdownField } from "@/components/MarkdownField";
 
 // spec §5: owner-only product create/edit, same shape as TierForm.tsx.
 export function ProductForm({
   product,
 }: {
-  product?: { id: string; title: string; description: string; price: number; currency: string; status: string };
+  product?: {
+    id: string;
+    title: string;
+    description: string;
+    price: number;
+    currency: string;
+    status: string;
+    coverImageUrl: string | null;
+  };
 }) {
   const action = product ? updateProduct : createProduct;
   const [state, formAction, pending] = useActionState(action, undefined);
+  const idSuffix = product?.id ?? "new";
+  const [descriptionValue, setDescriptionValue] = useState(product?.description ?? "");
 
   return (
-    <form action={formAction} className="settingsForm">
+    <form action={formAction} className="settingsForm" encType="multipart/form-data">
       {product && <input type="hidden" name="productId" value={product.id} />}
       <div className="field">
-        <label htmlFor={`productTitle-${product?.id ?? "new"}`}>Title</label>
-        <input id={`productTitle-${product?.id ?? "new"}`} name="title" defaultValue={product?.title} maxLength={120} required />
+        <label htmlFor={`productTitle-${idSuffix}`}>Title</label>
+        <input id={`productTitle-${idSuffix}`} name="title" defaultValue={product?.title} maxLength={120} required />
       </div>
-      <div className="field">
-        <label htmlFor={`productDescription-${product?.id ?? "new"}`}>Description</label>
-        <textarea id={`productDescription-${product?.id ?? "new"}`} name="description" defaultValue={product?.description} maxLength={2000} rows={2} />
-      </div>
+      <MarkdownField
+        id={`productDescription-${idSuffix}`}
+        name="description"
+        label="Description"
+        value={descriptionValue}
+        onChange={setDescriptionValue}
+        maxLength={2000}
+        rows={2}
+      />
+      <AISuggestButton
+        label="AI: Suggest a description"
+        contextLabel="What's this product? (optional)"
+        contextPlaceholder="e.g. a Notion template for freelancers"
+        generate={suggestProductDescription}
+        onInsert={setDescriptionValue}
+      />
+      <ImagePickerField
+        id={`productCover-${idSuffix}`}
+        name="coverImage"
+        label="Cover image"
+        mode="single"
+        initialUrls={product?.coverImageUrl ? [product.coverImageUrl] : []}
+      />
       <div className="fieldRow">
         <div className="field">
           <label htmlFor={`productPrice-${product?.id ?? "new"}`}>Price</label>

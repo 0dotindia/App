@@ -1,5 +1,6 @@
 import "server-only";
 import { realtimeRedisConfigured } from "./redis-config";
+import { logger } from "@/lib/logger";
 
 // `Last-Event-ID` replay for the realtime bus (spec
 // addendum-realtime-community.md Phase C). Each buffered event on a channel
@@ -54,7 +55,7 @@ export async function recordForReplay<E extends object>(
       .exec();
     return { seq, event };
   } catch (error) {
-    console.error("[realtime] recordForReplay failed", error);
+    logger.error("realtime: recordForReplay failed", error, { channel });
     return null;
   }
 }
@@ -99,7 +100,7 @@ export async function getReplayFrames(channel: string, afterSeq: number): Promis
 
     return { kind: "frames", frames: parsed.filter((f) => f.seq > afterSeq) };
   } catch (error) {
-    console.error("[realtime] getReplayFrames failed", error);
+    logger.error("realtime: getReplayFrames failed", error, { channel });
     return { kind: "gap" };
   }
 }

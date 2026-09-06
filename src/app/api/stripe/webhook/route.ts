@@ -12,6 +12,7 @@ import { activateMarketplacePurchase } from "@/app/actions/marketplace";
 import { activateMembershipSubscription, syncMembershipFromStripe } from "@/app/actions/memberships";
 import { activateApiPlanSubscription, recordApiUsageInvoicePaid } from "@/lib/api-usage-billing";
 import { classifyCheckoutSession, isFulfillableSubscriptionStatus } from "@/lib/stripe-webhook-fulfillment";
+import { logger } from "@/lib/logger";
 
 // One-time (mode: "payment") destination-charge purchases, keyed by the
 // metadata.kind every createPurchaseCheckoutSession caller sets — each
@@ -46,7 +47,7 @@ async function handleCheckoutSession(session: Stripe.Checkout.Session): Promise<
   const decision = classifyCheckoutSession(session, KNOWN_ONE_TIME_KINDS);
 
   if (decision.action === "defer" || decision.action === "ignore") {
-    console.log(`stripe webhook: checkout ${session.id} — ${decision.action} (${decision.reason})`);
+    logger.info("stripe webhook: checkout deferred/ignored", undefined, { checkoutId: session.id, action: decision.action, reason: decision.reason });
     return;
   }
 
@@ -63,7 +64,7 @@ async function handleCheckoutSession(session: Stripe.Checkout.Session): Promise<
   const currentPeriodEnd = new Date(currentPeriodEndSeconds * 1000);
 
   if (!isFulfillableSubscriptionStatus(subscription.status)) {
-    console.log(`stripe webhook: subscription ${subscription.id} for checkout ${session.id} is "${subscription.status}" — deferring activation until it clears.`);
+    logger.info("stripe webhook: subscription not yet fulfillable — deferring activation", undefined, { subscriptionId: subscription.id, checkoutId: session.id, status: subscription.status });
     return;
   }
 
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const session = event.data.object as Stripe.Checkout.Session;
       // Nothing was ever granted (the "unpaid" branch above returned early),
       // so there's nothing to unwind — just leave a trail.
-      console.warn(`stripe webhook: delayed payment failed for checkout ${session.id} (kind=${session.metadata?.kind ?? "?"}) — no fulfillment occurred.`);
+      logger.warn("stripe webhook: delayed payment failed — no fulfillment occurred", undefined, { checkoutId: session.id, kind: session.metadata?.kind ?? "?" });
       break;
     }
     case "customer.subscription.updated":

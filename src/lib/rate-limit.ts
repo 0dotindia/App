@@ -124,7 +124,7 @@ async function enforceRateLimitViaDb(
     });
     return consumed.count > 0;
   } catch (err) {
-    console.error(`enforceRateLimit: backing store unavailable for "${key}" — falling back to in-memory limiter.`, err);
+    logger.error("enforceRateLimit: backing store unavailable — falling back to in-memory limiter", err, { key });
     return checkRateLimit(key, { max, windowMs });
   }
 }

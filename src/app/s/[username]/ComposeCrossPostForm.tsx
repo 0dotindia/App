@@ -3,6 +3,8 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
 import { createScheduledCrossPost } from "@/app/actions/cross-post";
+import { suggestCrossPostCaption } from "@/app/actions/ai-content";
+import { AISuggestButton } from "@/components/AISuggestButton";
 import { SocialIcon } from "@/components/SocialIcon";
 import { getSocialPlatformLabel } from "@/lib/theme-presets";
 import type { CrossPostPlatform } from "@/lib/cross-post-platforms";
@@ -21,6 +23,7 @@ export function ComposeCrossPostForm({
   const [state, formAction, pending] = useActionState(createScheduledCrossPost, undefined);
   const formRef = useRef<HTMLFormElement>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [contentValue, setContentValue] = useState("");
   const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files]);
 
   useEffect(() => {
@@ -50,10 +53,26 @@ export function ComposeCrossPostForm({
         await formAction(formData);
         formRef.current?.reset();
         setFiles([]);
+        setContentValue("");
       }}
       className="settingsForm"
     >
-      <textarea name="content" placeholder="What's happening?" maxLength={500} rows={3} className="textInput" />
+      <textarea
+        name="content"
+        placeholder="What's happening?"
+        value={contentValue}
+        onChange={(e) => setContentValue(e.target.value)}
+        maxLength={500}
+        rows={3}
+        className="textInput"
+      />
+      <AISuggestButton
+        label="AI: Suggest a caption"
+        contextLabel="What's this about? (optional)"
+        contextPlaceholder="e.g. launching a new feature"
+        generate={suggestCrossPostCaption}
+        onInsert={setContentValue}
+      />
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
         {accounts.map((account) => (

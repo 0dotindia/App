@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { getOrCreateTranslation } from "@/lib/ai-translation";
+import { logger } from "@/lib/logger";
 
 export type TranslateResult = { text: string } | { error: string };
 
@@ -39,7 +40,7 @@ export async function translateArticle(articleId: string, targetLanguage: string
     // one place that turns a real failure into the {error} shape the UI
     // already knows how to show (TranslateArticleButton's errorText), same
     // as every other Server Action here.
-    console.error(`translateArticle failed for article ${article.id} -> ${targetLanguage}`, err);
+    logger.error("translateArticle failed", err, { articleId: article.id, targetLanguage });
     return { error: "Translation failed. Please try again." };
   }
 }

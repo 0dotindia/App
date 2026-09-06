@@ -1,5 +1,6 @@
 import "server-only";
 import { realtimeRedisConfigured } from "./redis-config";
+import { logger } from "@/lib/logger";
 
 // Cross-instance presence — "does this user have at least one live SSE
 // connection open right now", the source of truth for the messaging
@@ -74,10 +75,10 @@ function resolve(): PresenceStore {
   if (realtimeRedisConfigured()) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy: keeps @upstash/redis out of builds/tests without Redis
     store = (require("./presence-store-redis") as typeof import("./presence-store-redis")).redisPresenceStore;
-    console.log("[realtime] presence: Redis store");
+    logger.info("realtime: presence using Redis store");
   } else {
     store = memoryStore;
-    console.log("[realtime] presence: in-memory store (single-process)");
+    logger.info("realtime: presence using in-memory store (single-process)");
   }
   return store;
 }

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { publishForm, closeForm, type FormFieldDef } from "@/app/actions/forms";
 import { EmptyState } from "@/components/EmptyState";
+import { EditFormDescriptionForm } from "../EditFormDescriptionForm";
 
 // Best-effort only, same posture as the courses/developer generateMetadata
 // siblings — real access control stays in the page component below, this
@@ -60,6 +61,17 @@ export default async function FormDetailPage({ params }: { params: Promise<{ use
         </>
       )}
 
+      <details style={{ marginTop: "1rem" }}>
+        <summary className="settingsRow settingsAddTrigger">
+          <span className="settingsRowText">
+            <span className="settingsRowLabel">Edit description</span>
+          </span>
+        </summary>
+        <div className="settingsAddPanelBody">
+          <EditFormDescriptionForm formId={form.id} description={form.description} />
+        </div>
+      </details>
+
       <div style={{ marginTop: "1.5rem" }}>
         <p className="sectionHeading">Responses ({form.responses.length})</p>
         {form.responses.length === 0 && <EmptyState message="No responses yet." />}
@@ -71,7 +83,10 @@ export default async function FormDetailPage({ params }: { params: Promise<{ use
                 <p className="mutedText" style={{ margin: 0, fontSize: "0.8rem" }}>{response.submittedAt.toLocaleString()}</p>
                 {fields.map((field) => (
                   <p key={field.label} style={{ margin: "0.2rem 0 0" }}>
-                    <strong>{field.label}:</strong> {answers[field.label] || "—"}
+                    <strong>{field.label}</strong>
+                    {field.description && <span className="mutedText" style={{ fontSize: "0.75rem" }}> ({field.description})</span>}
+                    {": "}
+                    {answers[field.label] || "—"}
                   </p>
                 ))}
               </div>
