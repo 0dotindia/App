@@ -4,11 +4,12 @@ import type { ReactNode } from "react";
 // (src/lib/linkify.tsx) turns regex matches into React nodes — never
 // dangerouslySetInnerHTML, so there's no sanitizer to get wrong or fall
 // behind on. Deliberately not full CommonMark: headers, bold, italic,
-// inline code, bullet lists, paragraphs, and http(s)-only links. No
-// tables/images/nested lists/blockquotes — a documented scope limit (phase-3
-// spec §10.1's "sanitized markdown, never raw HTML"), not an oversight,
-// matching this codebase's "no new dependency" posture (see
-// message-events.ts) rather than adding a markdown+sanitizer library pair.
+// inline code, bullet and numbered lists, paragraphs, `---` rules, and
+// http(s)-only links. No tables/images/nested lists/blockquotes — a
+// documented scope limit (phase-3 spec §10.1's "sanitized markdown, never
+// raw HTML"), not an oversight, matching this codebase's "no new
+// dependency" posture (see message-events.ts) rather than adding a
+// markdown+sanitizer library pair.
 
 const LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
 
@@ -74,6 +75,10 @@ export function renderWikiMarkdown(rawBody: string): ReactNode[] {
     const lines = block.split("\n").filter((l) => l.trim().length > 0);
     const key = `block-${blockIndex}`;
 
+    if (lines.length === 1 && lines[0].trim() === "---") {
+      return [<hr key={key} style={{ border: "none", borderTop: "1px solid var(--border)", margin: "1rem 0" }} />];
+    }
+
     const headingMatch = lines.length === 1 ? lines[0].match(/^(#{1,3})\s+(.*)$/) : null;
     if (headingMatch) {
       const level = headingMatch[1].length;
@@ -91,26 +96,38 @@ export function renderWikiMarkdown(rawBody: string): ReactNode[] {
     // this) silently fell through to the paragraph branch and lost the
     // list formatting entirely instead of rendering the intro as its own
     // paragraph and the bullets as a real <ul>.
-    const runs: { isList: boolean; lines: string[] }[] = [];
+    type RunKind = "ul" | "ol" | "text";
+    const ORDERED_MARKER = /^\d+\.\s/;
+    const runs: { kind: RunKind; lines: string[] }[] = [];
     for (const line of lines) {
-      const isListLine = line.trim().startsWith("- ");
+      const trimmed = line.trim();
+      const kind: RunKind = trimmed.startsWith("- ") ? "ul" : ORDERED_MARKER.test(trimmed) ? "ol" : "text";
       const currentRun = runs[runs.length - 1];
-      if (currentRun && currentRun.isList === isListLine) {
+      if (currentRun && currentRun.kind === kind) {
         currentRun.lines.push(line);
       } else {
-        runs.push({ isList: isListLine, lines: [line] });
+        runs.push({ kind, lines: [line] });
       }
     }
 
     return runs.map((run, runIndex) => {
       const runKey = `${key}-r${runIndex}`;
-      if (run.isList) {
+      if (run.kind === "ul") {
         return (
           <ul key={runKey}>
             {run.lines.map((line, lineIndex) => (
               <li key={`${runKey}-${lineIndex}`}>{renderInline(line.trim().slice(2), `${runKey}-${lineIndex}`)}</li>
             ))}
           </ul>
+        );
+      }
+      if (run.kind === "ol") {
+        return (
+          <ol key={runKey}>
+            {run.lines.map((line, lineIndex) => (
+              <li key={`${runKey}-${lineIndex}`}>{renderInline(line.trim().replace(ORDERED_MARKER, ""), `${runKey}-${lineIndex}`)}</li>
+            ))}
+          </ol>
         );
       }
       return <p key={runKey}>{renderInline(run.lines.join(" "), runKey)}</p>;

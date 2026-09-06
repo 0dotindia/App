@@ -3,8 +3,9 @@ import { Logo } from "@/components/Logo";
 
 // Redesign Phase 3. Marketing footer for the logged-out marketing pages.
 // Links point exclusively at routes that actually exist (NAVIGATION.md rule
-// 2 — no dead entries): /help, /blog, and a pricing page are still "Future"
-// per docs/ROADMAP.md, so they're deliberately absent.
+// 2 — no dead entries): /blog and a pricing page are still "Future" per
+// docs/ROADMAP.md, so they're deliberately absent. /help shipped from
+// content/USER_GUIDE.md — see src/app/help/page.tsx.
 const GROUPS: { heading: string; links: { label: string; href: string }[] }[] = [
   {
     heading: "Product",
@@ -28,6 +29,7 @@ const GROUPS: { heading: string; links: { label: string; href: string }[] }[] = 
   {
     heading: "Trust",
     links: [
+      { label: "Help", href: "/help" },
       { label: "Trust & Safety", href: "/trust-safety" },
       { label: "Copyright / DMCA", href: "/dmca" },
     ],
