@@ -9,6 +9,12 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300; // same as api/messages/stream/route.ts — see its comment
 
 const HEARTBEAT_MS = 20_000; // same idle-proxy-friendly interval api/messages/stream/route.ts uses
+// Proactively recycle before Vercel's maxDuration ceiling kills the
+// function mid-stream — the client's EventSource reconnects cleanly on its
+// own, rather than the connection being force-terminated at the 300s
+// ceiling (which shows up in logs as a timeout error instead of a clean
+// close). The cookie-based api/messages/stream/route.ts already does this.
+const STREAM_RECYCLE_MS = 280_000;
 
 // Mobile pro-upgrade addendum M10: the bearer-token counterpart to
 // api/messages/stream/route.ts, subscribing to the exact same in-memory
@@ -42,10 +48,24 @@ export async function GET(request: Request) {
   let unsubscribe: (() => void) | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let connectionId: string | undefined;
+  let closed = false;
+
+  // Shared by the proactive recycle path and cancel() (client disconnects) —
+  // guarded so whichever fires first is the only one that unsubscribes/marks
+  // offline. Mirrors api/messages/stream/route.ts's cookie-based counterpart.
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    unsubscribe?.();
+    if (heartbeat) clearInterval(heartbeat);
+    db.user.update({ where: { id: userId }, data: { lastActiveAt: new Date() } }).catch(() => {});
+    if (connectionId) markUserOffline(userId, connectionId, () => broadcastPresence(userId, false));
+  };
 
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
+      const startedAt = Date.now();
       controller.enqueue(encoder.encode(`retry: 2000\n\n`));
       const send = (event: MessageEvent) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
@@ -54,6 +74,11 @@ export async function GET(request: Request) {
       unsubscribe = subscribeToUser(userId, send);
       connectionId = markUserOnline(userId);
       heartbeat = setInterval(() => {
+        if (Date.now() - startedAt >= STREAM_RECYCLE_MS) {
+          cleanup();
+          controller.close();
+          return;
+        }
         controller.enqueue(encoder.encode(`: heartbeat\n\n`));
         if (connectionId) refreshPresence(userId, connectionId);
       }, HEARTBEAT_MS);
@@ -62,11 +87,7 @@ export async function GET(request: Request) {
       broadcastPresence(userId, true);
     },
     cancel() {
-      unsubscribe?.();
-      if (heartbeat) clearInterval(heartbeat);
-
-      db.user.update({ where: { id: userId }, data: { lastActiveAt: new Date() } }).catch(() => {});
-      if (connectionId) markUserOffline(userId, connectionId, () => broadcastPresence(userId, false));
+      cleanup();
     },
   });
 

@@ -9,6 +9,18 @@ const EXPIRES_AT_KEY = "0dot_token_expires_at";
 
 export type StoredTokens = { accessToken: string; refreshToken: string; expiresAt: number };
 
+// Bumped on every clearTokens() call (explicit sign-out, or saveTokens's own
+// partial-write cleanup). client.ts's tryRefreshTokens() snapshots this
+// before starting a refresh and checks it again before persisting the
+// result, so a refresh that was already in flight when the user signed out
+// can't resurrect a session by writing fresh tokens back after clearTokens()
+// ran.
+let clearEpoch = 0;
+
+export function getClearEpoch(): number {
+  return clearEpoch;
+}
+
 export async function saveTokens(tokens: StoredTokens): Promise<void> {
   try {
     await Promise.all([
@@ -41,6 +53,7 @@ export async function loadTokens(): Promise<StoredTokens | null> {
 }
 
 export async function clearTokens(): Promise<void> {
+  clearEpoch++;
   await Promise.all([
     SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
     SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),

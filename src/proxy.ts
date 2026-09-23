@@ -78,7 +78,18 @@ export default async function proxy(request: NextRequest): Promise<Response | un
   try {
     const lookupUrl = new URL("/api/internal/custom-domain-route", request.nextUrl.origin);
     lookupUrl.searchParams.set("host", host);
-    const res = await fetch(lookupUrl);
+    // This fetch() re-enters the deployment through Vercel's edge as a new
+    // outbound request, so Vercel overwrites X-Forwarded-For on it to
+    // reflect this internal call, not the original visitor (see
+    // rate-limit.ts's getClientIp() comment on Vercel's XFF behavior) — the
+    // route being called would otherwise see every custom-domain visitor,
+    // platform-wide, as the same "unknown"/internal IP and collapse them
+    // onto one shared rate-limit bucket. Forward the real visitor IP (already
+    // Vercel-verified on *this* inbound request) through a distinct header
+    // Vercel won't overwrite, so that route can key its rate limit per real
+    // visitor instead of per internal-call bucket.
+    const visitorIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "";
+    const res = await fetch(lookupUrl, visitorIp ? { headers: { "x-internal-forwarded-client-ip": visitorIp } } : undefined);
     if (res.ok) {
       const data = (await res.json()) as { prefix: string | null };
       prefix = data.prefix;

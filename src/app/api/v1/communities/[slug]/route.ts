@@ -20,7 +20,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   if (!community) return apiError("Not found.", 404);
 
   const membership = await getCommunityMember(community.id, ctx.userId);
-  const isActiveMember = membership?.status === "active";
+  // active-or-muted, not active-only — matches every other community-gating
+  // call site (the chat route, every src/app/c/[slug]/*.tsx page). A muted
+  // member is restricted from posting/chatting, not from reading.
+  const isActiveMember = membership?.status === "active" || membership?.status === "muted";
   const canViewContent = !isGatedFromCommunityContent(community, isActiveMember);
 
   return Response.json(

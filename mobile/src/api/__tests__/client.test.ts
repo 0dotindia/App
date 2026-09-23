@@ -20,6 +20,12 @@ jest.mock("../../auth/tokenStorage", () => ({
   loadTokens: jest.fn(),
   saveTokens: jest.fn(),
   clearTokens: jest.fn(),
+  // Real implementation bumps this on every clearTokens() call so an
+  // in-flight refresh can detect a sign-out that happened while it was
+  // awaiting the network — fixed at 0 here since none of these tests
+  // exercise that race (a real clearTokens() call never actually runs
+  // against this mock, so it never needs to change).
+  getClearEpoch: jest.fn(() => 0),
 }));
 
 import { fetchWithTimeout } from "../http";
@@ -126,5 +132,25 @@ describe("authorizedRequest 401 handling", () => {
     expect(a).toEqual({ id: "me" });
     expect(b).toEqual({ id: "me" });
     expect(refreshCalls).toBe(1);
+  });
+
+  // Regression coverage for the mobile-review finding: a refresh in flight
+  // when the user taps Sign Out used to resurrect the session by writing
+  // its result back to SecureStore after clearTokens() had already run.
+  it("does not resurrect the session if clearTokens() ran while a refresh was in flight", async () => {
+    const mockGetClearEpoch = jest.requireMock("../../auth/tokenStorage").getClearEpoch as jest.Mock;
+    let epoch = 0;
+    mockGetClearEpoch.mockImplementation(() => epoch);
+
+    mockFetch.mockResolvedValue(fakeResponse(401, { error: "expired" }));
+    mockRefresh.mockImplementation(async () => {
+      // Simulate the user signing out (bumping the epoch, same as a real
+      // clearTokens() call) while this refresh is still awaiting the network.
+      epoch += 1;
+      return { accessToken: "AT2", refreshToken: "RT2", expiresAt: Date.now() + 999_999 };
+    });
+
+    await expect(getMe()).rejects.toThrow(ApiError);
+    expect(mockSave).not.toHaveBeenCalled();
   });
 });

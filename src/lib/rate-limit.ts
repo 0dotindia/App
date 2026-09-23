@@ -142,15 +142,21 @@ export async function sweepExpiredRateLimitCounters(): Promise<void> {
 // dev without a reverse proxy — degrades to a single global IP-bucket
 // rather than disabling the limiter entirely.
 //
-// Deployment assumption: exactly one trusted reverse proxy sits in front of
-// this app and appends (never lets the client overwrite) the real client IP
-// as the last hop of X-Forwarded-For. The *first* hop is attacker-controlled
-// — a client can send any value it wants as the start of that header — so
-// taking it would let per-IP limits be trivially spoofed by sending a fresh
-// X-Forwarded-For value per request. The last hop is the one the proxy
-// itself appended and is the only hop this app can trust. If self-hosting
-// behind a different proxy topology (multiple hops, a CDN that doesn't
-// strip client-supplied values), this assumption must be re-verified.
+// Deployment: this app runs on Vercel. Per Vercel's own docs
+// (vercel.com/docs/headers/request-headers, "x-forwarded-for": "we currently
+// overwrite the X-Forwarded-For header and do not forward external IPs" —
+// verified 2026-09-23), Vercel's edge sets this header itself and discards
+// any client-supplied value, so on a stock deployment (no purchased
+// "Trusted Proxy" add-on) it contains exactly one value: the real public
+// client IP. It is NOT client-spoofable the way a self-hosted
+// reverse-proxy's X-Forwarded-For would be, so no proxy-trust assumption is
+// needed here. Taking the *first* comma-separated value is still correct
+// (rather than assuming always-single-valued) to match standard
+// X-Forwarded-For convention — the original client is always leftmost, with
+// any later hop (e.g. a Trusted Proxy customer's own upstream, or a future
+// topology change) appended to the right. If this app is ever self-hosted
+// behind a different, non-Vercel proxy chain, this assumption must be
+// re-verified against that proxy's actual header contract.
 //
 // If BOTH headers are missing on a deployed (Vercel) request, every caller
 // collapses into one shared "unknown" bucket — a global lockout or an
@@ -162,7 +168,7 @@ let warnedMissingClientIp = false;
 export async function getClientIp(): Promise<string> {
   const headersList = await headers();
   const forwarded = headersList.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",").pop()!.trim();
+  if (forwarded) return forwarded.split(",")[0]!.trim();
 
   const realIp = headersList.get("x-real-ip");
   if (realIp) return realIp;

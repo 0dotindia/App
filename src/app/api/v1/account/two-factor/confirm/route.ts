@@ -1,12 +1,17 @@
 import { db } from "@/lib/db";
-import { resolveApiRequest, requireScope, requireVerifiedApiUser, apiError } from "@/lib/api-auth";
+import { resolveApiRequest, requireScope, requireVerifiedApiUser, requireCurrentPassword, apiError } from "@/lib/api-auth";
 import { checkApiRateLimit } from "@/lib/api-rate-limit";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { verifyTotpCode, generateRecoveryCodes, storeRecoveryCodes } from "@/lib/two-factor";
 
 // Bearer-token counterpart to confirmTwoFactorEnrollment (two-factor.ts) —
 // same per-user rate-limit bucket key that action uses, so an app hammering
-// this via the API shares the same throttle as a web attempt would.
+// this via the API shares the same throttle as a web attempt would. Also
+// requires currentPassword, same as that action — this is the step that
+// actually enables 2FA and mints recovery codes, so it needs the same
+// re-entry gate as any other security-sensitive mutation; otherwise a
+// leaked account:write-scoped bearer token alone (no password) could plant
+// a durable login backdoor.
 export async function POST(request: Request) {
   const ctx = await resolveApiRequest(request);
   if ("error" in ctx) return apiError(ctx.error, ctx.status);
@@ -26,6 +31,10 @@ export async function POST(request: Request) {
 
   const payload = await request.json().catch(() => null);
   const code = typeof payload?.code === "string" ? payload.code : "";
+  const currentPassword = typeof payload?.currentPassword === "string" ? payload.currentPassword : "";
+
+  const passwordError = await requireCurrentPassword(ctx, currentPassword);
+  if (passwordError) return apiError(passwordError.error, passwordError.status);
 
   const user = await db.user.findUnique({ where: { id: ctx.userId }, select: { twoFactorSecret: true } });
   if (!user?.twoFactorSecret) return apiError("Start enrollment before confirming a code.", 400);

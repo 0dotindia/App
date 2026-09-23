@@ -24,11 +24,13 @@ function createStyles(theme: Theme) {
     list: { gap: theme.space[1] },
     listItemRow: { flexDirection: "row", gap: theme.space[2] },
     bullet: { fontSize: theme.text.base, color: theme.colors.mutedForeground },
+    orderedMarker: { fontSize: theme.text.base, color: theme.colors.mutedForeground },
     listItemText: { flex: 1, fontSize: theme.text.base, color: theme.colors.foreground, lineHeight: theme.text.base * 1.45 },
     link: { color: theme.colors.accent, textDecorationLine: "underline" },
     bold: { fontWeight: theme.weight.emphasis },
     italic: { fontStyle: "italic" },
     code: { fontFamily: "monospace", backgroundColor: theme.colors.surface },
+    hr: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border, marginVertical: theme.space[2] },
   });
 }
 
@@ -108,6 +110,10 @@ export function renderWikiMarkdown(rawBody: string, theme: Theme): ReactNode[] {
     const lines = block.split("\n").filter((l) => l.trim().length > 0);
     const key = `block-${blockIndex}`;
 
+    if (lines.length === 1 && lines[0].trim() === "---") {
+      return [<View key={key} style={styles.hr} />];
+    }
+
     const headingMatch = lines.length === 1 ? lines[0].match(/^(#{1,3})\s+(.*)$/) : null;
     if (headingMatch) {
       const level = headingMatch[1].length;
@@ -120,29 +126,46 @@ export function renderWikiMarkdown(rawBody: string, theme: Theme): ReactNode[] {
       ];
     }
 
-    // Group consecutive lines by whether they're a "- " list item — see
-    // the web file's comment on why this is a run-grouping pass, not an
-    // all-or-nothing check on the whole block.
-    const runs: { isList: boolean; lines: string[] }[] = [];
+    // Group consecutive lines by run kind — see the web file's comment on
+    // why this is a run-grouping pass, not an all-or-nothing check on the
+    // whole block.
+    type RunKind = "ul" | "ol" | "text";
+    const ORDERED_MARKER = /^\d+\.\s/;
+    const runs: { kind: RunKind; lines: string[] }[] = [];
     for (const line of lines) {
-      const isListLine = line.trim().startsWith("- ");
+      const trimmed = line.trim();
+      const kind: RunKind = trimmed.startsWith("- ") ? "ul" : ORDERED_MARKER.test(trimmed) ? "ol" : "text";
       const currentRun = runs[runs.length - 1];
-      if (currentRun && currentRun.isList === isListLine) {
+      if (currentRun && currentRun.kind === kind) {
         currentRun.lines.push(line);
       } else {
-        runs.push({ isList: isListLine, lines: [line] });
+        runs.push({ kind, lines: [line] });
       }
     }
 
     return runs.map((run, runIndex) => {
       const runKey = `${key}-r${runIndex}`;
-      if (run.isList) {
+      if (run.kind === "ul") {
         return (
           <View key={runKey} style={styles.list}>
             {run.lines.map((line, lineIndex) => (
               <View key={`${runKey}-${lineIndex}`} style={styles.listItemRow}>
                 <Text style={styles.bullet}>{"•"}</Text>
                 <Text style={styles.listItemText}>{renderInline(line.trim().slice(2), `${runKey}-${lineIndex}`, styles)}</Text>
+              </View>
+            ))}
+          </View>
+        );
+      }
+      if (run.kind === "ol") {
+        return (
+          <View key={runKey} style={styles.list}>
+            {run.lines.map((line, lineIndex) => (
+              <View key={`${runKey}-${lineIndex}`} style={styles.listItemRow}>
+                <Text style={styles.orderedMarker}>{`${lineIndex + 1}.`}</Text>
+                <Text style={styles.listItemText}>
+                  {renderInline(line.trim().replace(ORDERED_MARKER, ""), `${runKey}-${lineIndex}`, styles)}
+                </Text>
               </View>
             ))}
           </View>

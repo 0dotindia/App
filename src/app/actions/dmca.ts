@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireVerifiedUser } from "@/lib/auth-guards";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { fileDmcaTakedownNotice, fileDmcaCounterNotice } from "@/lib/dmca";
 import type { ActionState } from "@/app/actions/auth";
 
@@ -11,6 +12,14 @@ import type { ActionState } from "@/app/actions/auth";
 // unauthenticated. The statutory attestation/contact fields are what
 // establish who's filing, not platform login.
 export async function fileDmcaTakedownNoticeAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  // Same shape as business-contact.ts's sendContactMessage — the only other
+  // anonymous write action in this codebase — since dropping the auth gate
+  // above otherwise leaves this endpoint with zero throttling, unlike every
+  // other anonymous submission surface.
+  if (!checkRateLimit(`dmca-notice:ip:${await getClientIp()}`, { max: 5, windowMs: 60 * 60 * 1000 })) {
+    return { error: "Too many notices submitted. Please try again later." };
+  }
+
   const result = await fileDmcaTakedownNotice({
     complainantName: String(formData.get("complainantName") ?? ""),
     complainantContact: String(formData.get("complainantContact") ?? ""),

@@ -3,12 +3,35 @@
 import { useActionState, useRef, useState } from "react";
 import { fileDmcaTakedownNoticeAction } from "@/app/actions/dmca";
 
+// "Comment" is deliberately not offered here even though lib/dmca.ts's
+// resolveDmcaSubject has a branch for it — that branch only accepts a raw
+// internal comment id (no comment has a public permalink anywhere on the
+// site), which no real-world complainant using this anonymous form could
+// ever supply. Only content types with an actual shareable URL are listed.
 const SUBJECT_TYPES = [
   { value: "post", label: "Post" },
   { value: "article", label: "Article" },
-  { value: "comment", label: "Comment" },
   { value: "marketplace_listing", label: "Marketplace listing" },
 ];
+
+const CONTENT_LOCATION_HELP: Record<string, { placeholder: string; help: string }> = {
+  post: {
+    placeholder: "https://0dot.in/username/status/1234567890",
+    help: "Paste the URL of the specific post — click its share/copy-link option, or copy it from your browser's address bar.",
+  },
+  article: {
+    placeholder: "https://0dot.in/username/articles/article-slug",
+    help: "Paste the URL of the specific article page.",
+  },
+  marketplace_listing: {
+    placeholder: "https://0dot.in/m/listing-id",
+    help: "Paste the URL of the specific marketplace listing.",
+  },
+};
+const DEFAULT_CONTENT_LOCATION_HELP = {
+  placeholder: "https://0dot.in/…",
+  help: "Select a content type above, then paste the URL of the specific content — click its share/copy-link option, or copy it from your browser's address bar.",
+};
 
 // phase-13 spec §4.1: the formal, statute-shaped notice — every field here
 // maps to a specific 17 U.S.C. § 512(c)(3) requirement. The two checkboxes
@@ -18,7 +41,9 @@ const SUBJECT_TYPES = [
 export function DmcaNoticeForm() {
   const [state, formAction, pending] = useActionState(fileDmcaTakedownNoticeAction, undefined);
   const [submitted, setSubmitted] = useState(false);
+  const [subjectType, setSubjectType] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
+  const locationHelp = CONTENT_LOCATION_HELP[subjectType] ?? DEFAULT_CONTENT_LOCATION_HELP;
 
   if (submitted && !state?.error) {
     return <p className="card">Notice submitted. Trust &amp; Safety staff will review it.</p>;
@@ -41,7 +66,7 @@ export function DmcaNoticeForm() {
       <div className="field">
         <label htmlFor="dmca-complainant-contact">Your contact information (email or address)</label>
         <input id="dmca-complainant-contact" type="text" name="complainantContact" className="textInput" required />
-        <p className="mutedText text-xs">
+        <p className="mutedTextSmall">
           Disclosed to the account whose content you&apos;re reporting, if they file a counter-notice — a
           statutory requirement, not optional.
         </p>
@@ -54,7 +79,14 @@ export function DmcaNoticeForm() {
 
       <div className="field">
         <label htmlFor="dmca-subject-type">Content type</label>
-        <select id="dmca-subject-type" name="infringingContentSubjectType" className="textInput" required defaultValue="">
+        <select
+          id="dmca-subject-type"
+          name="infringingContentSubjectType"
+          className="textInput"
+          required
+          value={subjectType}
+          onChange={(e) => setSubjectType(e.target.value)}
+        >
           <option value="" disabled>
             Select one
           </option>
@@ -73,13 +105,10 @@ export function DmcaNoticeForm() {
           type="text"
           name="infringingContentLocation"
           className="textInput"
-          placeholder="https://0dot.in/username/status/…"
+          placeholder={locationHelp.placeholder}
           required
         />
-        <p className="mutedText text-xs">
-          Paste the URL of the specific post, article, or listing — click its share/copy-link option, or copy it
-          from your browser&apos;s address bar.
-        </p>
+        <p className="mutedTextSmall">{locationHelp.help}</p>
       </div>
 
       <label className="checkboxField">

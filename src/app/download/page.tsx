@@ -210,7 +210,7 @@ function PlatformCard({
       </h2>
       <div className="flex w-full flex-col items-stretch">{action}</div>
       {meta && <p className="text-xs opacity-55">{meta}</p>}
-      {note && <p className="mutedText text-xs">{note}</p>}
+      {note && <p className="mutedTextSmall">{note}</p>}
     </div>
   );
 }

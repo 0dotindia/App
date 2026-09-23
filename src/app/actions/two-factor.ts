@@ -37,7 +37,17 @@ export async function startTwoFactorEnrollment(): Promise<{ error: string } | { 
   return { otpauthUrl, qrDataUrl };
 }
 
-export async function confirmTwoFactorEnrollment(code: string): Promise<{ error: string } | { recoveryCodes: string[] }> {
+// Requires currentPassword (same bcrypt.compare re-entry gate
+// disableTwoFactor/regenerateRecoveryCodes use) since this is the step that
+// actually turns 2FA on and mints recovery codes — without it, a hijacked
+// session/stolen bearer token with no knowledge of the password could plant
+// its own TOTP secret via startTwoFactorEnrollment and confirm it here,
+// creating a durable login backdoor that survives the original token being
+// revoked.
+export async function confirmTwoFactorEnrollment(
+  code: string,
+  currentPassword: string
+): Promise<{ error: string } | { recoveryCodes: string[] }> {
   const user = await requireVerifiedUser();
 
   const ok = await enforceRateLimit(`2fa-enroll:user:${user.id}`, { max: 10, windowMs: 15 * 60 * 1000 });
@@ -45,6 +55,11 @@ export async function confirmTwoFactorEnrollment(code: string): Promise<{ error:
 
   if (!user.twoFactorSecret) {
     return { error: "Start enrollment before confirming a code." };
+  }
+
+  const passwordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!passwordValid) {
+    return { error: "Current password is incorrect." };
   }
 
   const valid = await verifyTotpCode(user.twoFactorSecret, code);

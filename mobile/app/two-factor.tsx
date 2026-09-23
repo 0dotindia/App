@@ -56,12 +56,13 @@ export default function TwoFactorScreen() {
   }
 
   async function onConfirmEnroll() {
-    if (code.trim().length !== 6) return;
+    if (code.trim().length !== 6 || !currentPassword) return;
     setSaving(true);
     setError(null);
     try {
-      const res = await confirmTwoFactor(code.trim());
+      const res = await confirmTwoFactor(code.trim(), currentPassword);
       setRecoveryCodes(res.recoveryCodes);
+      setCurrentPassword("");
       setStep("recovery-codes");
       haptics.light();
     } catch (err) {
@@ -159,7 +160,21 @@ export default function TwoFactorScreen() {
               accessibilityLabel="Authenticator code"
             />
           </View>
-          <Button label="Confirm" onPress={onConfirmEnroll} loading={saving} disabled={code.trim().length !== 6} />
+          <View style={styles.field}>
+            <Text style={styles.label}>Current password</Text>
+            <PasswordInput
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              accessibilityLabel="Current password"
+              autoComplete="current-password"
+            />
+          </View>
+          <Button
+            label="Confirm"
+            onPress={onConfirmEnroll}
+            loading={saving}
+            disabled={code.trim().length !== 6 || !currentPassword}
+          />
         </>
       )}
 

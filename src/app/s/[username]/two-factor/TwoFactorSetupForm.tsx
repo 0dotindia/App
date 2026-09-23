@@ -15,6 +15,7 @@ type Step =
 export function TwoFactorSetupForm() {
   const [step, setStep] = useState<Step>({ name: "start" });
   const [code, setCode] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -34,7 +35,7 @@ export function TwoFactorSetupForm() {
     e.preventDefault();
     setPending(true);
     setError(null);
-    const result = await confirmTwoFactorEnrollment(code);
+    const result = await confirmTwoFactorEnrollment(code, currentPassword);
     setPending(false);
     if ("error" in result) {
       setError(result.error);
@@ -81,8 +82,20 @@ export function TwoFactorSetupForm() {
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
           />
         </label>
+        <label htmlFor="current-password">
+          Current password
+          <input
+            id="current-password"
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+          />
+        </label>
         {error && <p className="errorText">{error}</p>}
-        <button type="submit" className="button" disabled={pending || code.length !== 6}>
+        <button type="submit" className="button" disabled={pending || code.length !== 6 || !currentPassword}>
           {pending ? "Verifying…" : "Confirm and enable"}
         </button>
       </form>

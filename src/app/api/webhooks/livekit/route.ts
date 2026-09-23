@@ -1,5 +1,6 @@
 import { WebhookReceiver } from "livekit-server-sdk";
 import { db } from "@/lib/db";
+import { logger } from "@/lib/logger";
 import { broadcastRoomUpdate } from "@/lib/voice-room-events";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,12 @@ export async function POST(request: Request) {
   let event;
   try {
     event = await receiver.receive(body, request.headers.get("Authorization") ?? undefined);
-  } catch {
+  } catch (err) {
+    // A drifted LIVEKIT_API_KEY/SECRET (vs. the LiveKit project's actual
+    // webhook config) rejects every delivery here silently — without this,
+    // a crashed voice room/livestream never reconciles to "ended" and
+    // there's no log entry explaining why.
+    logger.error("livekit webhook: signature verification failed", err);
     return new Response("Invalid signature", { status: 401 });
   }
 

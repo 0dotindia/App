@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, type ReactNode } from "react";
 import { AppState } from "react-native";
 import { useAuth } from "../auth/AuthContext";
+import { isAppStateActive } from "../utils/useAppForeground";
 import { createMessagesStream, type MessageStreamEvent } from "./messagesStream";
 
 type Listener = (event: MessageStreamEvent) => void;
@@ -35,9 +36,9 @@ export function MessagesStreamProvider({ children }: { children: ReactNode }) {
     // radio work isn't worth it (Vercel kills the connection at 5 min
     // anyway) — push is the background channel, and on the way back to
     // foreground the stream emits `resync` so consumers close the gap.
-    stream.setActive(AppState.currentState === "active");
+    stream.setActive(isAppStateActive(AppState.currentState));
     const appStateSub = AppState.addEventListener("change", (next) => {
-      stream.setActive(next === "active");
+      stream.setActive(isAppStateActive(next));
     });
 
     return () => {

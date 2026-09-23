@@ -7,6 +7,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const HEARTBEAT_MS = 20_000;
+// Proactively recycle before Vercel's maxDuration ceiling kills the
+// function mid-stream — the client's own reconnect logic picks the stream
+// back up, so this is a clean close rather than a hard timeout in the logs.
+const STREAM_RECYCLE_MS = 280_000;
 
 // Realtime addendum Phase D3 — bearer-token counterpart to
 // api/c/[slug]/voice/[roomId]/stream. Carries only `{type:"room-updated"}`
@@ -33,12 +37,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
+      const startedAt = Date.now();
       controller.enqueue(encoder.encode(`retry: 2000\n\n`));
       const send = (event: VoiceRoomEvent) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       };
       unsubscribe = subscribeToVoiceRoom(roomId, send);
-      heartbeat = setInterval(() => controller.enqueue(encoder.encode(`: heartbeat\n\n`)), HEARTBEAT_MS);
+      heartbeat = setInterval(() => {
+        if (Date.now() - startedAt >= STREAM_RECYCLE_MS) {
+          unsubscribe?.();
+          if (heartbeat) clearInterval(heartbeat);
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoder.encode(`: heartbeat\n\n`));
+      }, HEARTBEAT_MS);
     },
     cancel() {
       unsubscribe?.();

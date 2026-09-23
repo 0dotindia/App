@@ -18,7 +18,13 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const cursor = url.searchParams.get("cursor");
   const kind = url.searchParams.get("kind") ?? undefined;
-  const pageLimit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 25));
+  // `|| 25` would treat an explicit `limit=0` the same as a missing/invalid
+  // value (0 is falsy) — parse and fall back only when the param is
+  // actually absent or non-numeric, so `limit=0` clamps to 1 (via
+  // Math.max below) instead of silently becoming the 25 default.
+  const rawLimit = url.searchParams.get("limit");
+  const requestedLimit = rawLimit === null ? 25 : Number(rawLimit);
+  const pageLimit = Math.min(100, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 25));
 
   const page = await listTransactions(ctx.userId, { cursor, kind, limit: pageLimit });
 

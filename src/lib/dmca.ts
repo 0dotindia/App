@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { isOwnHost } from "@/lib/proxy-routing";
 import { createTrustSafetyCase, resolveSubjectOwnerId, applyReportEnforcement } from "@/lib/trust-safety";
 import {
   notifyDmcaNoticeReceived,
@@ -59,7 +60,17 @@ export async function resolveDmcaSubject(subjectType: string, contentLocation: s
 
   let segments: string[] = [];
   try {
-    segments = new URL(trimmed, "https://0dot.in").pathname.split("/").filter(Boolean);
+    const parsed = new URL(trimmed, "https://0dot.in");
+    // A relative path (the common case — no scheme/host of its own)
+    // resolves against the "https://0dot.in" base above, so parsed.hostname
+    // is always "0dot.in" for those. An absolute URL to an unrelated site
+    // would otherwise silently resolve against its own path alone here,
+    // treating e.g. a coincidentally post-shaped path on a random domain as
+    // a reference to a real 0dot post.
+    if (parsed.hostname !== "0dot.in" && !isOwnHost(parsed.hostname)) {
+      return { error: "That link isn't a 0dot.in URL. Paste the direct link to the content on 0dot." };
+    }
+    segments = parsed.pathname.split("/").filter(Boolean);
   } catch {
     // not a parseable URL — fall through and treat the raw input as an id below
   }
@@ -82,8 +93,14 @@ export async function resolveDmcaSubject(subjectType: string, contentLocation: s
 
   if (subjectType === "article") {
     if (segments.length >= 3 && segments[1] === "articles") {
-      const handle = decodeURIComponent(segments[0]).toLowerCase();
-      const slug = decodeURIComponent(segments[2]).toLowerCase();
+      let handle: string;
+      let slug: string;
+      try {
+        handle = decodeURIComponent(segments[0]).toLowerCase();
+        slug = decodeURIComponent(segments[2]).toLowerCase();
+      } catch {
+        return notFound;
+      }
       const username = await db.username.findUnique({ where: { handle }, select: { userId: true } });
       const article = username
         ? await db.article.findUnique({ where: { authorId_slug: { authorId: username.userId, slug } }, select: { id: true } })

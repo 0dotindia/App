@@ -38,7 +38,13 @@ export async function requestEmailChange(_prevState: ActionState, formData: Form
   if (newEmail === user.email) return { error: "That's already your current email." };
 
   const existing = await db.user.findUnique({ where: { email: newEmail } });
-  if (existing) return { error: "An account with that email already exists." };
+  // A distinguishable "already exists" error lets any signed-in user
+  // enumerate arbitrary email addresses' registration status — not just
+  // their own. Respond exactly like the success path instead (same posture
+  // as login()'s enumeration fix, auth.ts's DUMMY_HASH), skipping the
+  // pending-row write and the send so no real confirmation email goes to
+  // that (someone else's) address.
+  if (existing) return { success: true };
 
   // Only the newest request should ever be redeemable — same "invalidate
   // anything outstanding before issuing a new one" posture as
@@ -93,7 +99,8 @@ export async function requestPhoneChange(
   if (newPhone === user.phone) return { error: "That's already your current mobile number." };
 
   const existing = await db.user.findUnique({ where: { phone: newPhone } });
-  if (existing) return { error: "An account with that mobile number already exists." };
+  // Same enumeration fix as requestEmailChange above.
+  if (existing) return { success: true };
 
   await db.pendingPhoneChange.deleteMany({ where: { userId: user.id } });
 

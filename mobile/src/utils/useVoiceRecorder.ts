@@ -22,8 +22,13 @@ export function useVoiceRecorder() {
   // instantly) — the caller treats that the same as a cancel rather than
   // sending an empty/near-zero-length attachment.
   async function stop(): Promise<MessageAttachmentUpload | null> {
-    const durationMillis = state.durationMillis;
     await recorder.stop();
+    // getStatus() is a synchronous native call made *after* stop() resolves,
+    // so it reflects the actual final duration — unlike state.durationMillis
+    // (from useAudioRecorderState's 200ms poll), which can understate a
+    // recording stopped right after a poll tick, wrongly discarding a
+    // legitimately long-enough recording as "too short".
+    const durationMillis = recorder.getStatus().durationMillis;
     if (!recorder.uri || durationMillis < 500) return null;
     return {
       uri: recorder.uri,

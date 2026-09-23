@@ -4,15 +4,21 @@ import { DmcaNoticeForm } from "./DmcaNoticeForm";
 
 export const metadata: Metadata = { title: "DMCA notice" };
 
-// TODO(legal): replace with the actual designated agent registered with
-// the US Copyright Office (https://dmca.copyright.gov/osp/) — 17 U.S.C. §
-// 512(c)(2) requires that registration, and requires this contact info to
-// be publicly posted, for the site to keep safe-harbor protection at all.
-const DESIGNATED_AGENT = {
-  name: "[Designated Agent name]",
-  email: "[dmca@yourdomain — create this mailbox before shipping]",
-  address: "[Street address, City, State, ZIP, Country]",
-};
+// 17 U.S.C. § 512(c)(2) requires a designated agent (registered with the US
+// Copyright Office, https://dmca.copyright.gov/osp/) and requires this exact
+// contact info to be publicly posted, for the site to keep safe-harbor
+// protection at all. Sourced from env rather than hardcoded so a missing
+// value fails loudly (this page throws instead of silently shipping
+// placeholder text as if it were real legal contact info).
+function requireDmcaAgentEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `${name} is not set — the DMCA designated-agent contact (17 U.S.C. § 512(c)(2)) must be configured before this page can render.`
+    );
+  }
+  return value;
+}
 
 // phase-13 spec §4.4: the heavier, statute-shaped formal notice, distinct
 // from the lightweight Report(category=ip_infringement) flag every
@@ -23,6 +29,12 @@ const DESIGNATED_AGENT = {
 // removed content, which this codebase can only verify for a logged-in
 // account — see /trust-safety.)
 export default function DmcaPage() {
+  const DESIGNATED_AGENT = {
+    name: requireDmcaAgentEnv("DMCA_AGENT_NAME"),
+    email: requireDmcaAgentEnv("DMCA_AGENT_EMAIL"),
+    address: requireDmcaAgentEnv("DMCA_AGENT_ADDRESS"),
+  };
+
   return (
     <div className="dmcaPage stack-lg">
       <div className="card section">

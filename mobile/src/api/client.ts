@@ -1,6 +1,6 @@
 import { File } from "expo-file-system";
 import { API_BASE_URL } from "../config";
-import { loadTokens, saveTokens, clearTokens } from "../auth/tokenStorage";
+import { loadTokens, saveTokens, clearTokens, getClearEpoch } from "../auth/tokenStorage";
 import { refreshAccessToken, RefreshFailedError } from "../auth/pkceAuth";
 import { fetchWithTimeout, isAbortError } from "./http";
 import type {
@@ -128,8 +128,13 @@ function tryRefreshTokens(): Promise<boolean> {
     refreshInFlight = (async () => {
       const current = await loadTokens();
       if (!current) return false;
+      const epochAtStart = getClearEpoch();
       try {
         const refreshed = await refreshAccessToken(current.refreshToken);
+        // If clearTokens() ran while this refresh was in flight (e.g. the
+        // user tapped Sign Out), don't resurrect the session by writing the
+        // refreshed tokens back — treat it as a failed refresh instead.
+        if (getClearEpoch() !== epochAtStart) return false;
         await saveTokens(refreshed);
         return true;
       } catch (err) {
@@ -137,7 +142,13 @@ function tryRefreshTokens(): Promise<boolean> {
         // the refresh token — a network-level failure says nothing about
         // whether it's still good, so the existing tokens are left in
         // place for the next attempt (see RefreshFailedError's comment).
-        if (err instanceof RefreshFailedError && err.invalidGrant) await clearTokens();
+        if (err instanceof RefreshFailedError && err.invalidGrant && getClearEpoch() === epochAtStart) {
+          // clearTokens() itself can throw (e.g. a Keystore/SecureStore
+          // failure) — this function is documented to always resolve to
+          // false, never reject, so a secondary failure here must be
+          // swallowed rather than propagated.
+          await clearTokens().catch(() => {});
+        }
         return false;
       }
     })().finally(() => {
@@ -713,8 +724,11 @@ export function enrollTwoFactor(): Promise<TwoFactorEnrollment> {
   return authorizedRequest<TwoFactorEnrollment>("/api/v1/account/two-factor/enroll", { method: "POST" });
 }
 
-export function confirmTwoFactor(code: string): Promise<RecoveryCodes> {
-  return authorizedRequest<RecoveryCodes>("/api/v1/account/two-factor/confirm", { method: "POST", body: JSON.stringify({ code }) });
+export function confirmTwoFactor(code: string, currentPassword: string): Promise<RecoveryCodes> {
+  return authorizedRequest<RecoveryCodes>("/api/v1/account/two-factor/confirm", {
+    method: "POST",
+    body: JSON.stringify({ code, currentPassword }),
+  });
 }
 
 export function disableTwoFactor(currentPassword: string): Promise<{ ok: true }> {

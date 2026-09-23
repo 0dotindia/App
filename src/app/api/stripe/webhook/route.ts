@@ -70,7 +70,14 @@ async function handleCheckoutSession(session: Stripe.Checkout.Session): Promise<
 
   if (decision.subscriptionKind === "platform_subscription") {
     const { subscriberType, subscriberId, payerUserId, plan, billingInterval } = metadata;
-    if (!subscriberType || !subscriberId || !payerUserId || !plan || !billingInterval) return;
+    if (!subscriberType || !subscriberId || !payerUserId || !plan || !billingInterval) {
+      logger.error("stripe webhook: platform_subscription checkout missing required metadata — payment collected but nothing activated", undefined, {
+        checkoutId: session.id,
+        subscriptionId: subscription.id,
+        metadata,
+      });
+      return;
+    }
     await activateSubscriptionFromCheckout({
       subscriberType: subscriberType as "profile" | "business",
       subscriberId,
@@ -108,7 +115,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let event: Stripe.Event;
   try {
     event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
-  } catch {
+  } catch (err) {
+    // A rotated/misconfigured STRIPE_WEBHOOK_SECRET makes every real
+    // delivery fail here silently — this is the only trace that a signature
+    // mismatch is happening at all, and Stripe will eventually auto-disable
+    // the endpoint after enough consecutive failures.
+    logger.error("stripe webhook: signature verification failed", err);
     return NextResponse.json({ error: "Invalid signature." }, { status: 400 });
   }
 

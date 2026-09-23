@@ -31,7 +31,11 @@ export function isInternalSystemAccountEmail(email: string): boolean {
 // 3986 §3.1's `scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`) —
 // mobile/app.json's own scheme registration failed expo-doctor's schema
 // validation against a leading digit, which is what surfaced this.
-const FIRST_PARTY_APPS = [
+// Exported so anything needing "the current first-party app catalog" (e.g.
+// the oauth-scopes debug route) derives it from this single source instead
+// of re-typing the name list, which would silently desync from this if an
+// app is renamed or a platform added here.
+export const FIRST_PARTY_APPS = [
   { platform: "ios", name: "0dot iOS App", description: "0dot's first-party iOS app.", redirectUris: ["zerodot-ios://oauth/callback"] },
   { platform: "android", name: "0dot Android App", description: "0dot's first-party Android app.", redirectUris: ["zerodot-android://oauth/callback"] },
   { platform: "desktop", name: "0dot Desktop", description: "0dot's first-party desktop app (installable PWA).", redirectUris: ["https://0dot.in/desktop/oauth/callback"] },

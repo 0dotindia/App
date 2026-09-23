@@ -69,7 +69,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     async start(controller) {
       const encoder = new TextEncoder();
       const startedAt = Date.now();
-      const enqueue = (chunk: string) => controller.enqueue(encoder.encode(chunk));
+      // Checked before every enqueue — start() awaits getReplayFrames/
+      // currentSeq (a Redis round trip) below before unsubscribe/heartbeat
+      // are assigned, so a disconnect during that await used to make
+      // cancel()'s cleanup() a no-op (closed already true, but nothing to
+      // unsubscribe/clearInterval yet) and let these enqueue() calls run
+      // against an already-cancelled controller, throwing instead of being
+      // suppressed.
+      const enqueue = (chunk: string) => {
+        if (closed) return;
+        controller.enqueue(encoder.encode(chunk));
+      };
       enqueue(`retry: 2000\n\n`);
 
       const sendEvent = (event: CommunityChatEvent) => {
@@ -95,6 +105,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
         const seq = await currentSeq(replayChannel);
         enqueue(`id: ${seq}\n\n`);
       }
+
+      if (closed) return; // cancelled during the awaits above — don't set up listeners cleanup() already ran without
 
       unsubscribe = subscribeToCommunityChat(community.id, sendEvent);
       heartbeat = setInterval(() => {

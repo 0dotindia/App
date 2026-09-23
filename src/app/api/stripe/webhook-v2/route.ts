@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { db } from "@/lib/db";
+import { logger } from "@/lib/logger";
 import type { PayoutAccountStatus } from "@/lib/payments";
 
 // Separate endpoint from /api/stripe/webhook on purpose: that route
@@ -39,7 +40,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let notification: Awaited<ReturnType<typeof stripe.parseEventNotificationAsync>>;
   try {
     notification = await stripe.parseEventNotificationAsync(body, signature, webhookSecret);
-  } catch {
+  } catch (err) {
+    // A wrong/rotated STRIPE_THIN_WEBHOOK_SECRET fails every delivery here
+    // silently — this route is specifically the fix for creators never
+    // getting marked payout-eligible, so a signature failure reproduces
+    // that exact bug with no trace unless it's logged.
+    logger.error("stripe thin-event webhook: signature verification failed", err);
     return NextResponse.json({ error: "Invalid signature." }, { status: 400 });
   }
 

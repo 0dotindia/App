@@ -6,6 +6,7 @@ import { checkApiRateLimit } from "@/lib/api-rate-limit";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { purchaseProfilePremiumWithCoins } from "@/lib/platform-billing";
 import { settleCoinPurchase } from "@/lib/wallet/charge";
+import { coinActionKey } from "@/lib/wallet/limits";
 import { createTipRow } from "@/app/actions/tips";
 import { notifyTipReceived } from "@/lib/notifications";
 
@@ -47,7 +48,9 @@ export async function POST(request: Request) {
 
   if (target === "tip") {
     const handle = typeof body?.username === "string" ? body.username.trim().toLowerCase() : "";
-    const amount = Math.round(Number(body?.amount) * 100) / 100;
+    // toFixed(2) first, THEN *100 — avoids the IEEE-754 case where e.g.
+    // 1.005 * 100 === 100.49999999999999 and rounds down to the wrong cent.
+    const amount = Math.round(Number(Number(body?.amount).toFixed(2)) * 100) / 100;
     const message = typeof body?.message === "string" ? body.message.slice(0, 280) : "";
     if (!handle) return apiError("A recipient username is required.", 400);
     if (!Number.isFinite(amount) || amount < 1 || amount > 500) return apiError("Tip must be between $1 and $500.", 400);
@@ -63,7 +66,13 @@ export async function POST(request: Request) {
       amountUsd: amount,
       currency: "usd",
       relatedObjectType: "tip",
-      idempotencyKey: `tip:coin:api:${idempotencyKey}`,
+      // Same coinActionKey(scope, token, payerId, recipientId, amount) shape
+      // src/app/actions/tips.ts's web action already uses — a raw
+      // `tip:coin:api:${idempotencyKey}` (this route's previous key) bound
+      // only the client's own token, with no userId/recipient/amount
+      // binding at all, so two different users submitting the same token
+      // value would collide on the same ledger transaction row.
+      idempotencyKey: coinActionKey("tip:coin", idempotencyKey, ctx.userId, recipient.userId, amount),
       metadata: { message },
       createRows: createTipRow,
     });

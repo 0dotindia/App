@@ -24,15 +24,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const post = await db.post.findFirst({ where: { id: postId, deletedAt: null }, select: { id: true } });
   if (!post) return apiError("Not found.", 404);
 
-  const existing = await db.bookmark.findUnique({ where: { postId_userId: { postId, userId: ctx.userId } } });
-  let bookmarked: boolean;
-  if (existing) {
-    await db.bookmark.delete({ where: { postId_userId: { postId, userId: ctx.userId } } });
-    bookmarked = false;
-  } else {
-    await db.bookmark.create({ data: { postId, userId: ctx.userId } });
-    bookmarked = true;
-  }
+  // Read + write in one transaction — same TOCTOU fix as the like route:
+  // a double-tap could otherwise have both requests read "not bookmarked
+  // yet" and both attempt create(), the second throwing on the unique
+  // constraint instead of un-bookmarking.
+  const bookmarked = await db.$transaction(async (tx) => {
+    const existing = await tx.bookmark.findUnique({ where: { postId_userId: { postId, userId: ctx.userId } } });
+    if (existing) {
+      await tx.bookmark.delete({ where: { postId_userId: { postId, userId: ctx.userId } } });
+      return false;
+    }
+    await tx.bookmark.create({ data: { postId, userId: ctx.userId } });
+    return true;
+  });
 
   revalidatePath("/feed");
   revalidatePath("/explore");

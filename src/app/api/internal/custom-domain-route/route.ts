@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getLiveCustomDomainByHost } from "@/lib/custom-domains";
 import { db } from "@/lib/db";
-import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { enforceRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // Internal-only lookup src/proxy.ts calls over fetch() rather than
 // querying Prisma directly from Proxy's own execution context — that
@@ -18,9 +18,23 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 // a production env var this app doesn't have yet and the data returned
 // isn't sensitive enough to justify blocking normal custom-domain traffic
 // if that var is ever unset.
+//
+// x-internal-forwarded-client-ip: proxy.ts's own outbound fetch() call to
+// this route re-enters the deployment through Vercel's edge, which
+// overwrites X-Forwarded-For to reflect that internal call rather than the
+// original site visitor (see rate-limit.ts's getClientIp() comment) —
+// without this, every custom-domain visitor platform-wide collapsed onto
+// one shared "unknown" bucket, so once aggregate traffic across *all*
+// custom domains exceeded the limit, every custom domain started
+// intermittently failing to resolve. proxy.ts forwards the real,
+// Vercel-verified visitor IP through this header instead. Uses
+// enforceRateLimit (durable, cross-instance) rather than the in-memory
+// checkRateLimit — this guards against a scripted enumeration attacker,
+// exactly the kind of abuse-prone check this module's own docs say the
+// in-memory limiter isn't sufficient for.
 export async function GET(request: Request): Promise<Response> {
-  const ip = await getClientIp();
-  if (!checkRateLimit(`custom-domain-route:ip:${ip}`, { max: 60, windowMs: 60 * 1000 })) {
+  const ip = request.headers.get("x-internal-forwarded-client-ip") || (await getClientIp());
+  if (!(await enforceRateLimit(`custom-domain-route:ip:${ip}`, { max: 60, windowMs: 60 * 1000 }))) {
     return NextResponse.json({ prefix: null }, { status: 429 });
   }
 

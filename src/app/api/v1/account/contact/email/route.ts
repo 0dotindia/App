@@ -52,7 +52,20 @@ export async function POST(request: Request) {
   if (newEmail === user.email) return apiError("That's already your current email.", 400);
 
   const existing = await db.user.findUnique({ where: { email: newEmail } });
-  if (existing) return apiError("An account with that email already exists.", 400);
+  // A distinguishable "already exists" error here lets any caller with a
+  // valid bearer token + their own password enumerate arbitrary email
+  // addresses' registration status (a per-request account-existence
+  // oracle, not just for their own account). Respond exactly like the
+  // success path instead of revealing which case happened — same posture
+  // as login()'s enumeration fix (auth.ts, DUMMY_HASH) — while skipping the
+  // pending-row write and the send so no real confirmation email goes to
+  // that (someone else's) address.
+  if (existing) {
+    return Response.json(
+      { ok: true },
+      { headers: { "X-RateLimit-Limit": String(limit), "X-RateLimit-Remaining": String(remaining) } }
+    );
+  }
 
   await db.pendingEmailChange.deleteMany({ where: { userId: ctx.userId } });
 

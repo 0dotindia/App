@@ -1,6 +1,18 @@
 import { useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 
+// Treats only the "background" state as inactive — "inactive" (control
+// centre, an incoming-call banner, a permission dialog, a share sheet) and
+// "unknown" (transient at startup) both count as active. Realtime stream
+// consumers (voice rooms, livestream/community chat SSE, the messages
+// stream) should call stream.setActive(isAppStateActive(state)) with this
+// rather than `state === "active"` directly — the stricter check tears the
+// connection down and forces a full resync on every dismissed dialog, not
+// just on a real app backgrounding.
+export function isAppStateActive(state: AppStateStatus): boolean {
+  return state !== "background";
+}
+
 // Fires `onForeground` when the app returns to the foreground from the
 // background.
 //

@@ -22,37 +22,58 @@ const CASE_TYPE_LABELS: Record<string, string> = {
 // case_type lands here, resolved through the single resolveCaseAction
 // (trust-safety.ts), which dispatches back to each subject's own status
 // field (§3.1) rather than this page touching those tables directly.
-async function fetchSubjectPreview(subjectType: string, subjectId: string): Promise<string> {
+// `link`, when present, is a direct URL to the live content — added so
+// staff (in particular reviewing a DMCA takedown notice, which only stores
+// the resolved subjectType/subjectId, not the complainant's original URL)
+// can open what was actually reported instead of having to query the DB
+// directly to find it.
+async function fetchSubjectPreview(subjectType: string, subjectId: string): Promise<{ preview: string; link?: string }> {
   if (subjectType === "post") {
-    const row = await db.post.findUnique({ where: { id: subjectId }, select: { body: true } });
-    return row?.body ?? "(content no longer available)";
+    const row = await db.post.findUnique({
+      where: { id: subjectId },
+      select: { body: true, author: { select: { username: { select: { handle: true } } } } },
+    });
+    if (!row) return { preview: "(content no longer available)" };
+    return { preview: row.body, link: row.author.username ? `/${row.author.username.handle}/status/${subjectId}` : undefined };
   }
   if (subjectType === "article") {
-    const row = await db.article.findUnique({ where: { id: subjectId }, select: { title: true, body: true } });
-    return row ? `${row.title}\n${row.body}` : "(content no longer available)";
+    const row = await db.article.findUnique({
+      where: { id: subjectId },
+      select: { title: true, body: true, slug: true, author: { select: { username: { select: { handle: true } } } } },
+    });
+    if (!row) return { preview: "(content no longer available)" };
+    return {
+      preview: `${row.title}\n${row.body}`,
+      link: row.author.username ? `/${row.author.username.handle}/articles/${row.slug}` : undefined,
+    };
   }
   if (subjectType === "comment") {
     const row = await db.comment.findUnique({ where: { id: subjectId }, select: { body: true } });
-    return row?.body ?? "(content no longer available)";
+    return { preview: row?.body ?? "(content no longer available)" };
   }
   if (subjectType === "business") {
     const row = await db.business.findUnique({ where: { id: subjectId }, select: { name: true, slug: true, description: true } });
-    return row ? `${row.name} (/b/${row.slug})\n${row.description}` : "(business no longer available)";
+    return row
+      ? { preview: `${row.name} (/b/${row.slug})\n${row.description}`, link: `/b/${row.slug}` }
+      : { preview: "(business no longer available)" };
   }
   if (subjectType === "marketplace_listing") {
     const row = await db.marketplaceListing.findUnique({ where: { id: subjectId }, select: { title: true, description: true, payload: true } });
-    return row ? `${row.title}\n${row.description}\n${row.payload}` : "(listing no longer available)";
+    return row ? { preview: `${row.title}\n${row.description}\n${row.payload}`, link: `/m/${subjectId}` } : { preview: "(listing no longer available)" };
   }
   if (subjectType === "developer_app_scope") {
     const [appId, scopeKey] = subjectId.split(":");
     const row = await db.developerAppScope.findUnique({ where: { appId_scopeKey: { appId, scopeKey } }, include: { app: true, scope: true } });
-    return row ? `${row.app.name} requests ${row.scopeKey} — ${row.scope.description}` : "(scope request no longer available)";
+    return { preview: row ? `${row.app.name} requests ${row.scopeKey} — ${row.scope.description}` : "(scope request no longer available)" };
   }
   if (subjectType === "user") {
     const row = await db.user.findUnique({ where: { id: subjectId }, select: { email: true, username: true } });
-    return row ? `${row.username?.handle ? `@${row.username.handle}` : "(no handle)"} · ${row.email}` : "(user no longer available)";
+    return {
+      preview: row ? `${row.username?.handle ? `@${row.username.handle}` : "(no handle)"} · ${row.email}` : "(user no longer available)",
+      link: row?.username ? `/${row.username.handle}` : undefined,
+    };
   }
-  return "(no preview available for this content type)";
+  return { preview: "(no preview available for this content type)" };
 }
 
 export default async function AdminTrustSafetyPage() {
@@ -66,7 +87,10 @@ export default async function AdminTrustSafetyPage() {
   });
 
   const withPreviews = await Promise.all(
-    cases.map(async (c) => ({ case: c, preview: await fetchSubjectPreview(c.subjectType, c.subjectId) }))
+    cases.map(async (c) => {
+      const { preview, link } = await fetchSubjectPreview(c.subjectType, c.subjectId);
+      return { case: c, preview, link };
+    })
   );
 
   return (
@@ -92,14 +116,19 @@ export default async function AdminTrustSafetyPage() {
         <EmptyState message="Nothing pending." />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {withPreviews.map(({ case: c, preview }) => (
+          {withPreviews.map(({ case: c, preview, link }) => (
             <div key={c.id} className="profileLinkItem" style={{ flexDirection: "column", alignItems: "flex-start", gap: "0.5rem" }}>
               <div>
                 <strong>{CASE_TYPE_LABELS[c.caseType] ?? c.caseType}</strong>{" "}
                 <span className="mutedText" style={{ fontSize: "0.85rem" }}>
                   {c.subjectType} · {c.reports.length > 0 ? `${c.reports.length} report(s)` : "system-initiated"}
                   {c.reason ? ` · ${c.reason}` : ""}
-                </span>
+                </span>{" "}
+                {link ? (
+                  <Link href={link} target="_blank" style={{ fontSize: "0.85rem" }}>
+                    View →
+                  </Link>
+                ) : null}
               </div>
               <p className="mutedText" style={{ whiteSpace: "pre-wrap", fontSize: "0.9rem" }}>
                 {preview.length > 400 ? `${preview.slice(0, 400)}…` : preview}

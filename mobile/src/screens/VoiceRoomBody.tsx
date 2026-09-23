@@ -10,6 +10,7 @@ import { Avatar } from "../components/Avatar";
 import { Button } from "../components/Button";
 import { EmptyState } from "../components/EmptyState";
 import { haptics } from "../utils/haptics";
+import { isAppStateActive } from "../utils/useAppForeground";
 import { useTheme, type Theme } from "../theme";
 import type { VoiceRoomDetail, VoiceRoomAction } from "../api/types";
 
@@ -70,8 +71,8 @@ export function VoiceRoomBody({ slug, roomId }: { slug: string; roomId: string }
     const accessToken = tokens?.accessToken;
     if (!accessToken || !detail?.isParticipant) return;
     const stream = createVoiceRoomStream({ slug, roomId, accessToken, onEvent: () => load() });
-    stream.setActive(AppState.currentState === "active");
-    const sub = AppState.addEventListener("change", (s) => stream.setActive(s === "active"));
+    stream.setActive(isAppStateActive(AppState.currentState));
+    const sub = AppState.addEventListener("change", (s) => stream.setActive(isAppStateActive(s)));
     return () => {
       sub.remove();
       stream.close();

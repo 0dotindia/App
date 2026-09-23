@@ -115,15 +115,22 @@ export function ProfileScreenBody({
     return { transform: [{ translateY }, { scale: stretch }] };
   });
 
+  // Rapid refocus (tab switch, back-then-forward) can fire two overlapping
+  // load() calls; without this guard, an older request's response arriving
+  // after a newer one's would silently overwrite the fresher state.
+  const loadRequestId = useRef(0);
   const load = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
     setError(null);
     try {
       const [profileResult, postsResult] = await Promise.all([getProfile(username), getUserPosts(username)]);
+      if (loadRequestId.current !== requestId) return;
       animateNextLayout();
       setProfile(profileResult);
       setPosts(postsResult.items);
       setPostsNextCursor(postsResult.nextCursor);
     } catch (err) {
+      if (loadRequestId.current !== requestId) return;
       animateNextLayout();
       setError(err instanceof ApiError ? err.message : "Could not load this profile.");
     }

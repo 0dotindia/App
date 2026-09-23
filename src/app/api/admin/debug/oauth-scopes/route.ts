@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { db } from "@/lib/db";
+import { hasPlatformRole } from "@/lib/auth-guards";
+import { FIRST_PARTY_APPS } from "@/lib/first-party-apps";
 
 // Ops diagnostic for the "This app isn't approved to request: ..." OAuth
 // consent error — lets an admin confirm from a browser whether
@@ -10,13 +12,17 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const user = await getCurrentUser();
-  const platformRole = user ? await db.platformRole.findUnique({ where: { userId: user.id } }) : null;
-  if (platformRole?.role !== "super_admin") {
+  // Shared rank-based check (auth-guards.ts) instead of a bespoke
+  // `role !== "super_admin"` comparison — that check alone would miss the
+  // fail-open guard on an unrecognized/corrupted role string that
+  // hasPlatformRole's own PLATFORM_ROLE_RANK[...] ?? 0 comparison exists to
+  // catch.
+  if (!user || !(await hasPlatformRole(user.id, "super_admin"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 403 });
   }
 
   const apps = await db.developerApp.findMany({
-    where: { name: { in: ["0dot iOS App", "0dot Android App", "0dot Desktop"] } },
+    where: { name: { in: FIRST_PARTY_APPS.map((spec) => spec.name) } },
     select: {
       id: true,
       name: true,

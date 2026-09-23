@@ -2155,6 +2155,17 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   font-size: var(--text-sm);
 }
 
+/* Smaller variant of .mutedText. NOT `className="mutedText text-xs"` — Tailwind's
+   utilities live inside `@layer utilities` (from `@import "tailwindcss"` above),
+   and .mutedText is unlayered; per the CSS Cascade Layers spec, an unlayered
+   declaration always beats a layered one regardless of source/class order, so
+   that combination silently fails to shrink the text. This class sets the
+   smaller size directly, at the same (unlayered) precedence as .mutedText. */
+.mutedTextSmall {
+  opacity: 0.65;
+  font-size: var(--text-xs);
+}
+
 /* Links inside user-authored wiki/markdown content (wiki-markdown.tsx) —
    the global `a { color: inherit; text-decoration: none }` reset above
    makes a plain <a> visually indistinguishable from surrounding text, which

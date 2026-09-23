@@ -74,7 +74,14 @@ function VoiceNoteRow({ url, durationS, tintColor }: { url: string; durationS: n
   const player = useAudioPlayer(url);
   const status = useAudioPlayerStatus(player);
 
-  const displaySeconds = status.playing || status.currentTime > 0 ? Math.max(status.duration - status.currentTime, 0) : (durationS ?? status.duration);
+  // Once playback finishes, status.playing goes false but status.currentTime
+  // stays at/near status.duration (the onPress handler above needs its own
+  // explicit seekTo(0) before a replay because of this) — without the
+  // `currentTime < duration` check, that state kept matching the "actively
+  // playing" branch and showed "0:00" indefinitely instead of reverting to
+  // the clip's full length.
+  const isActivelyPlaying = status.playing || (status.currentTime > 0 && status.currentTime < status.duration);
+  const displaySeconds = isActivelyPlaying ? Math.max(status.duration - status.currentTime, 0) : (durationS ?? status.duration);
 
   return (
     <Pressable

@@ -8,6 +8,7 @@ import { createLivestreamChatStream } from "../realtime/livestreamChatStream";
 import { Avatar } from "../components/Avatar";
 import { EmptyState } from "../components/EmptyState";
 import { relativeTime } from "../utils/relativeTime";
+import { isAppStateActive } from "../utils/useAppForeground";
 import { useTheme, type Theme } from "../theme";
 import type { LivestreamDetail, LivestreamChatMessage, LiveKitToken } from "../api/types";
 
@@ -89,8 +90,8 @@ export function LivestreamViewerBody({ livestreamId }: { livestreamId: string })
     const accessToken = tokens?.accessToken;
     if (!accessToken || !isLive) return;
     const stream = createLivestreamChatStream({ livestreamId, accessToken, onEvent: () => loadChat() });
-    stream.setActive(AppState.currentState === "active");
-    const sub = AppState.addEventListener("change", (s) => stream.setActive(s === "active"));
+    stream.setActive(isAppStateActive(AppState.currentState));
+    const sub = AppState.addEventListener("change", (s) => stream.setActive(isAppStateActive(s)));
     return () => {
       sub.remove();
       stream.close();
@@ -178,7 +179,17 @@ export function LivestreamViewerBody({ livestreamId }: { livestreamId: string })
     <View style={styles.screen}>
       <View style={styles.videoArea}>
         {liveKitToken ? (
-          <LiveKitRoom serverUrl={liveKitToken.url} token={liveKitToken.token} connect audio={false} video={false} onError={() => setTokenError("Connection lost.")}>
+          <LiveKitRoom
+            serverUrl={liveKitToken.url}
+            token={liveKitToken.token}
+            connect
+            audio={false}
+            video={false}
+            onError={() => {
+              setTokenError("Connection lost.");
+              setLiveKitToken(null);
+            }}
+          >
             <RemoteVideo />
           </LiveKitRoom>
         ) : (

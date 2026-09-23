@@ -46,7 +46,16 @@ export async function POST(request: Request) {
   if (newPhone === user.phone) return apiError("That's already your current mobile number.", 400);
 
   const existing = await db.user.findUnique({ where: { phone: newPhone } });
-  if (existing) return apiError("An account with that mobile number already exists.", 400);
+  // Same enumeration fix as the email-change route: a distinguishable
+  // "already exists" error would let any caller with a valid bearer token +
+  // their own password learn which arbitrary phone numbers are registered.
+  // Respond exactly like the success path and skip the send instead.
+  if (existing) {
+    return Response.json(
+      { ok: true },
+      { headers: { "X-RateLimit-Limit": String(limit), "X-RateLimit-Remaining": String(remaining) } }
+    );
+  }
 
   await db.pendingPhoneChange.deleteMany({ where: { userId: ctx.userId } });
 

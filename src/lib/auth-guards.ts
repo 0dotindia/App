@@ -27,13 +27,29 @@ export async function requireOwnProfile() {
 // Manually granted via /admin/platform-roles (super_admin only) or direct
 // DB access for the very first super_admin, same "no self-serve flow"
 // posture as Profile.isVerified.
-export async function requirePlatformRole(minRole: "support" | "admin" | "super_admin" = "support") {
+type PlatformRoleName = "support" | "admin" | "super_admin";
+
+// Pure rank check, no DB call and no redirect — shared by requirePlatformRole
+// and hasPlatformRole below so a route re-implementing its own
+// `role !== "super_admin"` check can't accidentally miss the fail-open guard
+// here (an unrecognized role string would otherwise make
+// PLATFORM_ROLE_RANK[...] undefined, and `undefined < N` is always false in
+// JS — through instead of rejected).
+function rankAtLeast(platformRole: { role: string } | null, minRole: PlatformRoleName): boolean {
+  return !!platformRole && (PLATFORM_ROLE_RANK[platformRole.role] ?? 0) >= PLATFORM_ROLE_RANK[minRole];
+}
+
+// For a JSON-returning API route that needs the same rank check as
+// requirePlatformRole without a redirect() (which would send an
+// unauthorized caller to "/" instead of a clean 403 response).
+export async function hasPlatformRole(userId: string, minRole: PlatformRoleName): Promise<boolean> {
+  const platformRole = await db.platformRole.findUnique({ where: { userId } });
+  return rankAtLeast(platformRole, minRole);
+}
+
+export async function requirePlatformRole(minRole: PlatformRoleName = "support") {
   const user = await requireVerifiedUser();
   const platformRole = await db.platformRole.findUnique({ where: { userId: user.id } });
-  // The ?? 0 matters: an unrecognized role string would otherwise make
-  // PLATFORM_ROLE_RANK[...] undefined, and `undefined < N` is always false
-  // in JS — a fail-open bug that would let a corrupted/garbage role value
-  // through instead of being rejected.
-  if (!platformRole || (PLATFORM_ROLE_RANK[platformRole.role] ?? 0) < PLATFORM_ROLE_RANK[minRole]) redirect("/");
-  return { user, platformRole };
+  if (!rankAtLeast(platformRole, minRole)) redirect("/");
+  return { user, platformRole: platformRole! };
 }

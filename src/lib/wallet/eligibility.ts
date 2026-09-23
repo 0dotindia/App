@@ -42,10 +42,12 @@ export async function checkTransferEligibility(
 
 // Per-day caps on coins sent and distinct recipients, read straight off
 // CoinTransfer (indexed on [fromUserId, createdAt]). `coins` is this
-// pending transfer's amount. Takes a transaction client so the read and the
-// CoinTransfer insert that follows it happen under the same write lock —
-// two concurrent transfers can't both pass the daily cap and then both
-// commit (review finding #6).
+// pending transfer's amount. Race-free only because the caller
+// (transferCoinsCore) runs ensureUserAccounts's write BEFORE calling this —
+// that's what actually acquires the DB's write lock; merely being inside
+// the same `tx` isn't enough on its own; a SELECT run before any write
+// executes doesn't block on a concurrent transaction the way one run after
+// acquiring the lock does. Don't reorder that call relative to this one.
 export async function checkTransferVelocity(
   client: Prisma.TransactionClient,
   fromUserId: string,

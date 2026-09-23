@@ -16,6 +16,7 @@ import { SendButton } from "../components/SendButton";
 import { animateNextLayout } from "../utils/animateLayout";
 import { haptics } from "../utils/haptics";
 import { relativeTime } from "../utils/relativeTime";
+import { isAppStateActive } from "../utils/useAppForeground";
 import { useTheme, type Theme } from "../theme";
 import type { CommunityChatMessage } from "../api/types";
 
@@ -92,8 +93,8 @@ export function CommunityChatBody({ slug, communityName }: { slug: string; commu
       },
     });
 
-    stream.setActive(AppState.currentState === "active");
-    const appStateSub = AppState.addEventListener("change", (next) => stream.setActive(next === "active"));
+    stream.setActive(isAppStateActive(AppState.currentState));
+    const appStateSub = AppState.addEventListener("change", (next) => stream.setActive(isAppStateActive(next)));
 
     return () => {
       appStateSub.remove();

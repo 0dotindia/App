@@ -27,14 +27,22 @@ export async function transferCoinsCore(params: {
   let outcome: "created" | "replayed" | { error: string };
   try {
     outcome = await db.$transaction(async (tx) => {
-      // Velocity is checked INSIDE the transaction (same write lock as the
-      // CoinTransfer insert below) so concurrent transfers can't jointly
-      // exceed the daily coin / recipient caps.
-      const velocityError = await checkTransferVelocity(tx, params.fromUserId, params.toUserId, params.coins);
-      if (velocityError) return { error: velocityError };
-
+      // ensureUserAccounts runs BEFORE the velocity check, not after —
+      // its upsert() is a real write statement, so it's what actually
+      // acquires SQLite/libSQL's single-writer lock for this transaction.
+      // A concurrent transfer's own ensureUserAccounts call blocks on that
+      // same lock until this transaction commits, so by the time it
+      // resumes and runs ITS velocity check, it sees this transfer's
+      // just-committed CoinTransfer row. Checking velocity first (the
+      // previous order) ran that SELECT before any lock was held, so two
+      // concurrent transfers could both read "under the cap" and both
+      // commit, jointly exceeding it — reordering closes that race without
+      // needing a schema change or explicit row locking.
       const from = await ensureUserAccounts(tx, params.fromUserId);
       const to = await ensureUserAccounts(tx, params.toUserId);
+
+      const velocityError = await checkTransferVelocity(tx, params.fromUserId, params.toUserId, params.coins);
+      if (velocityError) return { error: velocityError };
 
       const result = await postTransaction(tx, {
         kind: "transfer",
@@ -51,8 +59,23 @@ export async function transferCoinsCore(params: {
       // Replay of the same idempotencyKey — the coins already moved on the
       // first call. Don't write a second CoinTransfer row (it would show
       // twice in history and double-count toward the velocity limit) or
-      // re-notify.
-      if (!result.created) return "replayed";
+      // re-notify. But first confirm it's actually a replay of THIS
+      // request (same recipient and amount) rather than a different
+      // transfer that happens to reuse the key (a buggy client resending
+      // a mutated payload with an old key, or a colliding key across two
+      // different requests) — postTransaction's dedupe only matches on the
+      // key string, so without this check that case would silently report
+      // success while moving zero coins to the recipient actually named in
+      // this call.
+      if (!result.created) {
+        const toPosting = await tx.ledgerPosting.findFirst({
+          where: { transactionId: result.transaction.id, accountId: to.walletId },
+        });
+        if (result.transaction.relatedObjectId !== params.toUserId || toPosting?.amount !== units) {
+          return { error: "This idempotency key was already used for a different transfer." };
+        }
+        return "replayed";
+      }
 
       await tx.coinTransfer.create({
         data: { fromUserId: params.fromUserId, toUserId: params.toUserId, amount: params.coins },

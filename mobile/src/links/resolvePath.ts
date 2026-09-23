@@ -87,7 +87,7 @@ export function resolvePath(path: string): void {
   // screen for yet (marketplace items, businesses' sub-pages, ...) falls
   // through below — checked before the bare-username catch-all so e.g.
   // "/feed" or "/notifications" don't get misread as a username.
-  const reservedFirstSegment = /^\/(c|b|e|m|messages|feed|notifications|login|signup|s)(\/|$)/;
+  const reservedFirstSegment = /^\/(c|b|e|m|messages|feed|notifications|login|signup|s|trust-safety)(\/|$)/;
   const usernameMatch = !reservedFirstSegment.test(path) && path.match(/^\/([^/?#]+)\/?$/);
   if (usernameMatch) {
     router.push({ pathname: "/[username]", params: { username: usernameMatch[1] } });

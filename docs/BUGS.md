@@ -1,3 +1,50 @@
+# Bug report: full-codebase review (2026-09-23)
+
+Found by a parallel multi-agent code review (`/code-review high`) across
+`src/lib` + `src/app/actions`, `src/app/api`, `src/components` + `src/app`
+pages, and `mobile/src`. 33 findings — full detail, fix rationale, and a
+group-by-group summary in `docs/FIX_PLAN_2026-09-23.md`. All 33 are FIXED as
+of this writing; `tsc`, `eslint`, and both test suites (220 web / 89 mobile)
+pass clean.
+
+Headline items, most severe first:
+
+- **2FA enroll/confirm allowed account takeover via a stolen API token** —
+  neither the web action nor the API route required the current password to
+  finish enrollment, unlike every sibling security mutation. Now requires it
+  on both, plus mobile.
+- **Mobile sign-out could be silently undone** by an in-flight token refresh
+  racing `signOut()`. Fixed with a clear-epoch counter; regression test
+  added.
+- **`getClientIp()`'s "last hop" logic didn't match how Vercel actually
+  sets `X-Forwarded-For`** (verified against Vercel's own docs) — switched
+  to the first value.
+- **Custom-domain routing could fail platform-wide under ordinary load** —
+  `proxy.ts`'s internal lookup fetch never forwarded the real visitor IP, so
+  every custom-domain visitor site-wide shared one rate-limit bucket.
+- **`/dmca` shipped placeholder legal contact info** live on an indexable
+  page — now sourced from required env vars that fail loudly if unset
+  (real values still need to be provided — see the fix plan's "still open"
+  note).
+- Wallet transfer idempotency key wasn't bound to recipient/amount (a
+  mismatched replay silently reported success); the daily velocity cap had
+  a TOCTOU race; the same missing-idempotency-scoping bug was independently
+  found and fixed in the coin-tip purchase route.
+- Like/bookmark toggle races (TOCTOU) existed in **both** the web actions
+  and the API routes — only the repost action had previously been fixed.
+- Several SSE routes had an `enqueue`-after-`cancel` race, missing
+  `maxDuration`, or no proactive recycle before Vercel's timeout.
+- Muted community members were denied read access on two API routes.
+- Email/phone-change endpoints (web action **and** API route) let any
+  authenticated caller enumerate arbitrary registered addresses.
+- 10 mobile-specific bugs: sign-out race (above), a stuck livestream error
+  state, broken Trust & Safety deep links, unnecessary realtime
+  reconnects on transient `AppState` blips, a markdown renderer missing
+  ordered-list/`---` support, and others — see the fix plan for the full
+  list.
+
+---
+
 # Bug report: login → header flow
 
 Found by code review + live testing (logging in/out repeatedly in Chrome) on

@@ -70,9 +70,19 @@ export async function POST(request: Request) {
     return apiError(parsed.error.issues[0]?.message ?? "Invalid request body.", 400);
   }
   const { username: handle, coinAmount } = parsed.data;
+  // Scoped by ctx.userId — a client-supplied key on its own isn't unique
+  // across different callers, and postTransaction's dedupe matches on the
+  // full idempotencyKey string globally. Without this, two different users
+  // (or apps) submitting the same key value would collide: whichever
+  // request's transaction commits first "wins" the ledger row, and the
+  // other's transfer would be silently treated as an already-completed
+  // replay — transferCoinsCore's own replay check compares against the
+  // *requesting* recipient/amount, but with an unscoped key that comparison
+  // itself could false-positive-match a different user's unrelated transfer
+  // that coincidentally shares the same recipient and amount.
   const idempotencyKey = parsed.data.idempotencyKey
-    ? `transfer:api:${parsed.data.idempotencyKey}`
-    : `transfer:api:${randomUUID()}`;
+    ? `transfer:api:${ctx.userId}:${parsed.data.idempotencyKey}`
+    : `transfer:api:${ctx.userId}:${randomUUID()}`;
 
   if (!(await enforceRateLimit(`wallet-transfer:${ctx.userId}`, { max: 10, windowMs: 15 * 60 * 1000 }))) {
     return apiError("You're sending coins too fast. Please slow down.", 429);

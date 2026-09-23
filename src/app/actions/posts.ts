@@ -193,22 +193,26 @@ export async function toggleLike(formData: FormData): Promise<void> {
   const user = await requireVerifiedUser();
   const postId = String(formData.get("postId") ?? "");
 
-  const [existing, post] = await Promise.all([
-    db.postLike.findUnique({ where: { postId_userId: { postId, userId: user.id } } }),
-    db.post.findUnique({ where: { id: postId }, select: { authorId: true } }),
-  ]);
+  const post = await db.post.findUnique({ where: { id: postId }, select: { authorId: true } });
   if (!post) return;
 
-  if (existing) {
-    await db.$transaction([
-      db.postLike.delete({ where: { postId_userId: { postId, userId: user.id } } }),
-      db.post.update({ where: { id: postId }, data: { likeCount: { decrement: 1 } } }),
-    ]);
-  } else {
-    await db.$transaction([
-      db.postLike.create({ data: { postId, userId: user.id } }),
-      db.post.update({ where: { id: postId }, data: { likeCount: { increment: 1 } } }),
-    ]);
+  // Read + write in one transaction (not just the write) — same fix as
+  // toggleRepost's own comment: two concurrent calls could otherwise both
+  // read "not liked yet" before either write commits, and the second
+  // create() would throw on the unique constraint instead of un-liking.
+  const liked = await db.$transaction(async (tx) => {
+    const existing = await tx.postLike.findUnique({ where: { postId_userId: { postId, userId: user.id } } });
+    if (existing) {
+      await tx.postLike.delete({ where: { postId_userId: { postId, userId: user.id } } });
+      await tx.post.update({ where: { id: postId }, data: { likeCount: { decrement: 1 } } });
+      return false;
+    }
+    await tx.postLike.create({ data: { postId, userId: user.id } });
+    await tx.post.update({ where: { id: postId }, data: { likeCount: { increment: 1 } } });
+    return true;
+  });
+
+  if (liked) {
     await notifyLike({ recipientId: post.authorId, actorId: user.id, subjectId: postId });
   }
 
@@ -220,16 +224,16 @@ export async function toggleBookmark(formData: FormData): Promise<void> {
   const postId = String(formData.get("postId") ?? "");
 
   // Private, toggle, never shown to anyone else — no denormalized count
-  // (phase-1 spec §5.3: bookmark counts are never public).
-  const existing = await db.bookmark.findUnique({
-    where: { postId_userId: { postId, userId: user.id } },
+  // (phase-1 spec §5.3: bookmark counts are never public). Read + write in
+  // one transaction — same TOCTOU fix as toggleLike/toggleRepost above.
+  await db.$transaction(async (tx) => {
+    const existing = await tx.bookmark.findUnique({ where: { postId_userId: { postId, userId: user.id } } });
+    if (existing) {
+      await tx.bookmark.delete({ where: { postId_userId: { postId, userId: user.id } } });
+    } else {
+      await tx.bookmark.create({ data: { postId, userId: user.id } });
+    }
   });
-
-  if (existing) {
-    await db.bookmark.delete({ where: { postId_userId: { postId, userId: user.id } } });
-  } else {
-    await db.bookmark.create({ data: { postId, userId: user.id } });
-  }
 
   revalidatePath("/feed");
   revalidatePath("/explore");
