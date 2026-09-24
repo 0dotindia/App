@@ -18,7 +18,7 @@ export function PremiumBillingForm({
         </p>
         <p className="mutedText" style={{ fontSize: "0.85rem" }}>
           {isCancelling ? "Access continues until " : "Renews "}
-          {new Date(subscription.currentPeriodEnd).toLocaleDateString()}.
+          {new Date(subscription.currentPeriodEnd).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}.
         </p>
         {!isCancelling && (
           <form action={cancelPremiumAction} style={{ marginTop: "0.3rem" }}>

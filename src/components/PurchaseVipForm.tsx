@@ -36,7 +36,7 @@ export function PurchaseVipForm({
           <strong>VIP active</strong>
         </div>
         <p className="mutedText" style={{ fontSize: "0.85rem" }}>
-          Billed {subscription.billingInterval} · renews {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
+          Billed {subscription.billingInterval} · renews {new Date(subscription.currentPeriodEnd).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
         </p>
         {subscription.coinFunded && (
           <form action={formAction} style={{ marginTop: "0.4rem" }}>

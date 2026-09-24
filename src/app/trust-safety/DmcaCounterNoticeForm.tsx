@@ -22,7 +22,7 @@ export function DmcaCounterNoticeForm({
   if (counterNotice) {
     return (
       <p className="mutedText" style={{ fontSize: "0.85rem" }}>
-        Counter-notice {counterNotice.status === "received" ? `submitted — eligible for restoration on ${counterNotice.restorationEligibleAt.toLocaleDateString()} unless the complainant files suit` : counterNotice.status.replace("_", " ")}
+        Counter-notice {counterNotice.status === "received" ? `submitted — eligible for restoration on ${counterNotice.restorationEligibleAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })} unless the complainant files suit` : counterNotice.status.replace("_", " ")}
       </p>
     );
   }
