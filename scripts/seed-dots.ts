@@ -5,6 +5,7 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { validateUsernameFormat } from "../src/lib/reserved-usernames";
 import { PALETTES, avatarSvg, coverSvg } from "./seed-dots-art";
+import { coverArtSvg, portraitSvg } from "./seed-dots-portrait-art";
 import { cleanupBeforeSeedDelete, recountNonSeed } from "./seed-dots-cleanup";
 import { PEOPLE, ROLES, GENERIC_POSTS, REPLIES, DM_SCRIPTS, type RoleKey } from "./seed-dots-data";
 
@@ -128,7 +129,7 @@ async function main() {
     const verifiedIdx = new Set(rankOrder.slice(0, 8));
 
     for (let i = 0; i < PEOPLE.length; i++) {
-      const [first, last, , city, role] = PEOPLE[i];
+      const [first, last, gender, city, role] = PEOPLE[i];
       const persona = ROLES[role];
       const ascii = (s: string) => s.toLowerCase().replace(/[^a-z]/g, "");
       const base = ascii(first);
@@ -158,10 +159,10 @@ async function main() {
 
       const palette = PALETTES[(i * 5 + int(3)) % PALETTES.length];
       const initials = `${first[0]}${last[0]}`.toUpperCase();
-      writeFileSync(`public/uploads/dot-${handle}.svg`, avatarSvg(initials, palette, i));
+      writeFileSync(`public/uploads/dot-${handle}.svg`, portraitSvg(gender, i + 1));
       writeFileSync(
         `public/uploads/dot-${handle}-cover.svg`,
-        coverSvg(PALETTES[(i * 7 + 3) % PALETTES.length], i + 1),
+        coverArtSvg(role, i + 1),
       );
 
       // Work history: current role + one earlier stint. Students get no work entry.
