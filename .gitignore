@@ -66,3 +66,6 @@ next-env.d.ts
 /test-results
 /playwright-report
 /blob-report
+
+# local HTTPS dev certificates (mkcert) — never commit
+/certificates/

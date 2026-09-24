@@ -5,6 +5,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "next dev -p 3001",
+    "dev:https": "next dev -p 3001 --experimental-https --experimental-https-key certificates/dev-key.pem --experimental-https-cert certificates/dev.pem",
     "build": "next build",
     "vercel-build": "node scripts/migrate-deploy.mjs && next build",
     "migrate:deploy": "node scripts/migrate-deploy.mjs",

@@ -77,7 +77,8 @@ const nextConfig: NextConfig = {
   // directly on top of the left sidebar's bottom edge — disabled so it
   // doesn't obscure sidebar content during development.
   devIndicators: false,
-  allowedDevOrigins: ["192.168.0.114", "192.168.0.122", "10.0.2.2"], // 10.0.2.2 = Android emulator's host-loopback address
+  // yoursname.com = local custom-domain test host (127.0.0.1 in /etc/hosts); 10.0.2.2 = Android emulator's host-loopback address
+  allowedDevOrigins: ["192.168.0.114", "192.168.0.122", "10.0.2.2", "yoursname.com"],
   experimental: {
     serverActions: {
       // Default is 1MB. Post images no longer flow through a Server Action
