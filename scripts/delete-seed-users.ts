@@ -1,5 +1,6 @@
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { cleanupBeforeSeedDelete, recountNonSeed } from "./seed-dots-cleanup";
 
 // Removes every account seed-users.ts created (identified by its dedicated
 // @seed.0dot.local email domain) so the batch can be regenerated from
@@ -18,9 +19,12 @@ async function main() {
   const adapter = new PrismaLibSql({ url, authToken: process.env.DATABASE_AUTH_TOKEN });
   const prisma = new PrismaClient({ adapter });
   try {
+    // Also clears rows non-seed accounts (e.g. the platform account) created against seeded dots.
+    await cleanupBeforeSeedDelete(prisma);
     const { count } = await prisma.user.deleteMany({
       where: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } },
     });
+    await recountNonSeed(prisma);
     console.log(`Deleted ${count} account(s).`);
   } finally {
     await prisma.$disconnect();
