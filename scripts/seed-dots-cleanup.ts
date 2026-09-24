@@ -26,8 +26,37 @@ export async function cleanupSeedContentReactions(prisma: PrismaClient): Promise
   }
 }
 
+// LedgerAccount.owner is SetNull and LedgerPosting/LedgerTransaction are Restrict, so deleting seeded
+// users would leave their ledger behind (and any tip/transfer with a non-seed account would leave
+// that account's balance wrong). Reverse every ledger transaction that touches a seeded account:
+// undo its effect on non-seed/system accounts, delete tips + payment rows, postings, transactions
+// and finally the seeded accounts themselves. Transactions among only non-seed accounts stay.
+export async function cleanupSeedWallet(prisma: PrismaClient): Promise<void> {
+  const seedAccounts = (await prisma.ledgerAccount.findMany({ where: { owner: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } }, select: { id: true } })).map((a) => a.id);
+  if (seedAccounts.length === 0) return;
+  const seedSet = new Set(seedAccounts);
+  const touching = await prisma.ledgerPosting.findMany({ where: { accountId: { in: seedAccounts } }, select: { transactionId: true }, distinct: ["transactionId"] });
+  const txIds = touching.map((t) => t.transactionId);
+  for (let i = 0; i < txIds.length; i += 500) {
+    const part = txIds.slice(i, i + 500);
+    const others = (await prisma.ledgerPosting.findMany({ where: { transactionId: { in: part } }, select: { accountId: true, amount: true } })).filter((p) => !seedSet.has(p.accountId));
+    const delta = new Map<string, number>();
+    for (const p of others) delta.set(p.accountId, (delta.get(p.accountId) ?? 0) + p.amount);
+    for (const [accountId, amount] of delta) await prisma.ledgerAccount.update({ where: { id: accountId }, data: { cachedBalance: { decrement: amount } } });
+    const ptIds = (await prisma.ledgerTransaction.findMany({ where: { id: { in: part }, paymentTransactionId: { not: null } }, select: { paymentTransactionId: true } })).map((t) => t.paymentTransactionId!);
+    if (ptIds.length) {
+      await prisma.tip.deleteMany({ where: { paymentTransactionId: { in: ptIds } } });
+      await prisma.paymentTransaction.deleteMany({ where: { id: { in: ptIds } } });
+    }
+    await prisma.ledgerPosting.deleteMany({ where: { transactionId: { in: part } } });
+    await prisma.ledgerTransaction.deleteMany({ where: { id: { in: part } } });
+  }
+  await prisma.ledgerAccount.deleteMany({ where: { id: { in: seedAccounts } } });
+}
+
 export async function cleanupBeforeSeedDelete(prisma: PrismaClient): Promise<void> {
   await cleanupSeedContentReactions(prisma);
+  await cleanupSeedWallet(prisma);
   const seedAuthor = { author: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } };
   const nonSeedAuthor = { author: { email: { not: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } } };
 
