@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { requireOwnProfile, requireVerifiedUser } from "@/lib/auth-guards";
 import { isBusinessStaff } from "@/lib/businesses";
 import { isProfilePremium, isBusinessSubscribed } from "@/lib/platform-billing";
-import { claimCustomDomain, normalizeDomain, looksLikeApex, releaseCustomDomain, setPrimaryCustomDomain, verifyDomainRouting } from "@/lib/custom-domains";
+import { claimCustomDomain, restoreDormantCustomDomain, normalizeDomain, looksLikeApex, releaseCustomDomain, setPrimaryCustomDomain, verifyDomainRouting } from "@/lib/custom-domains";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { ActionState } from "@/app/actions/auth";
 
@@ -52,7 +52,7 @@ async function claim(ownerType: "profile" | "business", ownerId: string, formDat
   if (existingCount >= 1) return { error: "Your plan includes one custom domain. Remove your existing one to claim a different domain." };
 
   try {
-    const row = await claimCustomDomain({ ownerType, ownerId, domain, isApex });
+    const row = (await restoreDormantCustomDomain({ ownerType, ownerId, domain })) ?? (await claimCustomDomain({ ownerType, ownerId, domain, isApex }));
     await verifyDomainRouting(row.id).catch(() => {}); // best-effort immediate check; the scheduler (custom-domains.ts) retries regardless
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {

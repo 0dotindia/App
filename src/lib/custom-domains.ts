@@ -74,6 +74,31 @@ export async function claimCustomDomain(params: {
   });
 }
 
+// spec §5.3: a dormant row is a 90-day reservation for the owner who removed
+// it, so claiming the same domain again restores that row (keeping its
+// dns_target, so DNS records they left in place still verify) instead of
+// colliding with the unique `domain` constraint. Returns null when there is
+// nothing of theirs to restore.
+export async function restoreDormantCustomDomain(params: {
+  ownerType: "profile" | "business";
+  ownerId: string;
+  domain: string;
+}): Promise<CustomDomain | null> {
+  const row = await db.customDomain.findUnique({ where: { domain: params.domain } });
+  if (!row || row.status !== "dormant") return null;
+  const ownerId = params.ownerType === "profile" ? row.ownerProfileId : row.ownerBusinessId;
+  if (row.ownerType !== params.ownerType || ownerId !== params.ownerId) return null;
+  return db.customDomain.update({
+    where: { id: row.id },
+    data: {
+      status: "active",
+      dormantAt: null,
+      isPrimary: true,
+      claimExpiresAt: new Date(Date.now() + CLAIM_EXPIRY_MS),
+    },
+  });
+}
+
 export function getDnsInstructions(domain: CustomDomain): { recordType: string; host: string; value: string; note: string } {
   // spec §4.2: apex domains can't use a CNAME per the DNS spec — surfaced
   // explicitly rather than giving every claim identical instructions.
