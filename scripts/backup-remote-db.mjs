@@ -42,7 +42,11 @@ function resolveDumpTarget() {
   const authToken = process.env.DATABASE_AUTH_TOKEN;
   if (!authToken) throw new Error("DATABASE_AUTH_TOKEN is not set");
 
-  const target = new URL(url);
+  // `.dump` over a URL is an HTTP GET to <url>/dump, which the CLI's HTTP
+  // client rejects for the libsql:// scheme ("unsupported protocol scheme").
+  // Same host, so rewrite to https:// (string swap — URL.protocol can't
+  // change between non-special and special schemes).
+  const target = new URL(url.replace(/^libsql:/, "https:"));
   target.searchParams.set("authToken", authToken);
   return target.toString();
 }
