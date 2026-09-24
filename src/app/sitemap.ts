@@ -16,7 +16,7 @@ export async function generateSitemaps() {
   return SITEMAP_IDS.map((id) => ({ id }));
 }
 
-const STATIC_ROUTES = ["", "/explore", "/login", "/signup", "/trending", "/jobs", "/map"];
+const STATIC_ROUTES = ["", "/explore", "/login", "/signup", "/trending", "/jobs", "/map", "/about", "/terms", "/privacy"];
 
 export default async function sitemap({ id }: { id: Promise<string> }): Promise<MetadataRoute.Sitemap> {
   const category = await id;

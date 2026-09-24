@@ -31,7 +31,8 @@ const GROUPS: { heading: string; links: { label: string; href: string }[] }[] = 
     links: [
       { label: "Help", href: "/help" },
       { label: "Trust & Safety", href: "/trust-safety" },
-      { label: "Copyright / DMCA", href: "/dmca" },
+      { label: "Terms", href: "/terms" },
+      { label: "Privacy", href: "/privacy" },
     ],
   },
 ];

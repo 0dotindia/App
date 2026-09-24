@@ -82,18 +82,6 @@ export function ReportButton({ subjectType, subjectId, small = true }: { subject
             onChange={(e) => setDetails(e.target.value)}
           />
         </div>
-        {category === "ip_infringement" && (
-          // phase-13 spec §4.4: this report stays the lightweight "this
-          // looks stolen" flag — the statute-shaped legal notice is a
-          // separate, heavier path a rights-holder opts into.
-          <p className="mutedText" style={{ fontSize: "0.8rem" }}>
-            To request removal under copyright law, file a{" "}
-            <a href="/dmca" target="_blank" rel="noreferrer">
-              formal DMCA takedown notice
-            </a>{" "}
-            instead.
-          </p>
-        )}
         {error && <p className="errorText">{error}</p>}
         <div className="modalActions">
           <button type="button" className="button buttonSecondary" onClick={() => setOpen(false)}>

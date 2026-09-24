@@ -119,6 +119,11 @@ export function SignupForm() {
 
         {state?.error && <p className="errorText">{state.error}</p>}
 
+        <p className="mutedText" style={{ fontSize: "0.8rem" }}>
+          By signing up you agree to the <Link href="/terms" prefetch={false}>Terms</Link> and{" "}
+          <Link href="/privacy" prefetch={false}>Privacy Policy</Link>.
+        </p>
+
         <button type="submit" className="button" disabled={pending}>
           {pending ? "Creating account…" : "Sign up"}
         </button>

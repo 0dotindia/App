@@ -25,7 +25,8 @@ const PUBLIC_ROUTES = [
   "/explore",
   "/trending",
   "/trust-safety",
-  "/dmca",
+  "/terms",
+  "/privacy",
   "/jobs",
 ];
 
