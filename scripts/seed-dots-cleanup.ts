@@ -54,9 +54,43 @@ export async function cleanupSeedWallet(prisma: PrismaClient): Promise<void> {
   await prisma.ledgerAccount.deleteMany({ where: { id: { in: seedAccounts } } });
 }
 
+// Card-payment rows (PaymentTransaction) reference their purchase/tip/donation/conversion rows with
+// Restrict, and a payer is only SetNull on delete, so payments between a seeded and a non-seed account
+// (e.g. @dot buying a seeded creator's product) would be left dangling. Delete every payment that
+// involves a seeded payer, payee or business — plus affiliate commissions credited on seeded programs —
+// together with the rows that point at it.
+export async function cleanupSeedMonetization(prisma: PrismaClient, opts: { cardOnly?: boolean } = {}): Promise<void> {
+  const seedUser = { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } };
+  const links = (await prisma.affiliateLink.findMany({ where: { OR: [{ affiliate: seedUser }, { program: { creator: seedUser } }] }, select: { id: true } })).map((l) => l.id);
+  const ids = (
+    await prisma.paymentTransaction.findMany({
+      where: {
+        OR: [{ payer: seedUser }, { payee: seedUser }, { payeeBusiness: { creator: seedUser } }, { relatedObjectType: "affiliate_link", relatedObjectId: { in: links } }],
+        // cardOnly (used by seed-dots-monetization.ts RESET) keeps coin-wallet payments that seed-dots-wallet.ts owns
+        ...(opts.cardOnly ? { processor: "stripe_connect" } : {}),
+      },
+      select: { id: true },
+    })
+  ).map((p) => p.id);
+  for (let i = 0; i < ids.length; i += 500) {
+    const part = ids.slice(i, i + 500);
+    const ref = { paymentTransactionId: { in: part } };
+    await prisma.tip.deleteMany({ where: ref });
+    await prisma.digitalProductPurchase.deleteMany({ where: ref });
+    await prisma.offeringPurchase.deleteMany({ where: ref });
+    await prisma.affiliateConversion.deleteMany({ where: ref });
+    await prisma.donation.deleteMany({ where: ref });
+    await prisma.courseAccessGrant.deleteMany({ where: ref });
+    await prisma.ticket.deleteMany({ where: ref });
+    await prisma.marketplacePurchase.deleteMany({ where: ref });
+    await prisma.paymentTransaction.deleteMany({ where: { id: { in: part } } });
+  }
+}
+
 export async function cleanupBeforeSeedDelete(prisma: PrismaClient): Promise<void> {
   await cleanupSeedContentReactions(prisma);
   await cleanupSeedWallet(prisma);
+  await cleanupSeedMonetization(prisma);
   const seedAuthor = { author: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } };
   const nonSeedAuthor = { author: { email: { not: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } } };
 
