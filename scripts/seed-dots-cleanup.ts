@@ -87,7 +87,17 @@ export async function cleanupSeedMonetization(prisma: PrismaClient, opts: { card
   }
 }
 
+// Job notifications carry no FK either: an alert-match/application/status notification for a non-seed
+// account (e.g. @dot's job alert) would keep pointing at a seeded business's deleted job.
+export async function cleanupSeedJobNotifications(prisma: PrismaClient): Promise<void> {
+  const slugs = (await prisma.business.findMany({ where: { creator: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } }, select: { slug: true } })).map((b) => b.slug);
+  for (const slug of slugs) {
+    await prisma.notification.deleteMany({ where: { type: { in: ["job_alert_match", "job_application", "application_status"] }, subjectId: { startsWith: `${slug}/jobs/` } } });
+  }
+}
+
 export async function cleanupBeforeSeedDelete(prisma: PrismaClient): Promise<void> {
+  await cleanupSeedJobNotifications(prisma);
   await cleanupSeedContentReactions(prisma);
   await cleanupSeedWallet(prisma);
   await cleanupSeedMonetization(prisma);
