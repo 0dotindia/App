@@ -1,29 +1,22 @@
 import { randomBytes, randomUUID } from "crypto";
 import { mkdirSync, writeFileSync } from "fs";
 import {
-  DAY, MIN, SEED_DOMAIN, SHOWCASE_DOMAIN, SCALE_COLORS, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, round2, type NotifRow,
+  DAY, MIN, SEED_DOMAIN, SCALE_COLORS, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, round2, type NotifRow,
 } from "./seed-showcase-common";
 
-// Monetization and wallet for the showcase profile (@ira), recorded like real payments (PaymentTransaction,
+// Monetization and wallet for the platform showcase profile (@dot), recorded like real payments (PaymentTransaction,
 // stripe_connect, 7% fee because the profile is Premium):
-//   3 membership tiers (Seedling/Grove/Canopy, one yearly) with ~55 members + recurring charges + members-only
+//   @dot's existing tiers (Supporter/Insider/Patron) topped up to ~55 members + recurring charges + members-only
 //   posts/newsletter/episode, 5 digital products with purchases, 3 bookable services + availability +
 //   appointments, an affiliate program on a product and a tier (12 affiliates, clicks, conversions + commissions),
 //   ~90 card tips, and a coin wallet: standard 7-coin signup grant, extra spendable coins, coin tips and
 //   transfers with the dots (obeying app limits, balances recomputed from postings).
-// @dot becomes a Seedling member, buys a product, tips and books a session.
 // Run seed-showcase-profile.ts (and the other showcase scripts) first. Local only.
-// Usage: npx tsx scripts/seed-showcase-monetization.ts     (refuses if it already exists)
-//        RESET=1 npx tsx scripts/seed-showcase-monetization.ts
+// Usage: npx tsx scripts/seed-showcase-monetization.ts     (refuses if it already exists; no undo, restore a DB backup)
 
 const SYSTEM = { revenue: "00000000-0000-4000-8000-000000000001", promoIssuance: "00000000-0000-4000-8000-000000000002" };
 const COIN = 100;
 
-const TIERS: [string, number, string, string][] = [
-  ["Seedling", 3, "monthly", "Support the work and get early access to essays, field notes and seed-library updates."],
-  ["Grove", 9, "monthly", "Everything in Seedling, plus a monthly live Q&A, the members-only newsletter issues and bonus podcast episodes."],
-  ["Canopy", 290, "yearly", "Everything in Grove, plus an annual one-to-one session and your name in the next book's acknowledgements."],
-];
 const PRODUCTS: [string, string, number][] = [
   ["Scale Ladder Workbook", "A 60-page workbook with exercises for mapping any problem across the seven scales.", 12],
   ["Seed Library Starter Kit (PDF)", "Guides, label templates, rules and a launch checklist for a neighbourhood seed library.", 9],
@@ -45,33 +38,13 @@ async function main() {
   const now = Date.now();
   const after = makeAfter(now, rand);
   console.log(`Seeding showcase monetization at: ${url}`);
-  const showcaseUser = { email: { endsWith: `@${SHOWCASE_DOMAIN}` } };
 
   try {
     const me = await loadShowcase(prisma);
     const dots = await loadDots(prisma);
-    const dotAccount = await prisma.username.findUnique({ where: { handle: (process.env.PLATFORM_HANDLE ?? "dot").toLowerCase() }, select: { userId: true, user: { select: { createdAt: true } } } });
-    const dotUser = dotAccount ? { id: dotAccount.userId, createdAt: dotAccount.user.createdAt.getTime() } : null;
 
-    if (process.env.RESET === "1") {
-      const ptIds = (await prisma.paymentTransaction.findMany({ where: { OR: [{ payeeId: me.id }, { payerId: me.id }], processor: "stripe_connect", kind: { in: ["membership_charge", "digital_purchase", "freelance_purchase", "tip", "affiliate_commission"] } }, select: { id: true } })).map((p) => p.id);
-      for (const part of chunk(ptIds, 500)) {
-        const ref = { paymentTransactionId: { in: part } };
-        await prisma.tip.deleteMany({ where: ref });
-        await prisma.digitalProductPurchase.deleteMany({ where: ref });
-        await prisma.offeringPurchase.deleteMany({ where: ref });
-        await prisma.affiliateConversion.deleteMany({ where: ref });
-        await prisma.paymentTransaction.deleteMany({ where: { id: { in: part } } });
-      }
-      await prisma.post.deleteMany({ where: { authorId: me.id, requiredTierId: { not: null } } });
-      await Promise.all([prisma.appointment.deleteMany({ where: { sellerUserId: me.id } }), prisma.affiliateProgram.deleteMany({ where: { creatorId: me.id } }), prisma.availabilityRule.deleteMany({ where: { sellerUserId: me.id } })]);
-      await prisma.offering.deleteMany({ where: { sellerUserId: me.id } });
-      await prisma.digitalProduct.deleteMany({ where: { creatorId: me.id } });
-      await prisma.membershipTier.deleteMany({ where: { creatorId: me.id } });
-      console.log("RESET: removed showcase monetization (coin wallet rows are kept; re-running skips them).");
-    }
-    if ((await prisma.membershipTier.count({ where: { creatorId: me.id } })) > 0) {
-      console.log("Showcase monetization already exists. Re-run with RESET=1 to rebuild it.");
+    if ((await prisma.digitalProduct.count({ where: { creatorId: me.id, title: PRODUCTS[0][0] } })) > 0) {
+      console.log("Showcase monetization already exists (restore a DB backup to redo it).");
       return;
     }
     mkdirSync("public/uploads", { recursive: true });
@@ -90,17 +63,17 @@ async function main() {
     const early = me.createdAt + 20 * DAY;
 
     // ---------- Tiers, members, charges ----------
-    const tiers = await Promise.all(TIERS.map(([name, price, interval, description], i) => prisma.membershipTier.create({ data: { creatorId: me.id, name, level: i + 1, price, currency: "usd", billingInterval: interval, description, status: "active", createdAt: new Date(early) }, select: { id: true, price: true, billingInterval: true } })));
+    const tiers = (await prisma.membershipTier.findMany({ where: { creatorId: me.id, status: "active" }, orderBy: { level: "asc" }, select: { id: true, price: true, billingInterval: true } })).slice(0, 3);
+    if (tiers.length < 3) throw new Error("Expected @dot's three membership tiers (seed-dots-monetization.ts).");
+    const alreadyMembers = new Set((await prisma.membershipSubscription.findMany({ where: { tierId: { in: tiers.map((t) => t.id) } }, select: { fanId: true } })).map((m) => m.fanId));
     const memberSubs: Record<string, unknown>[] = [];
     const firstCharge: { tierId: string; ref: string; amount: number; at: Date; fanId: string }[] = [];
-    const fans = shuffle(dots).slice(0, 54);
-    if (dotUser) fans.push({ id: dotUser.id, createdAt: dotUser.createdAt } as never);
+    const fans = shuffle(dots.filter((d) => !alreadyMembers.has(d.id))).slice(0, Math.max(0, 55 - alreadyMembers.size));
     for (const fan of fans) {
-      const isDot = fan.id === dotUser?.id;
       const r = rand();
-      const tier = tiers[isDot ? 0 : r < 0.58 ? 0 : r < 0.9 ? 1 : 2];
+      const tier = tiers[r < 0.58 ? 0 : r < 0.9 ? 1 : 2];
       const startedAt = after([fan.createdAt], Math.max(early, now - 120 * DAY, fan.createdAt), now - 30 * MIN);
-      const status = isDot || chance(0.9) ? "active" : "cancelled";
+      const status = chance(0.9) ? "active" : "cancelled";
       const step = (tier.billingInterval === "yearly" ? 365 : 30) * DAY;
       const cycles = Math.max(1, Math.min(4, Math.floor((now - startedAt.getTime()) / step) + 1));
       const paid = status === "cancelled" ? Math.max(1, cycles - 1) : cycles;
@@ -135,7 +108,6 @@ async function main() {
     const purchases: { productId: string; buyerId: string; ptId: string; at: Date }[] = [];
     for (const p of products) {
       const buyers = shuffle(dots).slice(0, between(22, 70));
-      if (dotUser && p.title === "Scale Ladder Workbook") buyers.push({ id: dotUser.id, createdAt: dotUser.createdAt } as never);
       for (const b of buyers) {
         const at = after([b.createdAt], Math.max(early + 5 * DAY, b.createdAt, now - 110 * DAY), now - 10 * MIN);
         const row = pay("digital_purchase", b.id, me.id, p.price, ["digital_product", p.id], at);
@@ -159,12 +131,10 @@ async function main() {
     const offeringPurchases: { offeringId: string; buyerId: string; ptId: string; status: string; at: Date }[] = [];
     const occupied = new Set<string>();
     const customers = shuffle(dots).slice(0, 26);
-    if (dotUser) customers.push({ id: dotUser.id, createdAt: dotUser.createdAt } as never);
     for (const c of customers) {
       const o = pick(offerings);
       for (let attempt = 0; attempt < 30; attempt++) {
-        const isDot = c.id === dotUser?.id;
-        const offset = isDot ? between(1, 12) : between(-40, 16);
+        const offset = between(-40, 16);
         const local = new Date(now + offset * DAY + IST);
         if (!days.includes(local.getUTCDay())) continue;
         const hour = between(10, 16);
@@ -199,7 +169,6 @@ async function main() {
     for (const pr of programs) {
       const program = await prisma.affiliateProgram.create({ data: { creatorId: me.id, offeringType: pr.type, offeringId: pr.id, commissionPercent: pr.pct, status: "active", createdAt: new Date(early + 40 * DAY) }, select: { id: true } });
       const affiliates = shuffle(dots).slice(0, 12);
-      if (dotUser && pr.type === "digital_product") affiliates.push({ id: dotUser.id, createdAt: dotUser.createdAt, handle: "dot" } as never);
       for (const a of affiliates) {
         let code = `${a.handle}${between(10, 99)}`.slice(0, 20);
         while (usedCodes.has(code)) code = `${a.handle}${between(100, 9999)}`;
@@ -210,7 +179,7 @@ async function main() {
         await prisma.affiliateClick.createMany({ data: Array.from({ length: between(10, 90) }, () => ({ affiliateLinkId: link.id, occurredAt: new Date(createdAt.getTime() + rand() * (now - createdAt.getTime() - MIN)), referrerHost: pick(["twitter.com", "linkedin.com", "wa.me", "youtube.com", null]) })) });
         const sales = pr.type === "digital_product" ? productSales.get(pr.id) ?? [] : firstCharge.filter((f) => f.tierId === pr.id).map((f) => ({ ref: f.ref, amount: f.amount, at: f.at, buyerId: f.fanId }));
         for (const s of sales) {
-          if (s.buyerId === a.id || s.at.getTime() < createdAt.getTime() || converted.has(s.ref) || !chance(a.id === dotUser?.id ? 0.7 : 0.25)) continue;
+          if (s.buyerId === a.id || s.at.getTime() < createdAt.getTime() || converted.has(s.ref) || !chance(0.25)) continue;
           const commission = round2((s.amount * pr.pct) / 100);
           if (commission <= 0) continue;
           const row = pay("affiliate_commission", null, a.id, commission, ["affiliate_link", link.id], s.at, `${s.ref}_aff`);
@@ -226,7 +195,6 @@ async function main() {
     // ---------- Card tips ----------
     const tipRows: { id: string; from: string; to: string; amount: number; message: string | null; ptId: string; at: Date }[] = [];
     const tippers = [...shuffle(dots), ...shuffle(dots).slice(0, 30)];
-    if (dotUser) tippers.unshift({ id: dotUser.id, createdAt: dotUser.createdAt } as never);
     for (const [i, d] of tippers.entries()) {
       if (i >= 96) break;
       const amount = pick([1, 2, 3, 5, 5, 10, 20, 50]);
@@ -267,7 +235,6 @@ async function main() {
     post({ kind: "signup_grant", key: `signup_grant:${me.id}`, actor: null, memo: "Signup bonus", relType: null, relId: null, expiresAt: exp, createdAt: grantAt, lines: [[SYSTEM.promoIssuance, -1 * COIN], [myAcct.promo, 1 * COIN]] });
     post({ kind: "promo_grant", key: `launch_promo:${me.id}`, actor: null, memo: "launch", relType: null, relId: null, expiresAt: exp, createdAt: new Date(grantAt.getTime() + 1000), lines: [[SYSTEM.promoIssuance, -6 * COIN], [myAcct.promo, 6 * COIN]] });
     post({ kind: "admin_adjustment", key: `seed_wallet:fund:${me.id}`, actor: null, memo: "Seed: starter test funds", relType: null, relId: null, expiresAt: null, createdAt: new Date(me.createdAt + 3 * DAY), lines: [[myAcct.wallet, 800 * COIN], [SYSTEM.promoIssuance, -800 * COIN]] });
-    spendable.set(myAcct.wallet, 800);
     const coinTips: { ledgerId: string; from: string; amount: number; at: Date }[] = [];
     const coinTransfers: { from: string; to: string; amount: number; at: Date }[] = [];
     let coinN = 0;
@@ -321,7 +288,6 @@ async function main() {
     console.log("Done: " + Object.entries(totals).map(([k, v]) => `${v} ${k}`).join(", ") + `. Card payments recorded: ${pts.length} (gross $${earned} to @${me.handle}). Notifications: ${notifs.length}.`);
     console.log(`Wallet @${me.handle}: spendable ${(myBal.find((b) => b.type === "user_wallet")?.cachedBalance ?? 0) / COIN}, restricted ${(myBal.find((b) => b.type === "user_promo")?.cachedBalance ?? 0) / COIN}.`);
     void SEED_DOMAIN;
-    void showcaseUser;
     void int;
   } finally {
     await prisma.$disconnect();

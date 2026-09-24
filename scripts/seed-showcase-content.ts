@@ -2,9 +2,8 @@ import { randomBytes, randomUUID } from "crypto";
 import { mkdirSync, writeFileSync } from "fs";
 import { validateArticleSlugFormat } from "../src/lib/reserved-article-slugs";
 import { validateProjectSlugFormat } from "../src/lib/reserved-project-slugs";
-import { cleanupSeedContentReactions } from "./seed-dots-cleanup";
 import {
-  DAY, HOUR, MIN, SHOWCASE_DOMAIN, SHOWCASE_HANDLE, SCALE_COLORS, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, snake, type NotifRow,
+  DAY, HOUR, MIN, SHOWCASE_HANDLE, SCALE_COLORS, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, snake, type NotifRow,
 } from "./seed-showcase-common";
 import { PERSON, SCALES, PAPERS } from "./seed-showcase-data";
 import {
@@ -12,17 +11,16 @@ import {
 } from "./seed-showcase-content-data";
 import { CHAT_LINES } from "./seed-dots-content-data";
 
-// Content for the showcase profile: 7 projects (one per scale, with gallery, collaborators, skill tags, likes and
+// Content for the platform showcase profile (@dot): 7 projects (one per scale, with gallery, collaborators, skill tags, likes and
 // comments, linked to repositories and papers), 11 articles/tutorials/notes with tags and engagement, the book
 // "Scales of Living" (9 chapters), a profile wiki (field guide with a revision history), 3 downloadable files,
 // 2 courses + a learning path (text lessons, ~70 learners with progress), the podcast "Small Big Things"
 // (9 episodes, placeholder audio), the newsletter "Scale Notes" (8 issues, ~300 subscribers), 4 livestreams
-// (3 ended with chat, 1 upcoming) and a published survey with responses. @dot likes, comments and subscribes.
+// (3 ended with chat, 1 upcoming) and a published survey with responses. 
 //
 // Limits: podcast audio uses placeholder keys (protected uploads live in Vercel Blob); lessons are text-only.
 // Run seed-showcase-profile.ts first. Local only.
 // Usage: npx tsx scripts/seed-showcase-content.ts     (refuses if content already exists)
-//        RESET=1 npx tsx scripts/seed-showcase-content.ts   (remove the showcase's content first, then reseed)
 
 async function main() {
   const { url, prisma } = await openDb();
@@ -30,29 +28,13 @@ async function main() {
   const now = Date.now();
   const after = makeAfter(now, rand);
   console.log(`Seeding showcase content at: ${url}`);
-  const showcaseUser = { email: { endsWith: `@${SHOWCASE_DOMAIN}` } };
 
   try {
     const me = await loadShowcase(prisma);
     const dots = await loadDots(prisma);
-    const dotAccount = await prisma.username.findUnique({ where: { handle: (process.env.PLATFORM_HANDLE ?? "dot").toLowerCase() }, select: { userId: true, user: { select: { createdAt: true, email: true } } } });
 
-    if (process.env.RESET === "1") {
-      await cleanupSeedContentReactions(prisma, SHOWCASE_DOMAIN);
-      const slugs = (await prisma.article.findMany({ where: { author: showcaseUser }, select: { slug: true } })).map((a) => `/${SHOWCASE_HANDLE}/articles/${a.slug}`);
-      await prisma.notification.deleteMany({ where: { subjectType: { in: ["article", "project"] }, subjectId: { in: slugs } } });
-      await Promise.all([
-        prisma.project.deleteMany({ where: { owner: showcaseUser } }), prisma.article.deleteMany({ where: { author: showcaseUser } }),
-        prisma.wikiPage.deleteMany({ where: { profile: { user: showcaseUser } } }), prisma.book.deleteMany({ where: { profile: { user: showcaseUser } } }),
-        prisma.publishedFile.deleteMany({ where: { profile: { user: showcaseUser } } }), prisma.learningPath.deleteMany({ where: { creator: showcaseUser } }),
-        prisma.course.deleteMany({ where: { creator: showcaseUser } }), prisma.podcast.deleteMany({ where: { creator: showcaseUser } }),
-        prisma.livestream.deleteMany({ where: { creator: showcaseUser } }), prisma.newsletterIssue.deleteMany({ where: { creator: showcaseUser } }),
-        prisma.newsletterSubscription.deleteMany({ where: { creator: showcaseUser } }), prisma.form.deleteMany({ where: { ownerProfile: { user: showcaseUser } } }),
-      ]);
-      console.log("RESET: removed showcase content.");
-    }
     if ((await prisma.project.count({ where: { ownerId: me.id } })) > 0) {
-      console.log("Showcase content already exists. Re-run with RESET=1 to rebuild it.");
+      console.log("Showcase content already exists (restore a DB backup to redo it).");
       return;
     }
     mkdirSync("public/uploads", { recursive: true });
@@ -230,7 +212,7 @@ async function main() {
 
     // ================= Podcast =================
     const rssSlug = `small-big-things-${randomBytes(4).toString("hex")}`;
-    writeFileSync(`public/uploads/podcast-${rssSlug}.svg`, dotSquareSvg("Small Big Things", 5, "#1a9c93", 600, "with Ira Menon"));
+    writeFileSync(`public/uploads/podcast-${rssSlug}.svg`, dotSquareSvg("Small Big Things", 5, "#1a9c93", 600, "by 0dot"));
     const podAt = spread(0, 6, 100);
     const podcast = await prisma.podcast.create({ data: { creatorId: me.id, title: "Small Big Things", description: "A weekly show about the essentials of living, from a single seed to the whole planet, with people who work at every scale.", coverUrl: `/uploads/podcast-${rssSlug}.svg`, rssSlug, createdAt: podAt } });
     const episodes: [string, string, number][] = [["Trailer: A Dot Is Where It Begins", "What this show is about and why the smallest scale matters.", 420], ...CONTENT.map((c) => c.episode), ["Finale: Back to the Dot", "What we learned across seven scales, and what to do next.", 1980]];
@@ -246,7 +228,7 @@ async function main() {
     const issues = [...CONTENT.map((c) => c.issue), ["Issue 8: See you at the Seed to Planet Summit", "The summit is almost here.", ["Sessions for every scale", "Free and paid tickets", "Bring one seed and one question"] as [string, string, string]] as [string, string, [string, string, string]]];
     for (const [i, [subject, blurb, bullets]] of issues.entries()) {
       const sentAt = new Date(now - (issues.length - i) * 7 * DAY - int(DAY));
-      await prisma.newsletterIssue.create({ data: { creatorId: me.id, subject: `Scale Notes: ${subject}`, body: `Hi friends,\n\n${blurb}\n\n${bullets.map((b) => `- ${b}`).join("\n")}\n\nUntil next time,\nIra`, status: "sent", sentAt, createdAt: new Date(sentAt.getTime() - DAY) } });
+      await prisma.newsletterIssue.create({ data: { creatorId: me.id, subject: `Scale Notes: ${subject}`, body: `Hi friends,\n\n${blurb}\n\n${bullets.map((b) => `- ${b}`).join("\n")}\n\nUntil next time,\nThe 0dot team`, status: "sent", sentAt, createdAt: new Date(sentAt.getTime() - DAY) } });
       tally("issues");
     }
     const subs = [
@@ -286,20 +268,7 @@ async function main() {
     });
     tally("surveyResponses", responders.length);
 
-    // ================= @dot =================
-    let dotLikes = 0;
-    if (dotAccount && !dotAccount.user.email.endsWith("@seed.0dot.local")) {
-      const P = dotAccount.userId;
-      for (const a of shuffle(articleRows).slice(0, 8)) {
-        const at = new Date(Math.max(dotAccount.user.createdAt.getTime() + 10 * MIN, now - between(5, 90) * MIN));
-        reactions.push({ subjectType: "article", subjectId: a.id as string, userId: P, kind: "like", createdAt: at });
-        dotLikes++;
-      }
-      reactions.push({ subjectType: "book", subjectId: book.id, userId: P, kind: "like", createdAt: new Date(now - 20 * MIN) });
-      comments.push({ subjectType: "article", subjectId: shuffle(articleRows)[0].id as string, authorId: P, body: "A beautiful way to think about scale. Sharing this with the 0dot team 🙏", createdAt: new Date(now - 15 * MIN) });
-      await prisma.newsletterSubscription.create({ data: { creatorId: me.id, subscriberUserId: P, subscriberEmail: dotAccount.user.email, unsubscribeToken: randomUUID(), subscribedAt: new Date(now - 30 * MIN) } });
-    }
-
+    const dotLikes = 0;
     for (const part of chunk(reactions, 800)) await prisma.reaction.createMany({ data: part });
     for (const part of chunk(comments, 800)) await prisma.comment.createMany({ data: part });
     for (const part of chunk(notifs, 800)) await prisma.notification.createMany({ data: part });

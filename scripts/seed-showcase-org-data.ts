@@ -1,11 +1,11 @@
-// Organisation-side data for the showcase: Bindu Foundation (business), Scale Ladder (community), events,
+// Organisation-side data for the showcase: ZERO DOT (business), Scale Ladder (community), events,
 // jobs, fundraising and reviews. Fictional; addresses and domains use invented names / .example.
 
 export const BUSINESS = {
-  slug: "bindu_foundation",
-  name: "Bindu Foundation",
+  slug: "dot",
+  name: "ZERO DOT",
   tagline: "From one dot to the whole planet.",
-  description: "Bindu Foundation is a non-profit that connects seed libraries, neighbourhood compost networks, city air data and national food datasets into one open, community-owned system. We work at every scale, from a single seed to the planet, on the things that matter to live: soil, water, air, food, health and learning. Everything we build is open, documented and free to copy.",
+  description: "0dot is the platform, and its programmes connect seed libraries, neighbourhood compost networks, city air data and national food datasets into one open, community-owned system. We work at every scale, from a single seed to the planet, on the things that matter to live: soil, water, air, food, health and learning. Everything we build is open, documented and free to copy.",
   category: "nonprofit",
   foundedYear: new Date().getFullYear() - 6,
   sizeRange: "51_200",
@@ -13,8 +13,8 @@ export const BUSINESS = {
     { label: "Head office, Kochi", address: "12, Backwater Road, Fort Kochi, Kochi", lat: 9.9658, lng: 76.2421, hours: ["09:30", "18:00", ["mon", "tue", "wed", "thu", "fri"]] },
     { label: "Data hub, Bengaluru", address: "5th Floor, Indiranagar Innovation Hub, Bengaluru", lat: 12.9784, lng: 77.6408, hours: ["10:00", "18:30", ["mon", "tue", "wed", "thu", "fri", "sat"]] },
   ] as { label: string; address: string; lat: number; lng: number; hours: [string, string, string[]] }[],
-  contact: { email: "hello@bindu-foundation.example", phone: "+91 484 555 0142", website: "https://bindu-foundation.example" },
-  links: [["Annual impact report", "https://bindu-foundation.example/impact"], ["Open datasets", "https://data.bindu-foundation.example"], ["Volunteer with us", "https://bindu-foundation.example/volunteer"], ["Press kit", "https://bindu-foundation.example/press"]] as [string, string][],
+  contact: { email: "hello@0dot.example", phone: "+91 484 555 0142", website: "https://0dot.example" },
+  links: [["Annual impact report", "https://0dot.example/impact"], ["Open datasets", "https://data.0dot.example"], ["Volunteer with us", "https://0dot.example/volunteer"], ["Press kit", "https://0dot.example/press"]] as [string, string][],
   offerings: [
     { kind: "product", name: "Seed Kit (Starter)", description: "A jar of five heirloom seed varieties with recipe cards, a growing guide and a label set.", price: 499, stock: "in_stock" },
     { kind: "product", name: "Ward Compost Starter Bundle", description: "Bin, aerator, guide and a 90-day pilot checklist for 20 households.", price: 6500, stock: "made_to_order" },
@@ -128,7 +128,7 @@ export const BUSINESS_FORM = {
 };
 
 export const TEAM_TITLES = ["Programme Director", "Head of Data", "Community Lead", "Field Operations", "Communications", "Research Lead"];
-export const APPLICATION_NOTES = ["I've followed Bindu Foundation's work for a year and would love to contribute.", "This role matches my experience and values. Happy to share examples of my work.", "I'm based in the region and can start within a month.", "Please consider my application. I care deeply about this work."];
+export const APPLICATION_NOTES = ["I've followed 0dot's work for a year and would love to contribute.", "This role matches my experience and values. Happy to share examples of my work.", "I'm based in the region and can start within a month.", "Please consider my application. I care deeply about this work."];
 export const DOC_FILES = [
   { title: "Impact Report 2025", filename: "impact-report-2025.md", visibility: "public", content: "# Impact Report 2025\n\n- 312 seed varieties saved\n- 38 wards composting\n- 1,900 air sensors in 40 cities\n- 900 markets in the Open Grain Commons\n" },
   { title: "Open Data Governance Policy", filename: "open-data-policy.md", visibility: "public", content: "# Open Data Governance\n\nAll datasets are CC-BY, versioned and documented. Personal data is never published.\n" },

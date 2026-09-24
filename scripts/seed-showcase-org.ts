@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "crypto";
 import { mkdirSync, writeFileSync } from "fs";
 import {
-  DAY, HOUR, MIN, SHOWCASE_DOMAIN, SHOWCASE_HANDLE, SCALE_COLORS, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, ringsCoverSvg, round2, type NotifRow,
+  DAY, HOUR, MIN, SHOWCASE_HANDLE, SCALE_COLORS, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, ringsCoverSvg, round2, type NotifRow,
 } from "./seed-showcase-common";
 import { SCALES } from "./seed-showcase-data";
 import { APPLICATION_NOTES, BUSINESS, BUSINESS_FORM, CAMPAIGNS, COMMUNITY, DOC_FILES, EVENTS, JOBS, TEAM_TITLES } from "./seed-showcase-org-data";
@@ -10,7 +10,7 @@ import { REPLIES } from "./seed-dots-data";
 import { EVENT_CITY_COORDS, VENUES } from "./seed-dots-jobs-events-data";
 
 // The organisation around the showcase profile:
-//   Bindu Foundation (/b/bindu_foundation): verified non-profit business with a team, two mapped locations with hours,
+//   ZERO DOT (/b/dot, the platform's business page): verified, with a team, two mapped locations with hours,
 //     contact info, links, offerings, documents, 12 reviews with responses, 12 business-authored posts, 5 jobs with
 //     applications, a volunteer sign-up form with responses, 3 fundraising campaigns with donations, and a business
 //     subscription.
@@ -19,8 +19,7 @@ import { EVENT_CITY_COORDS, VENUES } from "./seed-dots-jobs-events-data";
 //   Events: 8 events (flagship hybrid summit with 4 ticket types, workshops, book launch, panel, past field day)
 //     with RSVPs, free and paid tickets (INR card payments), check-ins, map coordinates and a linked livestream.
 // Run seed-showcase-profile.ts and seed-showcase-content.ts first. Local only.
-// Usage: npx tsx scripts/seed-showcase-org.ts     (refuses if it already exists)
-//        RESET=1 npx tsx scripts/seed-showcase-org.ts
+// Usage: npx tsx scripts/seed-showcase-org.ts     (refuses if it already exists; no undo, restore a DB backup)
 
 async function main() {
   const { url, prisma } = await openDb();
@@ -28,29 +27,17 @@ async function main() {
   const now = Date.now();
   const after = makeAfter(now, rand);
   console.log(`Seeding showcase organisation at: ${url}`);
-  const showcaseUser = { email: { endsWith: `@${SHOWCASE_DOMAIN}` } };
 
   try {
     const me = await loadShowcase(prisma);
     const dots = await loadDots(prisma);
-    const eventSlugs = EVENTS.map((e) => e.slug);
-
-    if (process.env.RESET === "1") {
-      const ticketPts = (await prisma.ticket.findMany({ where: { ticketType: { event: { slug: { in: eventSlugs } } }, paymentTransactionId: { not: null } }, select: { paymentTransactionId: true } })).map((t) => t.paymentTransactionId!);
-      const donationPts = (await prisma.donation.findMany({ where: { campaign: { title: { in: CAMPAIGNS.map((c) => c.title) }, organizerBusiness: { slug: BUSINESS.slug } } }, select: { paymentTransactionId: true } })).map((d) => d.paymentTransactionId);
-      await prisma.event.deleteMany({ where: { slug: { in: eventSlugs } } });
-      await prisma.post.deleteMany({ where: { businessAuthor: { slug: BUSINESS.slug } } });
-      await prisma.community.deleteMany({ where: { slug: COMMUNITY.slug, creator: showcaseUser } });
-      await prisma.business.deleteMany({ where: { slug: BUSINESS.slug, creator: showcaseUser } });
-      for (const part of chunk([...ticketPts, ...donationPts], 500)) await prisma.paymentTransaction.deleteMany({ where: { id: { in: part } } });
-      console.log("RESET: removed showcase organisation.");
-    }
-    if (await prisma.business.findUnique({ where: { slug: BUSINESS.slug } })) {
-      console.log("Showcase organisation already exists. Re-run with RESET=1 to rebuild it.");
+    const existing = await prisma.business.findUnique({ where: { slug: BUSINESS.slug }, select: { id: true, createdBy: true } });
+    if (!existing || existing.createdBy !== me.id) throw new Error(`Business /b/${BUSINESS.slug} owned by @${me.handle} not found.`);
+    if ((await prisma.fundraisingCampaign.count({ where: { organizerBusinessId: existing.id, title: CAMPAIGNS[0].title } })) > 0) {
+      console.log("Showcase organisation already exists (restore a DB backup to redo it).");
       return;
     }
     mkdirSync("public/uploads", { recursive: true });
-    const dotAccount = await prisma.username.findUnique({ where: { handle: (process.env.PLATFORM_HANDLE ?? "dot").toLowerCase() }, select: { userId: true, user: { select: { createdAt: true } } } });
 
     const notifs: NotifRow[] = [];
     const markRead = (at: Date) => (chance(0.55) ? new Date(at.getTime() + between(5, 600) * MIN) : null);
@@ -66,27 +53,26 @@ async function main() {
     writeFileSync("public/uploads/showcase-bindu-logo.svg", dotSquareSvg("Bindu", 5, "#0f7a5c", 512, "Foundation"));
     writeFileSync("public/uploads/showcase-bindu-cover.svg", ringsCoverSvg(SCALES.map((s) => s.name)));
     const teamPool = shuffle(dots).slice(0, 6);
-    const business = await prisma.business.create({
-      data: {
-        slug: BUSINESS.slug, name: BUSINESS.name, tagline: BUSINESS.tagline, description: BUSINESS.description, category: BUSINESS.category, foundedYear: BUSINESS.foundedYear, sizeRange: BUSINESS.sizeRange,
-        isVerified: true, status: "active", logoUrl: "/uploads/showcase-bindu-logo.svg", coverUrl: "/uploads/showcase-bindu-cover.svg", createdBy: me.id, createdAt: new Date(orgStart),
-        members: { create: [{ userId: me.id, role: "owner", title: "Founder & Director", isPublic: true, joinedAt: new Date(orgStart) }, ...teamPool.map((d, i) => ({ userId: d.id, role: i < 2 ? "admin" : i < 4 ? "editor" : "member", title: TEAM_TITLES[i], isPublic: true, joinedAt: after([d.createdAt], Math.max(orgStart, d.createdAt), now - 5 * DAY) }))] },
-        contactInfo: { create: BUSINESS.contact },
-        locations: { create: BUSINESS.locations.map((l) => ({ label: l.label, address: l.address, latitude: l.lat, longitude: l.lng, hoursJson: JSON.stringify(Object.fromEntries(l.hours[2].map((d) => [d, [{ opens: l.hours[0], closes: l.hours[1] }]]))) })) },
-        offerings: { create: BUSINESS.offerings.map((o, i) => ({ kind: o.kind, name: o.name, description: o.description, price: o.price, currency: o.price === null ? null : "INR", status: "active", sku: o.kind === "product" ? `BIN-${String(i + 1).padStart(3, "0")}` : null, stockStatus: o.kind === "product" ? o.stock : null, isBookable: o.kind === "service" ? false : null, createdAt: new Date(orgStart + DAY) })) },
-      },
-      select: { id: true, offerings: { select: { id: true, price: true, kind: true } } },
+    await prisma.business.update({
+      where: { id: existing.id },
+      data: { tagline: BUSINESS.tagline, description: BUSINESS.description, foundedYear: BUSINESS.foundedYear, sizeRange: BUSINESS.sizeRange, isVerified: true, status: "active", logoUrl: "/uploads/showcase-bindu-logo.svg", coverUrl: "/uploads/showcase-bindu-cover.svg" },
     });
+    await prisma.businessMember.createMany({ data: teamPool.map((d, i) => ({ businessId: existing.id, userId: d.id, role: i < 2 ? "admin" : i < 4 ? "editor" : "member", title: TEAM_TITLES[i], isPublic: true, joinedAt: after([d.createdAt], Math.max(orgStart, d.createdAt), now - 5 * DAY) })) });
+    await prisma.businessMember.updateMany({ where: { businessId: existing.id, userId: me.id }, data: { title: "0dot Platform", isPublic: true } });
+    await prisma.contactInfo.upsert({ where: { businessId: existing.id }, create: { businessId: existing.id, ...BUSINESS.contact }, update: BUSINESS.contact });
+    await prisma.businessLocation.createMany({ data: BUSINESS.locations.map((l) => ({ businessId: existing.id, label: l.label, address: l.address, latitude: l.lat, longitude: l.lng, hoursJson: JSON.stringify(Object.fromEntries(l.hours[2].map((d) => [d, [{ opens: l.hours[0], closes: l.hours[1] }]]))) })) });
+    await prisma.offering.createMany({ data: BUSINESS.offerings.map((o, i) => ({ businessId: existing.id, kind: o.kind, name: o.name, description: o.description, price: o.price, currency: o.price === null ? null : "INR", status: "active", sku: o.kind === "product" ? `ZDT-${String(i + 1).padStart(3, "0")}` : null, stockStatus: o.kind === "product" ? o.stock : null, isBookable: o.kind === "service" ? false : null, createdAt: new Date(orgStart + DAY) })) });
+    const business = { id: existing.id, offerings: await prisma.offering.findMany({ where: { businessId: existing.id, status: "active" }, select: { id: true, price: true, kind: true } }) };
     for (const [i, [label, u]] of BUSINESS.links.entries()) await prisma.link.create({ data: { businessId: business.id, label, url: u, position: i, isFeatured: i === 0, clickCount: between(50, 700) } });
     for (const f of DOC_FILES) {
       writeFileSync(`public/uploads/showcase-bindu-${f.filename}`, f.content);
       await prisma.businessDocument.create({ data: { businessId: business.id, title: f.title, fileUrl: `/uploads/showcase-bindu-${f.filename}`, visibility: f.visibility, uploadedBy: me.id, createdAt: spread(pick([0, 1, 2]), 3, 100) } });
     }
-    await prisma.creatorPayoutAccount.create({ data: { businessId: business.id, processor: "stub", processorAccountId: `acct_seed_${randomBytes(6).toString("hex")}`, country: "IN", status: "active", createdAt: new Date(orgStart + 2 * DAY) } });
+    if (!(await prisma.creatorPayoutAccount.findUnique({ where: { businessId: business.id } }))) await prisma.creatorPayoutAccount.create({ data: { businessId: business.id, processor: "stub", processorAccountId: `acct_seed_${randomBytes(6).toString("hex")}`, country: "IN", status: "active", createdAt: new Date(orgStart + 2 * DAY) } });
     if (!(await prisma.creatorPayoutAccount.findUnique({ where: { userId: me.id } }))) await prisma.creatorPayoutAccount.create({ data: { userId: me.id, processor: "stub", processorAccountId: `acct_seed_${randomBytes(6).toString("hex")}`, country: "IN", status: "active", createdAt: new Date(me.createdAt + 3 * DAY) } });
     const subAt = new Date(now - 50 * DAY);
-    await prisma.platformSubscription.create({ data: { subscriberType: "business", subscriberBusinessId: business.id, plan: "business_subscription", status: "active", billingInterval: "yearly", processorSubscriptionId: `sub_seed_${randomBytes(8).toString("hex")}`, currentPeriodEnd: new Date(subAt.getTime() + 365 * DAY), createdAt: subAt } });
-    await prisma.paymentTransaction.create({ data: { kind: "platform_subscription_charge", payerId: me.id, amount: 200, currency: "usd", platformFee: 200, processor: "stripe_connect", processorReference: `in_seed_${randomBytes(8).toString("hex")}`, status: "succeeded", relatedObjectType: "platform_subscription", relatedObjectId: business.id, createdAt: subAt } });
+    if ((await prisma.platformSubscription.count({ where: { subscriberBusinessId: business.id } })) === 0) await prisma.platformSubscription.create({ data: { subscriberType: "business", subscriberBusinessId: business.id, plan: "business_subscription", status: "active", billingInterval: "yearly", processorSubscriptionId: `sub_seed_${randomBytes(8).toString("hex")}`, currentPeriodEnd: new Date(subAt.getTime() + 365 * DAY), createdAt: subAt } });
+    if ((await prisma.platformSubscription.count({ where: { subscriberBusinessId: business.id } })) === 1 && !(await prisma.paymentTransaction.findFirst({ where: { relatedObjectType: "platform_subscription", relatedObjectId: business.id } }))) await prisma.paymentTransaction.create({ data: { kind: "platform_subscription_charge", payerId: me.id, amount: 200, currency: "usd", platformFee: 200, processor: "stripe_connect", processorReference: `in_seed_${randomBytes(8).toString("hex")}`, status: "succeeded", relatedObjectType: "platform_subscription", relatedObjectId: business.id, createdAt: subAt } });
     tally("business");
 
     // Reviews (+ responses), business posts, sales.
@@ -233,7 +219,7 @@ async function main() {
 
     // ================= Events =================
     const premiumFee = 0.1;
-    const dotUser = dotAccount ? { id: dotAccount.userId, createdAt: dotAccount.user.createdAt.getTime() } : null;
+    const dotUser = null as { id: string } | null;
     const eventIds: Record<string, string> = {};
     let rsvpTotal = 0;
     let ticketTotal = 0;
@@ -263,7 +249,6 @@ async function main() {
       // RSVPs (going bounded by capacity) and tickets for going attendees.
       const want = between(e.size[0], e.size[1]);
       const people = shuffle(dots).slice(0, Math.min(want, dots.length));
-      if (dotUser && e.slug === "seed_to_planet_summit") people.push({ id: dotUser.id, createdAt: dotUser.createdAt } as never);
       let capLeft = e.capacity ?? Infinity;
       const rsvps: { eventId: string; userId: string; status: string; createdAt: Date }[] = [];
       const going: { id: string; createdAt: number }[] = [];

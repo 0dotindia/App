@@ -1,29 +1,22 @@
-import bcrypt from "bcryptjs";
 import { createCipheriv, randomBytes, randomUUID } from "crypto";
 import { mkdirSync, writeFileSync } from "fs";
-import { validateUsernameFormat } from "../src/lib/reserved-usernames";
-import { cleanupBeforeSeedDelete, recountNonSeed } from "./seed-dots-cleanup";
 import { REPLIES } from "./seed-dots-data";
 import {
-  DAY, HOUR, MIN, SHOWCASE_DOMAIN, SHOWCASE_EMAIL, SHOWCASE_HANDLE, SHOWCASE_PASSWORD, chunk, dotSquareSvg, loadDots, makeAfter, makeRng, openDb, ringsCoverSvg, type NotifRow,
+  DAY, HOUR, MIN, SHOWCASE_HANDLE, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, ringsCoverSvg, type NotifRow,
 } from "./seed-showcase-common";
 import {
   AWARDS, CALENDAR, CERTIFICATES, DM_LINES, EDUCATION, IRA_REPLY_BACKS, LINKS, PAPERS, PERSON, POLLS, POSTS, QUESTIONS, REPLIES_TO_IRA, REPOS, SCALES, SHORT_LINKS, SKILLS, SOCIALS, THREAD_INTRO, THREAD_POSTS, WORK,
 } from "./seed-showcase-data";
 
-// Creates the flagship showcase profile (@ira by default) and everything on the profile/feed side:
-// avatar + cover art, bio, verified badge, Premium, theme, links (featured + scheduled, with clicks),
-// social links, skills with endorsements, work history, education, certificates, awards, research
-// papers, repositories, digital business card, portfolio layout, calendar, short links, followers
-// (all 99 dots) and follow-backs, ~95 posts (photo posts, a 9-part thread, polls with votes, questions
-// with accepted answers, mentions), replies, likes, reposts, bookmarks and encrypted DMs.
-// Content, organisation, monetization and wallet come from the other seed-showcase-*.ts scripts.
-//
-// Own email domain (@showcase.0dot.local), so seed-dots-*.ts never treat it as one of the 99 dots.
-// Login: ira@showcase.0dot.local / SeedUser!2026.
-// Local only. Usage: npx tsx scripts/seed-showcase-profile.ts
-//        RESET=1 npx tsx scripts/seed-showcase-profile.ts   (remove the whole showcase account, then recreate)
-//        UNDO=1 npx tsx scripts/seed-showcase-profile.ts    (remove the whole showcase account)
+// Turns the platform account (@dot, "ZERO DOT") into the flagship example profile, in the platform's own voice:
+// avatar + cover art, bio, Premium, emerald theme, links (featured + scheduled, with clicks), social links,
+// capabilities (skills) with endorsements, milestones, certificates, awards, research papers, repositories,
+// digital business card, portfolio layout, calendar, short links, follow top-ups, ~95 posts (photo posts, a
+// 9-part scale thread, polls with votes, questions with accepted answers, mentions), replies, likes,
+// reposts, bookmarks and encrypted DMs. Content, organisation and monetization come from the other
+// seed-showcase-*.ts scripts. Run seed-dots.ts + seed-dots-platform.ts first, with the dev server STOPPED
+// (it locks the SQLite file). There is no undo: back up prisma/dev.db first.
+// Usage: npx tsx scripts/seed-showcase-profile.ts
 
 function encryptAtRest(plaintext: string): string {
   const key = Buffer.from(process.env.MESSAGE_ENCRYPTION_KEY ?? "", "base64");
@@ -39,80 +32,40 @@ async function main() {
   const now = Date.now();
   const after = makeAfter(now, rand);
   const years = (n: number) => new Date(now - n * 365.25 * DAY);
-  console.log(`Seeding showcase profile @${SHOWCASE_HANDLE} at: ${url}`);
+  console.log(`Seeding the platform showcase profile @${SHOWCASE_HANDLE} at: ${url}`);
 
   try {
-    if (process.env.UNDO === "1" || process.env.RESET === "1") {
-      const existing = await prisma.user.findMany({ where: { email: { endsWith: `@${SHOWCASE_DOMAIN}` } }, select: { id: true } });
-      if (existing.length) {
-        await cleanupBeforeSeedDelete(prisma, SHOWCASE_DOMAIN);
-        await prisma.user.deleteMany({ where: { email: { endsWith: `@${SHOWCASE_DOMAIN}` } } });
-        await recountNonSeed(prisma, SHOWCASE_DOMAIN);
-      }
-      console.log(`Removed ${existing.length} showcase account(s) and everything they own.`);
-      if (process.env.UNDO === "1") return;
-    }
-    if (await prisma.user.findUnique({ where: { email: SHOWCASE_EMAIL } })) {
-      console.log(`Showcase account ${SHOWCASE_EMAIL} already exists. Use RESET=1 to rebuild it.`);
+    const me = await loadShowcase(prisma);
+    const dots = await loadDots(prisma);
+    if ((await prisma.skill.count({ where: { profileId: me.profileId } })) > 0) {
+      console.log(`@${SHOWCASE_HANDLE} already has the showcase profile (skills exist). Restore your DB backup to redo it.`);
       return;
     }
-    if (validateUsernameFormat(SHOWCASE_HANDLE) !== null) throw new Error(`Invalid handle: ${SHOWCASE_HANDLE}`);
-    if (await prisma.username.findUnique({ where: { handle: SHOWCASE_HANDLE } })) throw new Error(`@${SHOWCASE_HANDLE} is already taken by another account.`);
-
-    const dots = await loadDots(prisma);
     const canEncrypt = Buffer.from(process.env.MESSAGE_ENCRYPTION_KEY ?? "", "base64").length === 32;
     mkdirSync("public/uploads", { recursive: true });
 
-    // ================= Account + profile =================
-    const createdAtMs = now - 150 * DAY;
-    const createdAt = new Date(createdAtMs);
-    writeFileSync(`public/uploads/showcase-${SHOWCASE_HANDLE}.svg`, dotSquareSvg("IM", 5, "#0f7a5c", 512, "Bindu"));
+    // ================= Profile =================
+    const createdAtMs = me.createdAt;
+    writeFileSync(`public/uploads/showcase-${SHOWCASE_HANDLE}.svg`, dotSquareSvg("0dot", 5, "#0f7a5c", 512, "every dot matters"));
     writeFileSync(`public/uploads/showcase-${SHOWCASE_HANDLE}-cover.svg`, ringsCoverSvg(SCALES.map((s) => s.name)));
-    const takenPhones = new Set((await prisma.user.findMany({ where: { phone: { not: null } }, select: { phone: true } })).map((u) => u.phone as string));
-    let phone = "";
-    do phone = `+91${between(6, 9)}${String(int(1e9)).padStart(9, "0")}`;
-    while (takenPhones.has(phone));
-
     const layout = ["projects", "skills", "resume", "papers", "repositories", "certificates", "awards", "connectedContent"].map((key) => ({ key, visible: true }));
-    const created = await prisma.user.create({
+    await prisma.profile.update({
+      where: { id: me.profileId },
       data: {
-        email: SHOWCASE_EMAIL,
-        phone,
-        passwordHash: await bcrypt.hash(SHOWCASE_PASSWORD, 12),
-        status: "active",
-        emailVerifiedAt: createdAt,
-        dateOfBirth: new Date("1988-03-14T00:00:00Z"),
-        createdAt,
-        lastActiveAt: new Date(now - 5 * MIN),
-        username: { create: { handle: SHOWCASE_HANDLE, claimedAt: createdAt } },
-        profile: {
-          create: {
-            displayName: PERSON.name,
-            bio: PERSON.bio,
-            avatarUrl: `/uploads/showcase-${SHOWCASE_HANDLE}.svg`,
-            coverUrl: `/uploads/showcase-${SHOWCASE_HANDLE}-cover.svg`,
-            themePreset: "emerald",
-            isVerified: true,
-            createdAt,
-            portfolioLayoutJson: JSON.stringify(layout),
-            skills: { create: SKILLS.map((name, position) => ({ name, position })) },
-            workExperiences: {
-              create: WORK.map(([company, title, location, from, to, description], position) => ({ company, title, location, startDate: years(from), endDate: to === null ? null : years(to), description, position })),
-            },
-            education: { create: EDUCATION.map(([institution, degree, fieldOfStudy, from, to, description], position) => ({ institution, degree, fieldOfStudy, startDate: years(from), endDate: years(to), description, position })) },
-            certificates: { create: CERTIFICATES.map(([title, issuingOrg, ago], i) => ({ title, issuingOrg, issueDate: years(ago), expiryDate: i === 4 ? new Date(now + 400 * DAY) : null, credentialId: `${issuingOrg.split(" ").map((w) => w[0]).join("")}-${between(100000, 999999)}`, credentialUrl: `https://credentials.example/${randomUUID().slice(0, 8)}` })) },
-            awards: { create: AWARDS.map(([title, issuingOrg, ago, description]) => ({ title, issuingOrg, awardedDate: years(ago), description })) },
-            researchPapers: { create: PAPERS.map(([title, coauthors, venue, ago, abstract]) => ({ title, authors: `${PERSON.name}, ${coauthors}`, venue, publishDate: years(ago), doiOrUrl: `https://doi.example/10.9999/${randomUUID().slice(0, 8)}`, abstract })) },
-            gitRepositories: { create: REPOS.map(([name, description, primaryLanguage, starCount]) => ({ provider: "github", url: `https://github.example/ira-menon/${name}`, displayName: name, description, primaryLanguage, starCount, lastSyncedAt: new Date(now - between(0, 6) * DAY) })) },
-            socialLinks: { create: SOCIALS.map(([platform, url], position) => ({ platform, url, position })) },
-            digitalBusinessCard: { create: { enabled: true, includedFields: JSON.stringify(["bio", "workTitle", "email", "socialLinks"]) } },
-            calendarEntries: { create: CALENDAR.map(([title, inDays, hours]) => ({ title, startsAt: new Date(now + inDays * DAY), endsAt: new Date(now + inDays * DAY + hours * HOUR) })) },
-          },
-        },
+        bio: PERSON.bio, avatarUrl: `/uploads/showcase-${SHOWCASE_HANDLE}.svg`, coverUrl: `/uploads/showcase-${SHOWCASE_HANDLE}-cover.svg`, themePreset: "emerald", isVerified: true, portfolioLayoutJson: JSON.stringify(layout),
       },
-      select: { id: true, profile: { select: { id: true, skills: { select: { id: true, name: true } } } } },
     });
-    const ira = { id: created.id, profileId: created.profile!.id, skills: created.profile!.skills };
+    const years = (n: number) => new Date(now - n * 365.25 * DAY);
+    await prisma.skill.createMany({ data: SKILLS.map((name, position) => ({ profileId: me.profileId, name, position })) });
+    await prisma.workExperience.createMany({ data: WORK.map(([company, title, location, from, to, description], position) => ({ profileId: me.profileId, company, title, location, startDate: years(from), endDate: to === null ? null : years(to), description, position })) });
+    await prisma.certificate.createMany({ data: CERTIFICATES.map(([title, issuingOrg, ago], i) => ({ profileId: me.profileId, title, issuingOrg, issueDate: years(ago), expiryDate: i === 4 ? new Date(now + 400 * DAY) : null, credentialId: `${issuingOrg.split(" ").map((w) => w[0]).join("")}-${between(100000, 999999)}`, credentialUrl: `https://credentials.example/${randomUUID().slice(0, 8)}` })) });
+    await prisma.award.createMany({ data: AWARDS.map(([title, issuingOrg, ago, description]) => ({ profileId: me.profileId, title, issuingOrg, awardedDate: years(ago), description })) });
+    await prisma.researchPaper.createMany({ data: PAPERS.map(([title, coauthors, venue, ago, abstract]) => ({ profileId: me.profileId, title, authors: `${PERSON.name}, ${coauthors}`, venue, publishDate: years(ago), doiOrUrl: `https://doi.example/10.9999/${randomUUID().slice(0, 8)}`, abstract })) });
+    await prisma.gitRepository.createMany({ data: REPOS.map(([name, description, primaryLanguage, starCount]) => ({ profileId: me.profileId, provider: "github", url: `https://github.example/0dot/${name}`, displayName: name, description, primaryLanguage, starCount, lastSyncedAt: new Date(now - between(0, 6) * DAY) })) });
+    await prisma.socialLink.createMany({ data: SOCIALS.map(([platform, url], position) => ({ profileId: me.profileId, platform, url, position })) });
+    await prisma.digitalBusinessCard.upsert({ where: { profileId: me.profileId }, create: { profileId: me.profileId, enabled: true, includedFields: JSON.stringify(["bio", "workTitle", "email", "socialLinks"]) }, update: { enabled: true, includedFields: JSON.stringify(["bio", "workTitle", "email", "socialLinks"]) } });
+    await prisma.calendarEntry.createMany({ data: CALENDAR.map(([title, inDays, hours]) => ({ profileId: me.profileId, title, startsAt: new Date(now + inDays * DAY), endsAt: new Date(now + inDays * DAY + hours * HOUR) })) });
+    const ira = { id: me.id, profileId: me.profileId, skills: await prisma.skill.findMany({ where: { profileId: me.profileId }, select: { id: true, name: true } }) };
 
     // Links (one is scheduled, clicks recorded) and short links.
     const linkIds: string[] = [];
@@ -135,31 +88,37 @@ async function main() {
     }
 
     // Premium subscription (yearly) with its charge, so the profile shows the Premium badge/theme.
-    const premiumAt = new Date(now - 100 * DAY);
-    await prisma.platformSubscription.create({ data: { subscriberType: "profile", subscriberProfileId: ira.profileId, plan: "profile_premium", status: "active", billingInterval: "yearly", processorSubscriptionId: `sub_seed_${randomBytes(8).toString("hex")}`, currentPeriodEnd: new Date(premiumAt.getTime() + 365 * DAY), createdAt: premiumAt } });
-    await prisma.paymentTransaction.create({ data: { kind: "platform_subscription_charge", payerId: ira.id, amount: 60, currency: "usd", platformFee: 60, processor: "stripe_connect", processorReference: `in_seed_${randomBytes(8).toString("hex")}`, status: "succeeded", relatedObjectType: "platform_subscription", relatedObjectId: ira.id, createdAt: premiumAt } });
+    if ((await prisma.platformSubscription.count({ where: { subscriberProfileId: ira.profileId } })) === 0) {
+      const premiumAt = new Date(now - 100 * DAY);
+      await prisma.platformSubscription.create({ data: { subscriberType: "profile", subscriberProfileId: ira.profileId, plan: "profile_premium", status: "active", billingInterval: "yearly", processorSubscriptionId: `sub_seed_${randomBytes(8).toString("hex")}`, currentPeriodEnd: new Date(premiumAt.getTime() + 365 * DAY), createdAt: premiumAt } });
+      await prisma.paymentTransaction.create({ data: { kind: "platform_subscription_charge", payerId: ira.id, amount: 60, currency: "usd", platformFee: 60, processor: "stripe_connect", processorReference: `in_seed_${randomBytes(8).toString("hex")}`, status: "succeeded", relatedObjectType: "platform_subscription", relatedObjectId: ira.id, createdAt: premiumAt } });
+    }
 
-    // ================= Follows =================
+    // ================= Follows (top-up: the dots already follow @dot from seed-dots-platform.ts) =================
     const notifs: NotifRow[] = [];
     const markRead = (at: Date) => (chance(0.55) ? new Date(at.getTime() + between(5, 600) * MIN) : null);
     const followRows: { followerId: string; followeeId: string; status: string; createdAt: Date }[] = [];
-    const followAt = new Map<string, Date>();
+    const existingFollows = await prisma.follow.findMany({ where: { OR: [{ followerId: ira.id }, { followeeId: ira.id }] }, select: { followerId: true, followeeId: true, createdAt: true } });
+    const followerSet = new Set(existingFollows.filter((f) => f.followeeId === ira.id).map((f) => f.followerId));
+    const followingSet = new Set(existingFollows.filter((f) => f.followerId === ira.id).map((f) => f.followeeId));
+    const followAt = new Map<string, Date>(existingFollows.filter((f) => f.followeeId === ira.id).map((f) => [f.followerId, f.createdAt]));
     for (const d of dots) {
-      const at = after([d.createdAt, createdAtMs], Math.max(d.createdAt, now - 70 * DAY), now - 2 * HOUR);
+      if (followerSet.has(d.id)) continue;
+      const at = after([d.createdAt], Math.max(d.createdAt, now - 70 * DAY), now - 2 * HOUR);
       followAt.set(d.id, at);
       followRows.push({ followerId: d.id, followeeId: ira.id, status: "accepted", createdAt: at });
       notifs.push({ recipientId: ira.id, actorId: d.id, type: "new_follower", subjectType: "user", subjectId: d.id, createdAt: at, readAt: markRead(at) });
     }
-    const followsBack = [...dots].sort((a, b) => b.pop * (0.5 + rand()) - a.pop * (0.5 + rand())).slice(0, 45);
+    const followsBack = [...dots].filter((d) => !followingSet.has(d.id)).sort((a, b) => b.pop * (0.5 + rand()) - a.pop * (0.5 + rand())).slice(0, Math.max(0, 45 - followingSet.size));
     for (const d of followsBack) {
-      const at = after([d.createdAt], followAt.get(d.id)!.getTime(), now - HOUR);
+      const at = after([d.createdAt], Math.max(d.createdAt, followAt.get(d.id)?.getTime() ?? 0), now - HOUR);
       followRows.push({ followerId: ira.id, followeeId: d.id, status: "accepted", createdAt: at });
       notifs.push({ recipientId: d.id, actorId: ira.id, type: "new_follower", subjectType: "user", subjectId: ira.id, createdAt: at, readAt: markRead(at) });
     }
     for (const part of chunk(followRows, 500)) await prisma.follow.createMany({ data: part });
-    await prisma.profile.update({ where: { userId: ira.id }, data: { followerCount: dots.length, followingCount: followsBack.length } });
     for (const d of followsBack) await prisma.profile.update({ where: { userId: d.id }, data: { followerCount: { increment: 1 } } });
-    for (const d of dots) await prisma.profile.update({ where: { userId: d.id }, data: { followingCount: { increment: 1 } } });
+    for (const d of dots.filter((x) => !followerSet.has(x.id))) await prisma.profile.update({ where: { userId: d.id }, data: { followingCount: { increment: 1 } } });
+    await prisma.profile.update({ where: { userId: ira.id }, data: { followerCount: await prisma.follow.count({ where: { followeeId: ira.id, status: "accepted" } }), followingCount: await prisma.follow.count({ where: { followerId: ira.id, status: "accepted" } }) } });
 
     // ================= Skill endorsements =================
     const endorse: { skillId: string; endorserId: string; createdAt: Date }[] = [];
@@ -323,7 +282,8 @@ async function main() {
     // ================= Direct messages =================
     let dmThreads = 0;
     if (canEncrypt) {
-      const senders = shuffle(followsBack).slice(0, DM_LINES.length);
+      const talked = new Set((await prisma.conversationParticipant.findMany({ where: { conversation: { participants: { some: { userId: ira.id } } }, userId: { not: ira.id } }, select: { userId: true } })).map((c) => c.userId));
+      const senders = shuffle(dots.filter((d) => !talked.has(d.id))).slice(0, DM_LINES.length);
       for (const [i, d] of senders.entries()) {
         const lines = DM_LINES[i];
         let t = after([d.createdAt], Math.max(d.createdAt, followAt.get(d.id)!.getTime()), now - 2 * DAY).getTime();
@@ -337,7 +297,7 @@ async function main() {
             kind: "direct", createdBy: d.id, createdAt: msgs[0].createdAt, directKey: [d.id, ira.id].sort().join(":"), lastMessageAt: last.createdAt, lastMessageSenderId: last.senderId,
             lastMessagePreview: encryptAtRest(last.body.length > 80 ? `${last.body.slice(0, 77)}...` : last.body),
             participants: { create: [{ userId: d.id, joinedAt: msgs[0].createdAt }, { userId: ira.id, joinedAt: msgs[0].createdAt }] },
-            requestState: { create: { status: "accepted", initiatedBy: d.id } },
+            requestState: { create: { status: followingSet.has(d.id) || followsBack.some((f) => f.id === d.id) ? "accepted" : "pending", initiatedBy: d.id } },
           },
         });
         await prisma.message.createMany({ data: msgs.map((m) => ({ id: m.id, conversationId: conv.id, senderId: m.senderId, body: encryptAtRest(m.body), createdAt: m.createdAt })) });
@@ -350,11 +310,11 @@ async function main() {
 
     const iraPostCount = posts.filter((p) => p.authorId === ira.id && !p.replyToId).length;
     console.log(
-      `Done: @${SHOWCASE_HANDLE} created (login ${SHOWCASE_EMAIL} / ${SHOWCASE_PASSWORD}). ${dots.length} followers, follows ${followsBack.length}. ` +
+      `Done: @${SHOWCASE_HANDLE} profile upgraded. +${followRows.filter((f) => f.followeeId === ira.id).length} followers, +${followsBack.length} follow-backs. ` +
         `${iraPostCount + THREAD_POSTS.length} own posts (${polls.length} polls, ${QUESTIONS.length} questions, thread of ${THREAD_POSTS.length + 1}), ${posts.length} posts incl. replies/reposts, ${likes.length} likes, ${votes.length} poll votes, ` +
         `${endorse.length} endorsements, ${linkIds.length} links, ${dmThreads} DM threads, ${notifs.length} notifications.`,
     );
-    console.log("Next: seed-showcase-content.ts, seed-showcase-org.ts, seed-showcase-monetization.ts. Undo: UNDO=1 npx tsx scripts/seed-showcase-profile.ts");
+    console.log("Next: seed-showcase-content.ts, seed-showcase-org.ts, seed-showcase-monetization.ts (no undo; restore a DB backup to redo).");
   } finally {
     await prisma.$disconnect();
   }

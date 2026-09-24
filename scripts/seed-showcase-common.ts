@@ -2,14 +2,12 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { PEOPLE, type RoleKey } from "./seed-dots-data";
 
-// Shared plumbing for the showcase scripts (seed-showcase-*.ts): one flagship "world-class" example
-// profile, @ira, whose work runs from the smallest dot (a seed) to the largest things that matter to
-// live (the planet). The account uses its own email domain, NOT the seed domain, so the per-role
-// seed scripts never mistake it for one of the 99 dots; cleanup uses the same helpers as @dot's
-// (cleanup helpers take a domain).
+// Shared plumbing for the showcase scripts (seed-showcase-*.ts): they turn the platform account (@dot,
+// "ZERO DOT") into the flagship "world-class" example profile, in the platform's own voice: 0dot's vision
+// runs from the smallest dot (a seed) to the largest things that matter to live (the planet).
 
 export const SHOWCASE_DOMAIN = "showcase.0dot.local";
-export const SHOWCASE_HANDLE = (process.env.SHOWCASE_HANDLE ?? "ira").toLowerCase();
+export const SHOWCASE_HANDLE = (process.env.PLATFORM_HANDLE ?? "dot").toLowerCase();
 export const SHOWCASE_EMAIL = `${SHOWCASE_HANDLE}@${SHOWCASE_DOMAIN}`;
 export const SHOWCASE_PASSWORD = "SeedUser!2026";
 export const SEED_DOMAIN = "seed.0dot.local";
@@ -76,10 +74,14 @@ export async function loadDots(prisma: PrismaClient): Promise<Dot[]> {
 
 export type Showcase = { id: string; handle: string; profileId: string; createdAt: number; name: string; email: string };
 
+// The showcase IS the platform account (@dot): its real account is only hours old, so its story is backdated —
+// createdAt is reported as at least 150 days ago (posts, projects, events... are dated relative to that).
 export async function loadShowcase(prisma: PrismaClient): Promise<Showcase> {
-  const u = await prisma.user.findUnique({ where: { email: SHOWCASE_EMAIL }, select: { id: true, createdAt: true, email: true, username: { select: { handle: true } }, profile: { select: { id: true, displayName: true } } } });
-  if (!u?.profile) throw new Error(`Showcase account ${SHOWCASE_EMAIL} not found. Run scripts/seed-showcase-profile.ts first.`);
-  return { id: u.id, handle: u.username!.handle, profileId: u.profile.id, createdAt: u.createdAt.getTime(), name: u.profile.displayName, email: u.email };
+  const u = await prisma.username.findUnique({ where: { handle: SHOWCASE_HANDLE }, select: { user: { select: { id: true, createdAt: true, email: true, profile: { select: { id: true, displayName: true } } } } } });
+  const user = u?.user;
+  if (!user?.profile) throw new Error(`Platform account @${SHOWCASE_HANDLE} not found.`);
+  if (user.email.endsWith(`@${SEED_DOMAIN}`)) throw new Error(`@${SHOWCASE_HANDLE} is a seeded dot, not the platform account.`);
+  return { id: user.id, handle: SHOWCASE_HANDLE, profileId: user.profile.id, createdAt: Math.min(user.createdAt.getTime(), Date.now() - 150 * DAY), name: user.profile.displayName, email: user.email };
 }
 
 // A believable timestamp after every listed party exists and inside [from, to] (capped at "now").
