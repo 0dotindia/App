@@ -113,8 +113,11 @@ export default async function proxy(request: NextRequest): Promise<Response | un
 // (yourname.com, per isOwnHost above) gets those requests rewritten to
 // `${prefix}/manifest.json` etc., which 404s — silently breaking PWA
 // installability (and the home-screen icon) for every custom-domain visitor.
+// Same for the public/ asset folders (uploads/, defaults/): avatars, covers and
+// default images are absolute /uploads/... URLs, so without excluding them every
+// image on a custom domain 404s.
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|api/|favicon.ico|sitemap.xml|robots.txt|manifest.json|sw.js|apple-touch-icon.png|0dot.png|1dot.png|icon-light-48.png|icon-dark-48.png|icon-192.png|icon-512.png|icon-maskable-192.png|icon-maskable-512.png).*)",
+    "/((?!_next/static|_next/image|api/|favicon.ico|sitemap.xml|robots.txt|uploads/|defaults/|manifest.json|sw.js|apple-touch-icon.png|0dot.png|1dot.png|icon-light-48.png|icon-dark-48.png|icon-192.png|icon-512.png|icon-maskable-192.png|icon-maskable-512.png).*)",
   ],
 };
