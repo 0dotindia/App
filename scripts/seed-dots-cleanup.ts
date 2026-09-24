@@ -8,7 +8,26 @@ import type { PrismaClient } from "../src/generated/prisma/client";
 
 export const SEED_EMAIL_DOMAIN = "seed.0dot.local";
 
+// Reaction/Comment are polymorphic (subjectType + subjectId, no FK), so when seeded articles, books,
+// files or wiki pages go away their likes and comments (including the platform account's) stay behind.
+export async function cleanupSeedContentReactions(prisma: PrismaClient): Promise<void> {
+  const seedUser = { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } };
+  const rows = await Promise.all([
+    prisma.article.findMany({ where: { author: seedUser }, select: { id: true } }),
+    prisma.book.findMany({ where: { profile: { user: seedUser } }, select: { id: true } }),
+    prisma.publishedFile.findMany({ where: { profile: { user: seedUser } }, select: { id: true } }),
+    prisma.wikiPage.findMany({ where: { OR: [{ profile: { user: seedUser } }, { community: { creator: seedUser } }, { book: { profile: { user: seedUser } } }] }, select: { id: true } }),
+  ]);
+  const ids = rows.flat().map((r) => r.id);
+  for (let i = 0; i < ids.length; i += 500) {
+    const part = ids.slice(i, i + 500);
+    await prisma.reaction.deleteMany({ where: { subjectId: { in: part } } });
+    await prisma.comment.deleteMany({ where: { subjectId: { in: part } } });
+  }
+}
+
 export async function cleanupBeforeSeedDelete(prisma: PrismaClient): Promise<void> {
+  await cleanupSeedContentReactions(prisma);
   const seedAuthor = { author: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } };
   const nonSeedAuthor = { author: { email: { not: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } } };
 
