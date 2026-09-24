@@ -19,6 +19,7 @@ import {
   Search,
   Settings as SettingsIcon,
   Shield,
+  Sparkles,
   User,
   UserCog,
   Users,
@@ -214,6 +215,7 @@ export function NavLinks({
     // entry existed).
     { href: "/notifications", label: "Notifications", icon: Bell },
     { href: "/bookmarks", label: "Bookmarks", icon: Bookmark },
+    { href: "/assistant", label: "Assistant", icon: Sparkles },
     { href: "/wallet", label: "Wallet", icon: Wallet },
   ];
 

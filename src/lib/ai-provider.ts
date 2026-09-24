@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { generateText, embed as aiEmbed, embedMany as aiEmbedMany } from "ai";
+import type { PersonalToolDefinition } from "@/lib/personal-assistant-tools";
 
 // phase-11 spec: every AI feature (content writer, profile builder,
 // moderation, translation, accessibility captioning, search/recommendation
@@ -36,7 +37,20 @@ export interface AIProvider {
   // valid regardless of which provider or model actually ran.
   embed(text: string): Promise<{ vector: number[]; costTokens: number; modelName: string }>;
   embedBatch(texts: string[]): Promise<{ vectors: number[][]; costTokens: number; modelName: string }>;
+  // Multi-turn chat with read-only tool access (personal-assistant.ts). The
+  // caller owns the tool executors and binds them to the session user —
+  // the provider only relays the model's tool calls to runTool and feeds
+  // the results back, so no provider implementation can widen what data a
+  // tool reaches.
+  chat(params: {
+    system: string;
+    messages: ChatTurn[];
+    tools: PersonalToolDefinition[];
+    runTool: (name: string, input: unknown) => Promise<string>;
+  }): Promise<{ text: string; costTokens: number; modelName: string; toolsUsed: string[] }>;
 }
+
+export type ChatTurn = { role: "user" | "assistant"; content: string };
 
 const EMBED_DIMENSIONS = 64;
 const SPAM_MARKERS = ["buy now", "click here", "free money", "act now", "limited offer", "guaranteed"];
@@ -246,6 +260,33 @@ class StubAIProvider implements AIProvider {
   async embedBatch(texts: string[]) {
     return { vectors: texts.map(hashEmbed), costTokens: 0, modelName: HASH_EMBEDDING_MODEL_NAME };
   }
+
+  // Keyword router, not a language model: picks the one tool whose topic
+  // the last user message names and echoes its raw result, clearly marked.
+  // Deterministic and zero-network so tests/CI and keyless dev exercise the
+  // real tool + audit path end to end.
+  async chat({ messages, runTool }: Parameters<AIProvider["chat"]>[0]) {
+    const last = [...messages].reverse().find((m) => m.role === "user")?.content.toLowerCase() ?? "";
+    const routes: Array<[RegExp, string]> = [
+      [/notification|unread/, "get_my_notifications"],
+      [/article|draft/, "list_my_articles"],
+      [/project|portfolio/, "list_my_projects"],
+      [/post|wrote|tweet/, "list_my_posts"],
+      [/profile|bio|skill|who am i|about me|experience/, "get_my_profile"],
+    ];
+    const tool = routes.find(([re]) => re.test(last))?.[1];
+    const costTokens = Math.max(8, Math.round(last.length / 4));
+    if (!tool) {
+      return {
+        text: "[stub assistant] I can look at your profile, posts, articles, projects or notifications — ask about one of those.",
+        costTokens,
+        modelName: STUB_MODEL_NAME,
+        toolsUsed: [] as string[],
+      };
+    }
+    const result = await runTool(tool, {});
+    return { text: `[stub assistant] ${tool} → ${result}`, costTokens, modelName: STUB_MODEL_NAME, toolsUsed: [tool] };
+  }
 }
 
 const moderationSchema = z.object({
@@ -439,6 +480,59 @@ class ClaudeAIProvider implements AIProvider {
     const { embeddings, usage } = await aiEmbedMany({ model: GATEWAY_EMBEDDING_MODEL, values: texts });
     return { vectors: embeddings.map(normalize), costTokens: usage?.tokens ?? 0, modelName: GATEWAY_EMBEDDING_MODEL };
   }
+
+  async chat({ system, messages, tools, runTool }: Parameters<AIProvider["chat"]>[0]) {
+    const MAX_TOOL_ROUNDS = 4; // bounds cost and prevents a tool-call loop
+    const convo: Anthropic.MessageParam[] = messages.map((m) => ({ role: m.role, content: m.content }));
+    const toolsUsed: string[] = [];
+    let costTokens = 0;
+
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const response = await this.client.messages.create(
+        {
+          model: GENERATION_MODEL,
+          max_tokens: 2000,
+          system,
+          tools,
+          messages: convo,
+          output_config: { effort: "medium" },
+        },
+        { timeout: 45_000 },
+      );
+      costTokens += response.usage.input_tokens + response.usage.output_tokens;
+
+      if (response.stop_reason === "refusal") {
+        return { text: "I can't help with that request.", costTokens, modelName: GENERATION_MODEL, toolsUsed };
+      }
+      const toolUses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+      if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
+        const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
+        return { text: textBlock?.text.trim() ?? "", costTokens, modelName: GENERATION_MODEL, toolsUsed };
+      }
+
+      // Full content (incl. any thinking blocks) goes back unchanged; all
+      // tool_results for one assistant turn go in a single user message.
+      convo.push({ role: "assistant", content: response.content });
+      const results: Anthropic.ToolResultBlockParam[] = await Promise.all(
+        toolUses.map(async (use) => {
+          toolsUsed.push(use.name);
+          try {
+            return { type: "tool_result" as const, tool_use_id: use.id, content: await runTool(use.name, use.input) };
+          } catch {
+            return { type: "tool_result" as const, tool_use_id: use.id, content: "Tool failed.", is_error: true };
+          }
+        }),
+      );
+      convo.push({ role: "user", content: results });
+    }
+
+    return {
+      text: "That took more steps than I'm allowed to take in one reply. Try asking something narrower.",
+      costTokens,
+      modelName: GENERATION_MODEL,
+      toolsUsed,
+    };
+  }
 }
 
 // Open-weight fallback for suggestText only — routed through Vercel AI
@@ -500,6 +594,13 @@ class FallbackAIProvider implements AIProvider {
 
   describeMedia(params: { url: string; contentType: string }) {
     return this.primary.describeMedia(params);
+  }
+
+  // No open-weight fallback: the tool loop is only trusted on Claude, and a
+  // silent downgrade to a weaker tool-calling model isn't worth hiding an
+  // outage for a chat the user is actively waiting on.
+  chat(params: Parameters<AIProvider["chat"]>[0]) {
+    return this.primary.chat(params);
   }
 
   async embed(text: string) {

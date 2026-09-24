@@ -48,6 +48,7 @@ export const RESERVED_USERNAMES = new Set([
   "oauth",
   "podcast",
   "aff",
+  "assistant",
 ]);
 
 import { validateSlugFormat } from "./slug-validation";

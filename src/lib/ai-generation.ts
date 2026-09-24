@@ -12,7 +12,8 @@ export type AIFeature =
   | "recommendation"
   | "search_rerank"
   | "translation"
-  | "accessibility_caption";
+  | "accessibility_caption"
+  | "personal_assistant";
 
 // §3.2: a private-subject row gets a bounded/redacted summary, not a
 // verbatim prompt — this cap is that boundedness, applied uniformly rather
@@ -99,6 +100,13 @@ export async function markAIGenerationAccepted(id: string, accepted: boolean): P
 // per-row TTL, since SQLite has no native expiry mechanism.
 export async function pruneExpiredPrivateAIGenerations(): Promise<number> {
   const cutoff = new Date(Date.now() - PRIVATE_RETENTION_MS);
+  // Personal-assistant rows are always logged as private (their replies can
+  // quote private content) but their subject is the user's profile, which
+  // isSubjectPrivate() has no visibility lookup for — so they'd never match
+  // the per-subject sweep below. Expire them by feature instead.
+  const { count: assistantCount } = await db.aIGeneration.deleteMany({
+    where: { feature: "personal_assistant", createdAt: { lt: cutoff } },
+  });
   const candidates = await db.aIGeneration.findMany({
     where: { createdAt: { lt: cutoff }, subjectType: { not: null }, subjectId: { not: null } },
     select: { id: true, subjectType: true, subjectId: true },
@@ -109,7 +117,7 @@ export async function pruneExpiredPrivateAIGenerations(): Promise<number> {
   for (const row of candidates) {
     if (await isSubjectPrivate(row.subjectType, row.subjectId)) staleIds.push(row.id);
   }
-  if (staleIds.length === 0) return 0;
+  if (staleIds.length === 0) return assistantCount;
   const { count } = await db.aIGeneration.deleteMany({ where: { id: { in: staleIds } } });
-  return count;
+  return count + assistantCount;
 }
