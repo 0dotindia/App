@@ -26,7 +26,7 @@
 
 import { spawn } from "child_process";
 import { createWriteStream, createReadStream } from "fs";
-import { mkdtemp, rm, stat } from "fs/promises";
+import { mkdtemp, rm, stat, open } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { put, list, del } from "@vercel/blob";
@@ -99,6 +99,18 @@ async function main() {
 
     const { size } = await stat(dumpPath);
     if (size === 0) throw new Error("Dump produced an empty file — refusing to upload/treat as a successful backup.");
+    // An empty database still dumps a few bytes of PRAGMA/BEGIN/COMMIT, so a
+    // size check alone would call it a success. Schema comes first in a
+    // .dump — require at least one CREATE TABLE in the head of the file.
+    const fh = await open(dumpPath, "r");
+    const head = Buffer.alloc(Math.min(size, 65536));
+    await fh.read(head, 0, head.length, 0);
+    await fh.close();
+    if (!/CREATE TABLE/i.test(head.toString("utf8"))) {
+      throw new Error(
+        `Dump (${size} bytes) contains no CREATE TABLE — the target database looks empty or wrong. Refusing to upload/treat as a successful backup.`
+      );
+    }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const pathname = `backups/${label}-${timestamp}.sql`;
