@@ -10,8 +10,8 @@ export const SEED_EMAIL_DOMAIN = "seed.0dot.local";
 
 // Reaction/Comment are polymorphic (subjectType + subjectId, no FK), so when seeded articles, books,
 // files or wiki pages go away their likes and comments (including the platform account's) stay behind.
-export async function cleanupSeedContentReactions(prisma: PrismaClient): Promise<void> {
-  const seedUser = { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } };
+export async function cleanupSeedContentReactions(prisma: PrismaClient, domain = SEED_EMAIL_DOMAIN): Promise<void> {
+  const seedUser = { email: { endsWith: `@${domain}` } };
   const rows = await Promise.all([
     prisma.article.findMany({ where: { author: seedUser }, select: { id: true } }),
     prisma.book.findMany({ where: { profile: { user: seedUser } }, select: { id: true } }),
@@ -31,8 +31,8 @@ export async function cleanupSeedContentReactions(prisma: PrismaClient): Promise
 // that account's balance wrong). Reverse every ledger transaction that touches a seeded account:
 // undo its effect on non-seed/system accounts, delete tips + payment rows, postings, transactions
 // and finally the seeded accounts themselves. Transactions among only non-seed accounts stay.
-export async function cleanupSeedWallet(prisma: PrismaClient): Promise<void> {
-  const seedAccounts = (await prisma.ledgerAccount.findMany({ where: { owner: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } }, select: { id: true } })).map((a) => a.id);
+export async function cleanupSeedWallet(prisma: PrismaClient, domain = SEED_EMAIL_DOMAIN): Promise<void> {
+  const seedAccounts = (await prisma.ledgerAccount.findMany({ where: { owner: { email: { endsWith: `@${domain}` } } }, select: { id: true } })).map((a) => a.id);
   if (seedAccounts.length === 0) return;
   const seedSet = new Set(seedAccounts);
   const touching = await prisma.ledgerPosting.findMany({ where: { accountId: { in: seedAccounts } }, select: { transactionId: true }, distinct: ["transactionId"] });
@@ -59,8 +59,8 @@ export async function cleanupSeedWallet(prisma: PrismaClient): Promise<void> {
 // (e.g. @dot buying a seeded creator's product) would be left dangling. Delete every payment that
 // involves a seeded payer, payee or business — plus affiliate commissions credited on seeded programs —
 // together with the rows that point at it.
-export async function cleanupSeedMonetization(prisma: PrismaClient, opts: { cardOnly?: boolean } = {}): Promise<void> {
-  const seedUser = { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } };
+export async function cleanupSeedMonetization(prisma: PrismaClient, opts: { cardOnly?: boolean } = {}, domain = SEED_EMAIL_DOMAIN): Promise<void> {
+  const seedUser = { email: { endsWith: `@${domain}` } };
   const links = (await prisma.affiliateLink.findMany({ where: { OR: [{ affiliate: seedUser }, { program: { creator: seedUser } }] }, select: { id: true } })).map((l) => l.id);
   const ids = (
     await prisma.paymentTransaction.findMany({
@@ -89,23 +89,28 @@ export async function cleanupSeedMonetization(prisma: PrismaClient, opts: { card
 
 // Job notifications carry no FK either: an alert-match/application/status notification for a non-seed
 // account (e.g. @dot's job alert) would keep pointing at a seeded business's deleted job.
-export async function cleanupSeedJobNotifications(prisma: PrismaClient): Promise<void> {
-  const slugs = (await prisma.business.findMany({ where: { creator: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } }, select: { slug: true } })).map((b) => b.slug);
+export async function cleanupSeedJobNotifications(prisma: PrismaClient, domain = SEED_EMAIL_DOMAIN): Promise<void> {
+  const slugs = (await prisma.business.findMany({ where: { creator: { email: { endsWith: `@${domain}` } } }, select: { slug: true } })).map((b) => b.slug);
   for (const slug of slugs) {
     await prisma.notification.deleteMany({ where: { type: { in: ["job_alert_match", "job_application", "application_status"] }, subjectId: { startsWith: `${slug}/jobs/` } } });
   }
 }
 
-export async function cleanupBeforeSeedDelete(prisma: PrismaClient): Promise<void> {
-  await cleanupSeedJobNotifications(prisma);
-  await cleanupSeedContentReactions(prisma);
-  await cleanupSeedWallet(prisma);
-  await cleanupSeedMonetization(prisma);
-  const seedAuthor = { author: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } };
-  const nonSeedAuthor = { author: { email: { not: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } } };
+export async function cleanupBeforeSeedDelete(prisma: PrismaClient, domain = SEED_EMAIL_DOMAIN): Promise<void> {
+  await cleanupSeedJobNotifications(prisma, domain);
+  await cleanupSeedContentReactions(prisma, domain);
+  await cleanupSeedWallet(prisma, domain);
+  await cleanupSeedMonetization(prisma, {}, domain);
+  const seedAuthor = { author: { email: { endsWith: `@${domain}` } } };
+  const nonSeedAuthor = { author: { email: { not: { endsWith: `@${domain}` } } } };
 
-  // Non-seed replies/quotes/reposts pointing at seeded posts (replies-to-replies first).
-  for (let depth = 0; depth < 4; depth++) {
+  // Non-seed replies/quotes/reposts pointing at seeded posts (replies-to-replies first). Reply chains can
+  // alternate authors (seed post <- non-seed reply <- seed reply-back), so peel leaves from both sides:
+  // seed replies under non-seed posts go first (they'd be cascade-deleted anyway), then non-seed dependents.
+  for (let depth = 0; depth < 8; depth++) {
+    const seedLeaves = await prisma.post.deleteMany({
+      where: { ...seedAuthor, replyTo: nonSeedAuthor, replies: { none: {} }, reposts: { none: {} } },
+    });
     const { count } = await prisma.post.deleteMany({
       where: {
         ...nonSeedAuthor,
@@ -114,32 +119,32 @@ export async function cleanupBeforeSeedDelete(prisma: PrismaClient): Promise<voi
         reposts: { none: {} },
       },
     });
-    if (count === 0) break;
+    if (count === 0 && seedLeaves.count === 0) break;
   }
 
   // Ghost notifications: a seed actor is SetNull on delete, which would leave
   // dangling "someone liked your post" rows for real accounts.
   await prisma.notification.deleteMany({
     where: {
-      actor: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } },
-      recipient: { email: { not: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } },
+      actor: { email: { endsWith: `@${domain}` } },
+      recipient: { email: { not: { endsWith: `@${domain}` } } },
     },
   });
 
   // DM threads between a seeded and a non-seed account would be left with one participant.
   await prisma.conversation.deleteMany({
     where: {
-      participants: { some: { user: { email: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } } },
-      AND: [{ participants: { some: { user: { email: { not: { endsWith: `@${SEED_EMAIL_DOMAIN}` } } } } } }],
+      participants: { some: { user: { email: { endsWith: `@${domain}` } } } },
+      AND: [{ participants: { some: { user: { email: { not: { endsWith: `@${domain}` } } } } } }],
     },
   });
 }
 
 // Denormalised counters on non-seed accounts go stale once seeded rows vanish;
 // recompute them from the real rows.
-export async function recountNonSeed(prisma: PrismaClient): Promise<void> {
+export async function recountNonSeed(prisma: PrismaClient, domain = SEED_EMAIL_DOMAIN): Promise<void> {
   const users = await prisma.user.findMany({
-    where: { email: { not: { endsWith: `@${SEED_EMAIL_DOMAIN}` } }, profile: { isNot: null } },
+    where: { email: { not: { endsWith: `@${domain}` } }, profile: { isNot: null } },
     select: { id: true },
   });
   for (const u of users) {
