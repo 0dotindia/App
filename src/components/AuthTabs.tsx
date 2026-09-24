@@ -42,7 +42,15 @@ function FieldSkeleton() {
 }
 
 export function AuthTabs() {
-  const [tab, setTab] = useState<"signup" | "login">("signup");
+  const [tab, setTabState] = useState<"signup" | "login">("signup");
+  // The panel's fade/slide-in (.authTabPanel--switch) only plays on a tab
+  // switch. On first paint the panel holds the page's LCP <h1>; animating it
+  // from opacity 0 delayed LCP by the animation's duration for no benefit.
+  const [switched, setSwitched] = useState(false);
+  const setTab = (next: "signup" | "login") => {
+    setSwitched(true);
+    setTabState(next);
+  };
   const [signupState, signupAction, signupPending] = useActionState(
     signup,
     undefined
@@ -64,7 +72,7 @@ export function AuthTabs() {
       </div>
 
       {tab === "signup" ? (
-        <div className="authTabPanel" key="signup">
+        <div className={switched ? "authTabPanel authTabPanel--switch" : "authTabPanel"} key="signup">
           <h1>Create your account</h1>
           <form
             action={signupAction}
@@ -159,7 +167,7 @@ export function AuthTabs() {
           </p>
         </div>
       ) : (
-        <div className="authTabPanel" key="login">
+        <div className={switched ? "authTabPanel authTabPanel--switch" : "authTabPanel"} key="login">
           <h1>Log in</h1>
           <form
             action={loginAction}

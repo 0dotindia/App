@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { db } from "@/lib/db";
+import { SITEMAP_IDS } from "@/lib/sitemap-ids";
 
 // SEO plan Phase 5: the static list below used to be this file's entire
 // output, on the reasoning that unbounded user-generated content is better
@@ -8,20 +9,11 @@ import { db } from "@/lib/db";
 // getPostById's own sitemap comment, feed-query.ts), but durable, evergreen
 // content (a business, a community, a published event) benefits from direct
 // enumeration rather than waiting on crawl-through discovery. generateSitemaps
-// splits this one route segment into named sub-sitemaps — Next.js serves
-// each at /sitemap/{id}.xml and /sitemap.xml itself becomes the index
-// referencing all of them, so robots.ts's single `sitemap:` entry still
-// covers everything.
+// splits this one route segment into named sub-sitemaps, each served at
+// /sitemap/{id}.xml. Next.js does NOT build a /sitemap.xml index for them, so
+// src/app/sitemap-index.xml/route.ts provides it (rewritten from /sitemap.xml) and robots.ts lists each one too.
 export async function generateSitemaps() {
-  return [
-    { id: "static" },
-    { id: "profiles" },
-    { id: "businesses" },
-    { id: "communities" },
-    { id: "events" },
-    { id: "jobs" },
-    { id: "marketplace" },
-  ];
+  return SITEMAP_IDS.map((id) => ({ id }));
 }
 
 const STATIC_ROUTES = ["", "/explore", "/login", "/signup", "/trending", "/jobs", "/map"];

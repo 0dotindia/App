@@ -14,7 +14,8 @@
 // statically here dropped the entire SDK into the hydration-critical chunk,
 // where it competed with first paint and interactivity on every page.
 //
-// Instead the SDK is loaded lazily once the main thread goes idle. A small
+// Instead the SDK is loaded lazily, after the first user interaction (see the
+// bottom of the `if (dsn)` block). A small
 // synchronous buffer captures errors thrown in the gap before it's ready and
 // replays them once it initializes, so deferring the import loses no reports.
 import type * as SentryNS from "@sentry/nextjs";
@@ -93,11 +94,27 @@ if (dsn) {
       });
   };
 
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(loadSentry, { timeout: 5000 });
-  } else {
-    setTimeout(loadSentry, 2000);
-  }
+  // Even on an idle main thread, parsing/executing the SDK (a ~300ms long
+  // task on a throttled mobile CPU) lands inside the page-load window and
+  // counts against Total Blocking Time / Time to Interactive. Wait for the
+  // first real user interaction instead — the buffer above holds any errors
+  // thrown in the meantime — with a long idle fallback so a visitor who
+  // never touches the page still gets monitored.
+  let started = false;
+  const start = () => {
+    if (started) return;
+    started = true;
+    for (const evt of INTERACTION_EVENTS) window.removeEventListener(evt, start);
+    clearTimeout(fallbackTimer);
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(loadSentry, { timeout: 2000 });
+    } else {
+      setTimeout(loadSentry, 0);
+    }
+  };
+  const INTERACTION_EVENTS = ["pointerdown", "keydown", "touchstart", "scroll"] as const;
+  for (const evt of INTERACTION_EVENTS) window.addEventListener(evt, start, { once: true, passive: true });
+  const fallbackTimer = setTimeout(start, 20_000);
 }
 
 // Required by Next.js for navigation instrumentation. Forwards to Sentry once

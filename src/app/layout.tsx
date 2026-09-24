@@ -118,8 +118,10 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     icons: {
       icon: [
-        { url: "/1dot.png", media: "(prefers-color-scheme: light)" },
-        { url: "/0dot.png", media: "(prefers-color-scheme: dark)" },
+        // 48px copies of 1dot/0dot.png: the browser fetches the tab icon on
+        // every first visit, and the 512px/1440px source logos are 90KB+.
+        { url: "/icon-light-48.png", sizes: "48x48", type: "image/png", media: "(prefers-color-scheme: light)" },
+        { url: "/icon-dark-48.png", sizes: "48x48", type: "image/png", media: "(prefers-color-scheme: dark)" },
       ],
       // Flattened onto solid black (public/apple-touch-icon.png, generated
       // from 1dot.png) rather than reusing the transparent source icon —

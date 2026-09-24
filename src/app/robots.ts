@@ -1,21 +1,10 @@
 import type { MetadataRoute } from "next";
+import { SITEMAP_IDS } from "@/lib/sitemap-ids";
 
-// Kept in sync with sitemap.ts's own generateSitemaps() ids — Next.js does
-// NOT serve a "/sitemap.xml" index that auto-references these sub-sitemaps
-// (confirmed empirically: with generateSitemaps in use, plain /sitemap.xml
-// 404s, only /sitemap/{id}.xml resolves), so every one has to be listed
-// here explicitly. Standard, fully-supported robots.txt behavior — multiple
-// `Sitemap:` lines, not a single index file, is exactly what the spec
-// allows for this case.
-const SITEMAP_URLS = [
-  "static",
-  "profiles",
-  "businesses",
-  "communities",
-  "events",
-  "jobs",
-  "marketplace",
-].map((id) => `https://0dot.in/sitemap/${id}.xml`);
+// Lists every sub-sitemap explicitly alongside the /sitemap.xml index
+// (src/app/sitemap-index.xml/route.ts) — multiple `Sitemap:` lines are standard
+// robots.txt behavior.
+const SITEMAP_URLS = SITEMAP_IDS.map((id) => `https://0dot.in/sitemap/${id}.xml`);
 
 // Everything not listed here defaults to crawlable — public profile pages
 // ([username]/page.tsx), /explore, /login, /signup, and the rest of the

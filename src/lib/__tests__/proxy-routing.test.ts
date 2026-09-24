@@ -16,6 +16,19 @@ describe("isOwnHost", () => {
     expect(isOwnHost("0dot.in")).toBe(true);
   });
 
+  it("recognizes the production hosts even when APP_ORIGIN is unset or different", () => {
+    delete process.env.APP_ORIGIN;
+    expect(isOwnHost("0dot.in")).toBe(true);
+    expect(isOwnHost("www.0dot.in")).toBe(true);
+    process.env.APP_ORIGIN = "https://example.com";
+    expect(isOwnHost("0dot.in")).toBe(true);
+  });
+
+  it("rejects lookalikes of the production host", () => {
+    expect(isOwnHost("evil0dot.in")).toBe(false);
+    expect(isOwnHost("0dot.in.evil.com")).toBe(false);
+  });
+
   it("rejects a third-party custom domain", () => {
     process.env.APP_ORIGIN = "https://0dot.in";
     expect(isOwnHost("alice.example")).toBe(false);

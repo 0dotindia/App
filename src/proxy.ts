@@ -115,6 +115,6 @@ export default async function proxy(request: NextRequest): Promise<Response | un
 // installability (and the home-screen icon) for every custom-domain visitor.
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|api/|favicon.ico|sitemap.xml|robots.txt|manifest.json|sw.js|apple-touch-icon.png|0dot.png|1dot.png|icon-192.png|icon-512.png|icon-maskable-192.png|icon-maskable-512.png).*)",
+    "/((?!_next/static|_next/image|api/|favicon.ico|sitemap.xml|robots.txt|manifest.json|sw.js|apple-touch-icon.png|0dot.png|1dot.png|icon-light-48.png|icon-dark-48.png|icon-192.png|icon-512.png|icon-maskable-192.png|icon-maskable-512.png).*)",
   ],
 };

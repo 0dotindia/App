@@ -290,7 +290,9 @@
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  /* 0.52 (was 0.556, #737373): 4.31:1 on the warm page background (#f5f4f1)
+     failed WCAG AA's 4.5:1 for normal text; this is ~5:1. */
+  --muted-foreground: oklch(0.52 0 0);
 
   /* Dark-mode palette — the single source of truth for both dark-mode
      trigger points below (the prefers-color-scheme:dark media query, for a
@@ -1013,7 +1015,7 @@ h6 {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .authTabPanel {
+  .authTabPanel--switch {
     animation: authTabPanelIn 180ms ease-out;
   }
 
@@ -2331,9 +2333,12 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   min-height: clamp(38px, 5.5vh, 52px);
 }
 
-/* Entrance motion for the first thing a visitor sees — fade + 8px slide-up,
+/* Entrance motion for the first thing a visitor sees — an 8px slide-up,
    respecting prefers-reduced-motion (DESIGN_SYSTEM.md flags this as not yet
-   handled anywhere; this is the first component to do it correctly). */
+   handled anywhere; this is the first component to do it correctly).
+   Deliberately transform-only, no opacity fade: the card holds the landing
+   page's LCP <h1>, and browsers don't count an element as painted for LCP
+   while it's at opacity 0 — the fade pushed LCP ~240ms past first paint. */
 @media (prefers-reduced-motion: no-preference) {
   .authCard {
     animation: authCardIn 220ms ease-out;
@@ -2341,11 +2346,9 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 
   @keyframes authCardIn {
     from {
-      opacity: 0;
       transform: translateY(8px);
     }
     to {
-      opacity: 1;
       transform: translateY(0);
     }
   }

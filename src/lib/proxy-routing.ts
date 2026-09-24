@@ -109,9 +109,15 @@ export function buildCsp(nonce: string): string {
 // A request whose Host is this app's own origin (or a local / preview host)
 // rather than a third-party custom domain — skips the custom-domain lookup
 // and its network round-trip entirely for the overwhelming majority of
-// traffic.
+// traffic. The production hostnames are hardcoded (as in sitemap.ts/robots.ts)
+// rather than relying solely on APP_ORIGIN: if that env var is unset or
+// differs from the served host, every 0dot.in request would otherwise pay the
+// custom-domain lookup's extra HTTP round trip and DB query.
+const PRODUCTION_HOSTS = new Set(["0dot.in", "www.0dot.in"]);
+
 export function isOwnHost(host: string): boolean {
   if (host === "localhost" || host === "127.0.0.1") return true;
+  if (PRODUCTION_HOSTS.has(host)) return true;
   if (host.endsWith(".vercel.app")) return true;
   try {
     if (process.env.APP_ORIGIN && host === new URL(process.env.APP_ORIGIN).hostname) return true;

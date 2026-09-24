@@ -102,6 +102,12 @@ const nextConfig: NextConfig = {
     // repeated here (see node_modules/next/dist/docs/.../optimizePackageImports.md).
     optimizePackageImports: ["radix-ui"],
   },
+  // Next.js doesn't serve a /sitemap.xml index when sitemap.ts uses
+  // generateSitemaps, and a route handler can't sit at that path (conflicts
+  // with the metadata route), so serve the hand-built index from here.
+  async rewrites() {
+    return { beforeFiles: [{ source: "/sitemap.xml", destination: "/sitemap-index.xml" }] };
+  },
   async headers() {
     return [
       {
