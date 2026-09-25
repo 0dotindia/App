@@ -1,6 +1,6 @@
 import { NavLinks } from "./NavLinks";
 
-// Desktop-only (>=1024px, --bp-lg per RESPONSIVE_LAYOUT.md) left nav — hidden
+// Desktop/tablet-only (>=768px; a slimmer 208px column below 1024px) left nav — hidden
 // below that via CSS in globals.css, not conditional rendering, since SSR
 // doesn't know the viewport. The mobile hamburger dropdown is the sibling
 // rendering of the same destinations, see SiteHeader.tsx. The brand

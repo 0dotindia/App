@@ -1,8 +1,11 @@
 import { Suspense } from "react";
+import Link from "next/link";
+import { Mail } from "lucide-react";
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/session";
 import { isProfilePagePath } from "@/lib/route-context";
 import { getUnreadNotificationCount } from "@/lib/notifications";
+import { getUnreadConversationCount } from "@/lib/messaging";
 import { ThemeToggleLogo } from "./ThemeToggleLogo";
 import { Sidebar } from "./Sidebar";
 import { MobileNavMenu } from "./MobileNavMenu";
@@ -21,7 +24,11 @@ export async function SiteHeader() {
   // NotificationBell (desktop) already fetches/renders this count itself;
   // MobileBottomNav's Bell icon has no server-fetching path of its own
   // (it's "use client", rendered here so it can be handed this as a prop).
-  const unreadNotificationCount = user ? await getUnreadNotificationCount(user.id) : 0;
+  // Same idea for the phone header's Messages link below: a plain link + count
+  // (MessagesBadge's inbox-preview popover is desktop-only and much heavier).
+  const [unreadNotificationCount, unreadMessageCount] = user
+    ? await Promise.all([getUnreadNotificationCount(user.id), getUnreadConversationCount(user.id)])
+    : [0, 0];
 
   // An anonymous visitor landing on someone's public profile (a common
   // discovery entry point, e.g. via a shared link) is a good moment for a
@@ -65,7 +72,7 @@ export async function SiteHeader() {
 
   return (
     <>
-      {/* Desktop (>=1024px), and mobile render simultaneously — CSS decides
+      {/* Desktop (>=768px), and mobile render simultaneously — CSS decides
           which is visible, since SSR has no viewport to branch on. See
           .desktopTopHeader / .desktopSidebar / .mobileHeader in globals.css. */}
       <header className="desktopTopHeader">
@@ -95,14 +102,31 @@ export async function SiteHeader() {
           <ThemeToggleLogo />
           {greeting}
         </div>
-        {/* Messages/notifications/account avatar are desktop-only (per
-            explicit direction) — mobile keeps just the nav toggle; Messages
-            and Settings are still reachable via NavLinks inside it, and
-            NavAction still has Log out. */}
-        <MobileNavMenu>
-          <NavLinks profileHandle={profileHandle} />
-          <NavAction hasProfile={hasProfile} showJoinCta={showJoinCta} />
-        </MobileNavMenu>
+        {/* Notifications live in the bottom tab bar and the account avatar in
+            the hamburger menu, but Messages had no phone entry point outside
+            that menu — so it gets its own header icon with the unread count.
+            Nav toggle keeps Settings and Log out (NavLinks / NavAction). */}
+        <div className="mobileHeaderActions">
+          {user && (
+            <Link
+              href="/messages"
+              prefetch={false}
+              className="notificationBell"
+              aria-label={unreadMessageCount > 0 ? `Messages, ${unreadMessageCount} unread` : "Messages"}
+            >
+              <Mail size={20} aria-hidden="true" />
+              {unreadMessageCount > 0 && (
+                <span className="notificationBellBadge" aria-hidden="true">
+                  {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
+                </span>
+              )}
+            </Link>
+          )}
+          <MobileNavMenu>
+            <NavLinks profileHandle={profileHandle} />
+            <NavAction hasProfile={hasProfile} showJoinCta={showJoinCta} />
+          </MobileNavMenu>
+        </div>
       </header>
 
       <MobileBottomNav profileHandle={profileHandle} unreadNotificationCount={unreadNotificationCount} />
