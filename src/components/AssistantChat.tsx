@@ -125,7 +125,7 @@ export function AssistantChat({ displayName }: { displayName: string }) {
           placeholder="Ask about your 0dot data…"
           aria-label="Message your assistant"
           maxLength={4000}
-          style={{ flex: 1 }}
+          style={{ flex: 1, minWidth: 0 }}
         />
         <button type="submit" className="button" disabled={pending || input.trim().length === 0}>
           Send

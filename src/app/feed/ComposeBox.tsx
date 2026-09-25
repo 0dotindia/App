@@ -235,7 +235,7 @@ export function ComposeBox({
             />
           </label>
           <label
-            className="mutedText"
+            className="mutedText composeToggle"
             style={{ fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}
             title="Mark this as a question — replies to it can be marked as the accepted answer."
           >
@@ -247,7 +247,7 @@ export function ComposeBox({
               type="button"
               onClick={onTogglePoll}
               aria-pressed={showPoll}
-              className="mutedText"
+              className="mutedText composeToggle"
               style={{
                 fontSize: "0.8rem",
                 display: "inline-flex",

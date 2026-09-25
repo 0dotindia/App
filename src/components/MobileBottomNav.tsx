@@ -83,14 +83,15 @@ export function MobileBottomNav({
             className={`bottomNavLink${isActive ? " bottomNavLinkActive" : ""}`}
             aria-label={badgeLabel}
             aria-current={isActive ? "page" : undefined}
-            style={isNotifications ? { position: "relative" } : undefined}
           >
-            <Icon aria-hidden="true" size={22} />
-            {isNotifications && unreadNotificationCount > 0 && (
-              <span className="notificationBellBadge" aria-hidden="true">
-                {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
-              </span>
-            )}
+            <span className="bottomNavIcon">
+              <Icon aria-hidden="true" size={22} />
+              {isNotifications && unreadNotificationCount > 0 && (
+                <span className="notificationBellBadge" aria-hidden="true">
+                  {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                </span>
+              )}
+            </span>
           </Link>
         );
       })}

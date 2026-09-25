@@ -2142,6 +2142,42 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   }
 }
 
+/* Second pass on the same audit: small text links / toggles that sat at
+   18-29px tall on a phone. Touch-only (like the block above), so a mouse
+   keeps the compact design. min-height + inline-flex grows the hit area
+   without changing the visible text size. */
+@media (pointer: coarse) {
+  button.navSettingsExpand {
+    width: 44px;
+    height: 44px;
+  }
+  .navSubGroups a.navSubLink {
+    min-height: 44px;
+  }
+  .composeToggle,
+  .exploreSectionMore,
+  a.profileMetaItem {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .composeToggle input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* iOS Safari zooms the whole page when a field under 16px is focused and
+   doesn't zoom back. Phones only: desktop keeps its compact inputs. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
+  select,
+  select.settingsRowSelect,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
 .errorText {
   color: var(--danger);
   font-size: var(--text-sm);
@@ -3851,6 +3887,23 @@ a.profileMetaItem:hover {
   }
 }
 
+/* On a ~390px phone the five pills (Like/Reply/Repost/Quote + bookmark) are
+   just over the card's inner width, so Quote and the bookmark dropped to a
+   second row. Tighter horizontal padding keeps them on one line. */
+@media (max-width: 430px) {
+  .postActionsRow {
+    gap: 0;
+  }
+  .postActionsRow .postAction {
+    padding-inline: 0.3rem;
+    gap: var(--space-1);
+  }
+  .postActionsRow .postActionEnd {
+    min-width: 44px;
+    justify-content: center;
+  }
+}
+
 /* Redesign Phase 1: replaces FeedList's inline flex-column style object. */
 .feedList {
   display: flex;
@@ -4783,6 +4836,19 @@ body.hasBottomNav .mobileNavPanel {
   color: var(--foreground);
   opacity: 0.6;
   transition: opacity 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+/* Anchors the unread badge to the icon itself rather than the (flex:1, so
+   viewport-wide-on-tablet) link, which left the badge floating far from the
+   bell at 768px. */
+.bottomNavIcon {
+  position: relative;
+  display: inline-flex;
+}
+
+.bottomNavIcon .notificationBellBadge {
+  top: -6px;
+  right: -10px;
 }
 
 .bottomNavLink:active {
@@ -6135,8 +6201,9 @@ details:not([open]) > .settingsAddTrigger {
 
 .marketingFooterNav {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
   gap: var(--space-8);
+  min-width: 0;
 }
 
 .marketingFooterGroup {
@@ -6164,8 +6231,10 @@ details:not([open]) > .settingsAddTrigger {
     flex: 0 0 260px;
   }
   .marketingFooterNav {
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    min-width: 0;
     max-width: 560px;
+    gap: var(--space-5);
   }
 }
 
@@ -6401,4 +6470,10 @@ details:not([open]) > .settingsAddTrigger {
 
 .checkboxField input[type="checkbox"] {
   margin-top: 0.2rem;
+}
+
+/* Long unbroken inline code (URLs, paths in the help guide / wiki) must wrap
+   instead of stretching the page wider than a 360px phone. */
+code {
+  overflow-wrap: anywhere;
 }
