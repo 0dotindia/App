@@ -52,18 +52,17 @@ export function requireScope(ctx: ApiRequestContext, scope: string): { error: st
   return null;
 }
 
-// API-route equivalent of auth-guards.ts's requireVerifiedUser — same
-// emailVerifiedAt check every write server action already gates on, just
-// returning an error object instead of redirect() (meaningless outside a
-// page render). A valid bearer token only proves the authorization is
-// live (resolveApiRequest), not that the underlying account has since
-// finished verification or been reinstated after suspension — write
-// endpoints need the same account-standing check web writes already get,
-// not a weaker one just because the caller is a bearer-token client.
+// API-route equivalent of auth-guards.ts's requireVerifiedUser, returning an
+// error object instead of redirect() (meaningless outside a page render).
+// There is no email-verification requirement any more (signup has no
+// email/OTP step), so this is an account-standing check: write endpoints get
+// the same "active account only" rule web writes get via getCurrentUser(),
+// re-read here rather than trusting whatever resolveApiRequest saw, so a
+// suspension mid-request-burst still takes effect.
 export async function requireVerifiedApiUser(ctx: ApiRequestContext): Promise<{ error: string; status: number } | null> {
-  const user = await db.user.findUnique({ where: { id: ctx.userId }, select: { emailVerifiedAt: true } });
-  if (!user?.emailVerifiedAt) {
-    return { error: "Your account must have a verified email to do this.", status: 403 };
+  const user = await db.user.findUnique({ where: { id: ctx.userId }, select: { status: true } });
+  if (!user || user.status !== "active") {
+    return { error: "This account is no longer active.", status: 403 };
   }
   return null;
 }

@@ -12,7 +12,10 @@ datasource db {
 
 model User {
   id              String    @id @default(uuid())
-  email           String    @unique
+  // Optional since signup stopped collecting it (name + username + password
+  // only, no email/OTP verification step). Accounts created before that
+  // change still have one; SSO/JIT-provisioned accounts always do.
+  email           String?   @unique
   emailVerifiedAt DateTime?
   // E.164 ("+<dialcode><digits>", see country-codes.ts toE164). Required at
   // signup going forward (auth.ts) but stays nullable in the DB — every
@@ -86,6 +89,7 @@ model User {
   emailVerificationTokens    EmailVerificationToken[]
   passwordResetTokens        PasswordResetToken[]
   twoFactorRecoveryCodes     TwoFactorRecoveryCode[]
+  passwordRecoveryCodes      PasswordRecoveryCode[]
   pendingTwoFactorChallenges PendingTwoFactorChallenge[]
   coinTransfersSent          CoinTransfer[] @relation("CoinTransferSent")
   coinTransfersReceived      CoinTransfer[] @relation("CoinTransferReceived")
@@ -259,6 +263,24 @@ model Session {
 // addendum §2/§3: hashed with createHash("sha256"), never the raw code —
 // same "account-takeover-capable secret" reasoning as PasswordResetToken.
 model TwoFactorRecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// Self-service password recovery now that signup collects no email: 10
+// one-time codes issued at signup (and regenerable from Security settings),
+// any one of which resets the password on /forgot-password. Deliberately a
+// separate table from TwoFactorRecoveryCode — enrolling or disabling 2FA
+// regenerates/deletes those, and that must never silently wipe the codes a
+// user saved for getting back into an account they forgot the password to.
+// Hashed with sha256 for the same reason as TwoFactorRecoveryCode.
+model PasswordRecoveryCode {
   id        String    @id @default(uuid())
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)

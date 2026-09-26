@@ -14,7 +14,7 @@ TABLE OF CONTENTS
   1. WHAT IS 0DOT.IN
   2. GETTING STARTED
      2.1  Creating an account
-     2.2  Verifying your email
+     2.2  Saving your recovery codes
      2.3  Claiming a username (including "my account has no username")
      2.4  Logging in, 2FA, and password reset
      2.5  Your account settings map
@@ -89,24 +89,24 @@ Go to 0dot.in/signup. You'll provide:
   - Full name
   - Username           (0dot.in/yourname — permanent, 3-30 chars, letters/
                          numbers/underscore only)
-  - Email
   - Password           (8+ characters)
-  - Mobile number       (with country code)
-  - Date of birth
+
+That's it — no email, no phone number, no verification code. You're logged
+in the moment you submit and can use everything straight away. Email and
+mobile number are optional and can be added later in Settings > Security >
+Email & phone; you'll be asked for your date of birth once after signing in
+(some features stay restricted until it's on file).
 
 The username field checks availability live as you type. Reserved and
-platform-brand words can never be claimed.
+platform-brand words can never be claimed. Signup is rate-limited per IP.
 
-Signup is rate-limited per IP and per email, and a duplicate signup with an
-existing email, username, or phone number is rejected with a clear message
-telling you which field collided.
-
-2.2  VERIFYING YOUR EMAIL
+2.2  SAVING YOUR RECOVERY CODES
 --------------------------------------------------------------------------
-After signup you land on a "check your email" screen and a verification
-link is sent. You are logged in immediately (you can browse), but full
-posting/interaction is expected only after verification. If the email
-doesn't arrive, the same screen has a resend option.
+Right after signup you're shown 10 one-time recovery codes (they look like
+abcd-2345-wxyz). They're the only self-service way back into your account
+if you forget your password, so write them down or keep them in a password
+manager — they're shown once. Each code works once. You can generate a new
+set any time at Settings > Security (this replaces the old set).
 
 2.3  CLAIMING A USERNAME
 --------------------------------------------------------------------------
@@ -128,8 +128,8 @@ design (this is a deliberate product decision, not a missing feature).
 2.4  LOGGING IN, 2FA, AND PASSWORD RESET
 --------------------------------------------------------------------------
   Log in:            0dot.in/login
-                      Accepts email, username, OR mobile number as the
-                      identifier, plus your password.
+                      Accepts your username (or email / mobile number, if
+                      you've added one) plus your password.
 
   Two-factor auth:    Settings > Security > Two-factor authentication
                       Sets up an authenticator-app (TOTP) code plus a set
@@ -138,17 +138,15 @@ design (this is a deliberate product decision, not a missing feature).
                       0dot.in/login/2fa after your password succeeds.
 
   Forgot password:    0dot.in/forgot-password
-                      Enter your email; a reset link is emailed to you
-                      (valid 1 hour, single-use). Follow it to
-                      0dot.in/reset-password?token=... and set a new
-                      password there.
+                      Enter your username, one of your recovery codes
+                      (§2.2), and a new password. The code is used up and
+                      every device is signed out. Lost your codes too?
+                      Contact support — after confirming the account is
+                      yours they can issue you a new set.
 
-  IMPORTANT: if you're logging in with a reset password and keep getting
-  "Incorrect email/username/mobile number or password," double-check you're
-  typing your EMAIL (or the username you actually claimed) as the
-  identifier — a mistyped or unclaimed username will always fail this
-  check even with the correct password, and looks identical to a wrong
-  password from the error message alone.
+  IMPORTANT: if you keep getting "Incorrect username or password," check
+  the username is exactly the one you claimed — a mistyped username always
+  fails, and looks identical to a wrong password from the error alone.
 
   Active sessions:    Settings > Security > Active sessions
                       Lists every device with a live session; revoke any
@@ -822,8 +820,8 @@ COPYRIGHT / DMCA:  0dot.in/dmca — file a formal takedown notice if your
                   a counter-notice — this is a legal requirement of the
                   process, not a privacy inconsistency.
 
-AGE:               New accounts collect date of birth at signup; accounts
-                  with no verified age are held to default protective
+AGE:               New accounts are asked for date of birth after signing
+                  in; accounts with no verified age are held to default protective
                   restrictions until it's provided.
 
 ================================================================================
@@ -897,7 +895,8 @@ PAYMENTS:           0dot.in/admin/payments/iap-batches
   Create an account                     0dot.in/signup
   Fix "my account has no username"       0dot.in/claim-username
   Log in                                 0dot.in/login
-  Reset a forgotten password             0dot.in/forgot-password
+  Reset a forgotten password             0dot.in/forgot-password (needs a recovery code)
+  Get new recovery codes                  Settings > Security
   Turn on two-factor auth                Settings > Security > Two-factor
   See/revoke my logged-in devices        Settings > Security > Active sessions
   Edit my bio, avatar, theme             Settings > Profile > Edit profile

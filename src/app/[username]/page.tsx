@@ -1031,7 +1031,7 @@ async function ProfileMonetizationAndPortfolio({
             Newsletter
           </summary>
           <div style={{ marginTop: "0.6rem", maxWidth: "32ch" }}>
-            <NewsletterSubscribeForm creatorId={username.userId} defaultEmail={currentUser?.email} />
+            <NewsletterSubscribeForm creatorId={username.userId} defaultEmail={currentUser?.email ?? undefined} />
           </div>
         </details>
       )}

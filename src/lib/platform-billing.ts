@@ -33,7 +33,7 @@ export interface SubscriptionProcessor {
     subscriberType: "profile" | "business";
     subscriberId: string;
     payerUserId: string;
-    payerEmail: string;
+    payerEmail: string | null;
     plan: string;
     billingInterval: string;
     successUrl: string;
@@ -90,7 +90,7 @@ class StripeSubscriptionProcessor implements SubscriptionProcessor {
     subscriberType: "profile" | "business";
     subscriberId: string;
     payerUserId: string;
-    payerEmail: string;
+    payerEmail: string | null;
     plan: string;
     billingInterval: string;
     successUrl: string;
@@ -223,7 +223,7 @@ async function subscribe(params: {
   subscriberType: "profile" | "business";
   subscriberId: string; // profileId or businessId
   payerUserId: string;
-  payerEmail: string;
+  payerEmail: string | null;
   plan: string;
   billingInterval: string;
   successUrl: string;
@@ -237,7 +237,7 @@ async function subscribe(params: {
 export async function subscribeBusiness(
   businessId: string,
   payerUserId: string,
-  payerEmail: string,
+  payerEmail: string | null,
   billingInterval: string,
   successUrl: string,
   cancelUrl: string

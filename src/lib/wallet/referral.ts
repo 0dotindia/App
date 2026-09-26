@@ -11,7 +11,8 @@ import { notifyCoinsReceived } from "@/lib/notifications";
 // addendum-coin-wallet-v2.md §7.5 — referral rewards. Distinct from
 // AffiliateLink (a % on a specific offering's sales); this rewards bringing
 // a brand-new person onto the platform, paid only once the invitee shows
-// real intent (verified email + one meaningful action).
+// real intent (an account at least a day old + one meaningful action — there
+// is no email verification to key off since signup dropped it).
 
 export const REFERRAL_COOKIE = "ref";
 
@@ -72,17 +73,26 @@ async function inviteeCompletedAction(userId: string): Promise<boolean> {
 }
 
 // The earned-not-automatic payout. Idempotent on
-// `referral_reward:${inviteeUserId}` — safe to call from the verify route,
-// from feature actions, and from the daily sweep.
+// `referral_reward:${inviteeUserId}` — safe to call from feature actions and
+// from the daily sweep.
 export async function maybeGrantReferralReward(
   inviteeUserId: string,
 ): Promise<{ granted: boolean; reason?: string }> {
   const invitee = await db.user.findUnique({
     where: { id: inviteeUserId },
-    select: { referredByUserId: true, emailVerifiedAt: true },
+    select: { referredByUserId: true, createdAt: true, status: true },
   });
   if (!invitee?.referredByUserId) return { granted: false, reason: "no_referrer" };
-  if (!invitee.emailVerifiedAt) return { granted: false, reason: "unverified" };
+  // Signup has no email/OTP verification, so account age stands in as the
+  // throw-away-account filter: a scripted signup that posts once and is
+  // abandoned earns nothing until it has existed for a day (the same bar the
+  // inviter and coin transfers are held to), and the daily sweep below pays
+  // out anyone who clears it later.
+  if (invitee.status !== "active") return { granted: false, reason: "invitee_ineligible" };
+  const inviteeAgeHours = (Date.now() - invitee.createdAt.getTime()) / (60 * 60 * 1000);
+  if (inviteeAgeHours < WALLET_LIMITS.TRANSFER_MIN_ACCOUNT_AGE_HOURS) {
+    return { granted: false, reason: "invitee_too_new" };
+  }
 
   const already = await db.ledgerTransaction.findUnique({
     where: { idempotencyKey: `referral_reward:${inviteeUserId}` },
@@ -94,9 +104,9 @@ export async function maybeGrantReferralReward(
   const inviterId = invitee.referredByUserId;
   const inviter = await db.user.findUnique({
     where: { id: inviterId },
-    select: { emailVerifiedAt: true, createdAt: true, status: true },
+    select: { createdAt: true, status: true },
   });
-  if (!inviter || inviter.status !== "active" || !inviter.emailVerifiedAt) {
+  if (!inviter || inviter.status !== "active") {
     return { granted: false, reason: "inviter_ineligible" };
   }
   const inviterAgeHours = (Date.now() - inviter.createdAt.getTime()) / (60 * 60 * 1000);
@@ -135,7 +145,7 @@ export async function maybeGrantReferralReward(
     });
   });
 
-  // Lost a race with a concurrent call (eager /verify vs. the daily sweep):
+  // Lost a race with a concurrent call (a feature action vs. the daily sweep):
   // the coins moved once, but skip the second pair of notifications.
   if (!created) return { granted: false, reason: "already_rewarded" };
 
@@ -144,11 +154,11 @@ export async function maybeGrantReferralReward(
   return { granted: true };
 }
 
-// Daily cron backstop — catches invitees who completed an action after
-// verifying (so the eager trigger in /verify saw nothing). Scoped to
-// recently-verified cohorts: an invitee who verified 60+ days ago and
-// still hasn't done a post/link/purchase isn't going to, and re-scanning
-// every rewarded account forever doesn't scale. `maybeGrantReferralReward`
+// Daily cron — the main payout path: catches invitees once they're past the
+// account-age bar and have completed an action. Scoped to recent signups:
+// an invitee who signed up 60+ days ago and still hasn't done a
+// post/link/purchase isn't going to, and re-scanning every rewarded account
+// forever doesn't scale. `maybeGrantReferralReward`
 // itself no-ops on an already-rewarded invitee.
 const REFERRAL_SWEEP_LOOKBACK_DAYS = 60;
 
@@ -164,9 +174,9 @@ export async function runReferralRewardSweepOnce() {
   );
 
   const candidates = await db.user.findMany({
-    where: { referredByUserId: { not: null }, emailVerifiedAt: { gte: since } },
+    where: { referredByUserId: { not: null }, createdAt: { gte: since } },
     select: { id: true },
-    orderBy: { emailVerifiedAt: "desc" },
+    orderBy: { createdAt: "desc" },
     take: 5000,
   });
 

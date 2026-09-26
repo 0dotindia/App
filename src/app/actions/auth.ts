@@ -1,6 +1,5 @@
 "use server";
 
-import { randomBytes, createHash } from "crypto";
 import { headers, cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
@@ -10,21 +9,20 @@ import { createSession, destroySession, getCurrentUser, createTwoFactorChallenge
 import { revokeAllOtherSessions } from "@/app/actions/session-management";
 import { validateUsernameFormat } from "@/lib/reserved-usernames";
 import { checkRateLimit, enforceRateLimit, getClientIp } from "@/lib/rate-limit";
-import { toE164 } from "@/lib/country-codes";
-import { getEmailSender, getAppOrigin, renderVerifyEmailHtml, renderPasswordResetEmailHtml } from "@/lib/email";
 import { isInternalSystemAccountEmail } from "@/lib/first-party-apps";
 import { ensureUserAccounts } from "@/lib/wallet/accounts";
 import { issueSignupGrant, issueLaunchPromoIfEligible } from "@/lib/wallet/grants";
 import { recordReferralAttribution, REFERRAL_COOKIE } from "@/lib/wallet/referral";
+import {
+  issuePasswordRecoveryCodes,
+  consumePasswordRecoveryCode,
+  sealRecoveryCodes,
+  RECOVERY_CODES_COOKIE,
+  RECOVERY_CODES_COOKIE_MAX_AGE_S,
+} from "@/lib/password-recovery";
 
 export type ActionState = { error?: string; success?: boolean } | undefined;
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-// Shorter than VERIFICATION_TTL_MS above and deliberately so — a password
-// reset token grants account takeover, not just email-ownership
-// confirmation, so it stays valid for a much narrower window.
-const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1h
 const RATE_LIMIT_ERROR = "Too many attempts. Please try again in a few minutes.";
 // Precomputed bcrypt hash of an arbitrary fixed string, compared against
 // on a login attempt for an email that doesn't exist — so bcrypt.compare
@@ -33,25 +31,46 @@ const RATE_LIMIT_ERROR = "Too many attempts. Please try again in a few minutes."
 // straight past the ~100ms+ hash compare).
 const DUMMY_HASH = "$2b$12$7j5EHBqwhwNexnu5VeCDiuAkZZX8k8BFFqGnK9R./JTiJFcltTVOK";
 
-// PasswordResetToken stores this hash, never the raw token — see that
-// model's comment in schema.prisma. SHA-256, not bcrypt: the raw token
-// already has 192 bits of entropy (randomBytes(24)) so this isn't defending
-// against brute force, only against a DB leak being directly replayable —
-// a fast, deterministic hash is the right tool for that, unlike passwords.
-function hashResetToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-// Shared by login() and requestPasswordReset() below — both let someone
-// name their account with a freeform identifier that might be a phone
-// number, and both need to turn it into the exact E.164 form stored on
-// User.phone: strip everything but digits, then require enough of them
-// left (7) to plausibly be a real number before treating it as one at all.
+// A freeform login/recovery identifier might be a phone number — turn it into
+// the exact E.164 form stored on User.phone: only when it's made of nothing
+// but digits and phone punctuation (so a username that merely contains
+// digits, like "john1234567", is never mistaken for one), strip everything
+// but digits, then require enough of them left (7) to plausibly be a real
+// number.
 function phoneDigitsFromIdentifier(raw: string): string | null {
+  if (!/^[+\d\s().-]+$/.test(raw)) return null;
   const digits = raw.replace(/[^0-9]/g, "");
   return digits.length >= 7 ? `+${digits}` : null;
 }
 
+// Three ways to name an account: email (has "@"), phone (digits once
+// punctuation/spacing/"+" is stripped — compared against the stored E.164
+// form), or otherwise a username. Not merged into one OR'd query — each
+// shape has its own normalization, so keeping them as separate branches
+// keeps every comparison exact instead of guessing across all three.
+// Shared by login() and recoverPassword().
+async function findUserByIdentifier(identifier: string, identifierRaw: string) {
+  const phoneIdentifier = phoneDigitsFromIdentifier(identifierRaw);
+  return identifier.includes("@")
+    ? db.user.findUnique({ where: { email: identifier }, include: { username: true } })
+    : phoneIdentifier
+      ? db.user.findUnique({ where: { phone: phoneIdentifier }, include: { username: true } })
+      : db.username.findUnique({ where: { handle: identifier } }).then((u) =>
+          u ? db.user.findUnique({ where: { id: u.userId }, include: { username: true } }) : null
+        );
+}
+
+// Signup collects only what an account can't exist without — a name, a
+// permanent username, and a password — and logs the user straight in. There
+// is deliberately no email or OTP verification step: the platform doesn't
+// send mail or SMS for onboarding. Email, phone and date of birth are all
+// optional and can be added later from settings (date of birth is prompted
+// for by AgeGatePrompt, since an unknown DOB gets the protective default
+// restriction set — phase-12 spec §8.2). Abuse resistance comes from the
+// rate limits and honeypot below, plus account-age gates on anything
+// farmable (coin transfers, referral rewards — see wallet/eligibility.ts and
+// wallet/referral.ts). Password recovery uses the one-time recovery codes
+// issued here (see lib/password-recovery.ts).
 export async function signup(
   _prevState: ActionState,
   formData: FormData
@@ -61,33 +80,28 @@ export async function signup(
   // "company", "url", etc.) — mobile Chrome's Android-level autofill
   // ignores autocomplete="off" and will silently populate a hidden field
   // it heuristically recognizes, which previously made every real signup
-  // from an affected phone silently no-op (redirected to the same success
-  // screen, no account created, no email sent). Redirect straight to the
-  // same success destination a real signup hits — same response shape
-  // either way, no "invalid" signal a bot could learn from — without
-  // touching the DB or spending a rate-limit slot on it.
+  // from an affected phone silently no-op. Redirect straight to the same
+  // destination a real signup hits — same response shape either way, no
+  // "invalid" signal a bot could learn from (without a session that page
+  // just bounces to /login) — without touching the DB or spending a
+  // rate-limit slot on it.
   if (String(formData.get("hp_extra_field") ?? "").trim()) {
-    redirect("/verify/sent");
+    redirect("/signup/recovery-codes");
   }
 
   const displayName = String(formData.get("displayName") ?? "").trim();
   const handle = String(formData.get("username") ?? "").trim().toLowerCase();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  const phoneDialCode = String(formData.get("phoneDialCode") ?? "");
-  const phoneNumber = String(formData.get("phoneNumber") ?? "");
-  const dateOfBirthRaw = String(formData.get("dateOfBirth") ?? "");
 
-  // Mass account creation is primarily an IP-scoped abuse pattern; a
-  // per-email limit also catches repeated retries against one address
-  // (e.g. hammering past "email already exists"). Checked before any DB
-  // work — see phase-1 spec §7.2.
+  // Mass account creation is primarily an IP-scoped abuse pattern; the
+  // per-handle limit also catches repeated retries against one username.
+  // Checked before any DB work — see phase-1 spec §7.2.
   const ip = await getClientIp();
-  const [ipOk, emailOk] = await Promise.all([
+  const [ipOk, handleOk] = await Promise.all([
     enforceRateLimit(`signup:ip:${ip}`, { max: 5, windowMs: 15 * 60 * 1000 }),
-    enforceRateLimit(`signup:email:${email}`, { max: 3, windowMs: 15 * 60 * 1000 }),
+    enforceRateLimit(`signup:handle:${handle}`, { max: 3, windowMs: 15 * 60 * 1000 }),
   ]);
-  if (!ipOk || !emailOk) {
+  if (!ipOk || !handleOk) {
     return { error: RATE_LIMIT_ERROR };
   }
 
@@ -105,160 +119,67 @@ export async function signup(
     return { error: "That username is reserved." };
   }
 
-  if (!EMAIL_PATTERN.test(email)) {
-    return { error: "Enter a valid email address." };
-  }
   if (password.length < 8) {
     return { error: "Password must be at least 8 characters." };
   }
 
-  const phone = toE164(phoneDialCode, phoneNumber);
-  if (!phone) {
-    return { error: "Enter a valid mobile number." };
-  }
-
-  // Same bounds as the existing-account backfill path (setDateOfBirth,
-  // actions/age.ts) — collected up front here instead, so a new signup never
-  // hits AgeGatePrompt (RootLayout only renders it when dateOfBirth is null).
-  const dateOfBirth = new Date(dateOfBirthRaw);
-  const now = new Date();
-  const earliestPlausibleDob = new Date(now.getFullYear() - 130, now.getMonth(), now.getDate());
-  if (Number.isNaN(dateOfBirth.getTime()) || dateOfBirth > now || dateOfBirth < earliestPlausibleDob) {
-    return { error: "Enter a valid date of birth." };
-  }
-
-  const [existingEmail, existingHandle, existingPhone] = await Promise.all([
-    db.user.findUnique({ where: { email } }),
-    db.username.findUnique({ where: { handle } }),
-    db.user.findUnique({ where: { phone } }),
-  ]);
-  if (existingEmail) {
-    return { error: "An account with that email already exists." };
-  }
+  const existingHandle = await db.username.findUnique({ where: { handle } });
   if (existingHandle) {
     return { error: "That username is already taken." };
-  }
-  if (existingPhone) {
-    return { error: "An account with that mobile number already exists." };
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
   const refCode = (await cookies()).get(REFERRAL_COOKIE)?.value ?? null;
-  let user;
+  let created: { user: { id: string }; recoveryCodes: string[] };
   try {
     // User row + coin ledger accounts + the audited signup grant (plus, for
-    // early accounts, the launch promo, §8.1) all commit together
-    // (addendum-coin-wallet-v2.md §7.1). The ledger is the sole source of
-    // truth for coin balances — there is no coinBalance mirror any more.
-    user = await db.$transaction(async (tx) => {
-      const created = await tx.user.create({
+    // early accounts, the launch promo, §8.1) + recovery codes all commit
+    // together (addendum-coin-wallet-v2.md §7.1).
+    created = await db.$transaction(async (tx) => {
+      const user = await tx.user.create({
         data: {
-          email,
-          phone,
-          dateOfBirth,
           passwordHash,
           username: { create: { handle } },
           profile: { create: { displayName } },
         },
       });
-      await ensureUserAccounts(tx, created.id);
-      await issueSignupGrant(tx, created.id);
-      await issueLaunchPromoIfEligible(tx, created.id);
-      await recordReferralAttribution(tx, created.id, refCode);
-      return created;
+      await ensureUserAccounts(tx, user.id);
+      await issueSignupGrant(tx, user.id);
+      await issueLaunchPromoIfEligible(tx, user.id);
+      await recordReferralAttribution(tx, user.id, refCode);
+      const recoveryCodes = await issuePasswordRecoveryCodes(user.id, tx);
+      return { user, recoveryCodes };
     });
   } catch (err) {
-    // The findUnique checks above are check-then-act, not atomic — two
-    // concurrent signups for the same email/handle/phone can both pass them
-    // before either insert commits. Catch the resulting unique-constraint
-    // violation here rather than letting it surface as an unhandled 500.
+    // The findUnique check above is check-then-act, not atomic — two
+    // concurrent signups for the same handle can both pass it before either
+    // insert commits. Catch the resulting unique-constraint violation here
+    // rather than letting it surface as an unhandled 500.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      return { error: "That email, username, or mobile number is already taken." };
+      return { error: "That username is already taken." };
     }
     throw err;
   }
 
-  const token = randomBytes(24).toString("hex");
-  await db.emailVerificationToken.create({
-    data: {
-      token,
-      userId: user.id,
-      expiresAt: new Date(Date.now() + VERIFICATION_TTL_MS),
-    },
+  await createSession(created.user.id);
+  (await cookies()).set(RECOVERY_CODES_COOKIE, sealRecoveryCodes(created.user.id, created.recoveryCodes), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/signup/recovery-codes",
+    maxAge: RECOVERY_CODES_COOKIE_MAX_AGE_S,
   });
-
-  // getEmailSender() falls back to a console-log stub until SMTP_HOST is
-  // configured (see src/lib/email.ts) — same dev/prod seam as payments.
-  const sender = getEmailSender();
-  const verifyUrl = `${getAppOrigin()}/verify?token=${token}`;
-  const result = await sender.send({
-    to: email,
-    subject: "Verify your 0dot.in email",
-    html: renderVerifyEmailHtml(verifyUrl),
-  });
-
-  // Only the console stub needs the token surfaced back on the page — once
-  // a real sender is configured, an account-verification token has no
-  // business appearing in a URL that can land in browser history, a
-  // Referer header, or a screenshot.
-  if (sender.name === "console-stub") redirect(`/verify/sent?token=${token}`);
-  // Previously this redirect happened unconditionally, so a failed Resend/SMTP
-  // send (bad domain, unverified sender, provider outage) still landed the
-  // new account on "Check your email" with no indication anything went
-  // wrong — the account exists, but nothing to click ever arrives. The
-  // ?sendFailed flag lets /verify/sent tell the user to hit "Resend email"
-  // right away instead of waiting on a message that isn't coming; see
-  // resendVerificationEmail below, which already surfaces this same
-  // failure via an ActionState error.
-  redirect(result.status === "failed" ? "/verify/sent?sendFailed=1" : "/verify/sent");
+  redirect("/signup/recovery-codes");
 }
 
-// /verify/sent's resend button — the original signup() send is a
-// fire-and-forget best-effort (its result is never surfaced back to the
-// user), so a bad address, a bounce, or a dropped Resend call leaves
-// someone stuck on that page with no way to get a second attempt. This is
-// that second attempt: same token-issuing shape as signup()'s, gated on an
-// existing session rather than a form email field since the recipient is
-// whoever's already logged in and unverified.
-export async function resendVerificationEmail(
-  _prevState: ActionState,
-  _formData: FormData
-): Promise<ActionState> {
+// "I've saved my codes" on /signup/recovery-codes: drops the one-time cookie
+// and lands the new user on their own profile — the "here's your new page"
+// moment the old email-verification link used to deliver.
+export async function acknowledgeRecoveryCodes(): Promise<void> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.emailVerifiedAt) redirect("/feed");
-
-  const rateOk = await enforceRateLimit(`resend-verification:user:${user.id}`, { max: 3, windowMs: 15 * 60 * 1000 });
-  if (!rateOk) {
-    return { error: RATE_LIMIT_ERROR };
-  }
-
-  // Same "only the newest link works" invalidation as requestPasswordReset
-  // below — an old copy of this email sitting in an inbox shouldn't stay
-  // live once a new one's been issued.
-  await db.emailVerificationToken.updateMany({
-    where: { userId: user.id, usedAt: null },
-    data: { usedAt: new Date() },
-  });
-
-  const token = randomBytes(24).toString("hex");
-  await db.emailVerificationToken.create({
-    data: { token, userId: user.id, expiresAt: new Date(Date.now() + VERIFICATION_TTL_MS) },
-  });
-
-  const sender = getEmailSender();
-  const verifyUrl = `${getAppOrigin()}/verify?token=${token}`;
-  const result = await sender.send({
-    to: user.email,
-    subject: "Verify your 0dot.in email",
-    html: renderVerifyEmailHtml(verifyUrl),
-  });
-
-  if (result.status === "failed") {
-    return { error: "Couldn't send the verification email. Please try again in a moment." };
-  }
-
-  return { success: true };
+  (await cookies()).delete({ name: RECOVERY_CODES_COOKIE, path: "/signup/recovery-codes" });
+  redirect(user.username ? `/${user.username.handle}` : "/feed");
 }
 
 export type UsernameAvailability = "available" | "taken" | "invalid" | "reserved";
@@ -312,19 +233,7 @@ export async function login(
     return { error: RATE_LIMIT_ERROR };
   }
 
-  // Three ways to name an account: email (has "@"), phone (digits once
-  // punctuation/spacing/"+" is stripped — compared against the stored E.164
-  // form), or otherwise a username. Not merged into one OR'd query — each
-  // shape has its own normalization, so keeping them as separate branches
-  // keeps every comparison exact instead of guessing across all three.
-  const phoneIdentifier = phoneDigitsFromIdentifier(identifierRaw);
-  const user = identifier.includes("@")
-    ? await db.user.findUnique({ where: { email: identifier }, include: { username: true } })
-    : phoneIdentifier
-      ? await db.user.findUnique({ where: { phone: phoneIdentifier }, include: { username: true } })
-      : await db.username.findUnique({ where: { handle: identifier } }).then((u) =>
-          u ? db.user.findUnique({ where: { id: u.userId }, include: { username: true } }) : null
-        );
+  const user = await findUserByIdentifier(identifier, identifierRaw);
 
   // Always run bcrypt.compare, even when no user matched — comparing
   // against DUMMY_HASH keeps a nonexistent-account response taking
@@ -344,8 +253,8 @@ export async function login(
       data: { userId: user.id, ipAddress: ip, userAgent: headersList.get("user-agent"), success: passwordValid, method: "password" },
     });
   }
-  if (!user || !passwordValid || isInternalSystemAccountEmail(user.email)) {
-    return { error: "Incorrect email/username/mobile number or password." };
+  if (!user || !passwordValid || (user.email && isInternalSystemAccountEmail(user.email))) {
+    return { error: "Incorrect username or password." };
   }
 
   if (user.status !== "active") {
@@ -372,100 +281,37 @@ export async function login(
 
   await createSession(user.id);
 
-  if (!user.emailVerifiedAt) {
-    redirect("/verify/sent");
-  }
   // A returning user most likely wants to see what's new, not land back on
-  // their own profile every time — the just-verified first-time signup
-  // path (verify/route.ts) still lands on the new profile itself, since
-  // that's the "here's your new page" moment.
+  // their own profile every time — a first-time signup still lands on the
+  // new profile itself (acknowledgeRecoveryCodes), since that's the
+  // "here's your new page" moment.
   redirect("/feed");
 }
 
-export async function requestPasswordReset(
+// /forgot-password: username (or email/mobile, for accounts that have one)
+// + one unused recovery code + a new password. Replaces the old emailed
+// reset link — the platform doesn't send mail. The code is consumed in the
+// same transaction as the password change, and every session is killed,
+// same as the old link-based reset.
+export async function recoverPassword(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
   const identifierRaw = String(formData.get("identifier") ?? "").trim();
   const identifier = identifierRaw.toLowerCase();
-
-  // Same pair-of-buckets shape as signup's ip/email limit above — a mass
-  // request pattern is IP-scoped, while a targeted one hammers a single
-  // identifier (e.g. spamming someone's inbox with reset links).
-  const ip = await getClientIp();
-  const [ipOk, identifierOk] = await Promise.all([
-    enforceRateLimit(`password-reset-request:ip:${ip}`, { max: 5, windowMs: 15 * 60 * 1000 }),
-    enforceRateLimit(`password-reset-request:identifier:${identifier}`, { max: 3, windowMs: 15 * 60 * 1000 }),
-  ]);
-  if (!ipOk || !identifierOk) {
-    return { error: RATE_LIMIT_ERROR };
-  }
-
-  // Two ways to name the account, same split as login() above — email or
-  // mobile number, not username (this form was never asked to carry that
-  // third case). Whichever one matches, the reset link still only ever
-  // goes out over email below: it's the one delivery channel actually
-  // wired up, and every account has one on file.
-  const isEmail = identifier.includes("@");
-  const phoneIdentifier = isEmail ? null : phoneDigitsFromIdentifier(identifierRaw);
-  if (isEmail ? !EMAIL_PATTERN.test(identifier) : !phoneIdentifier) {
-    return { error: "Enter a valid email or mobile number." };
-  }
-
-  const user = isEmail
-    ? await db.user.findUnique({ where: { email: identifier } })
-    : await db.user.findUnique({ where: { phone: phoneIdentifier! } });
-
-  // Same enumeration posture as /verify/sent: no error branch for "no such
-  // account" — the confirmation page's copy stays generic either way, and a
-  // dev-only link only ever appears when a token was actually created. An
-  // internal system account (e.g. platform-apps@0dot.internal) is treated
-  // identically to a nonexistent one — it must never become loggable-into.
-  if (!user || isInternalSystemAccountEmail(user.email)) {
-    redirect("/forgot-password/sent");
-  }
-
-  // Only the newest link should ever work — invalidate anything still
-  // outstanding before issuing a new one, so an old email lying around
-  // (inbox, "sent" history) can't be replayed after a later request.
-  await db.passwordResetToken.updateMany({
-    where: { userId: user.id, usedAt: null },
-    data: { usedAt: new Date() },
-  });
-
-  const token = randomBytes(24).toString("hex");
-  await db.passwordResetToken.create({
-    data: {
-      tokenHash: hashResetToken(token),
-      userId: user.id,
-      expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
-    },
-  });
-
-  const sender = getEmailSender();
-  const resetUrl = `${getAppOrigin()}/reset-password?token=${token}`;
-  await sender.send({
-    to: user.email,
-    subject: "Reset your 0dot.in password",
-    html: renderPasswordResetEmailHtml(resetUrl),
-  });
-
-  // Same account-takeover-token-in-a-URL concern as signup verification
-  // above — only the console stub needs it echoed back on the page.
-  redirect(sender.name === "console-stub" ? `/forgot-password/sent?token=${token}` : "/forgot-password/sent");
-}
-
-export async function resetPassword(
-  _prevState: ActionState,
-  formData: FormData
-): Promise<ActionState> {
-  const token = String(formData.get("token") ?? "");
+  const code = String(formData.get("recoveryCode") ?? "");
   const password = String(formData.get("password") ?? "");
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
+  // Recovery codes are guessable in principle, so this is the brute-force
+  // surface — same pair-of-buckets shape as login(): IP-scoped for spraying,
+  // identifier-scoped for a targeted attack on one account from anywhere.
   const ip = await getClientIp();
-  const ipOk = await enforceRateLimit(`password-reset-confirm:ip:${ip}`, { max: 10, windowMs: 15 * 60 * 1000 });
-  if (!ipOk) {
+  const [ipOk, identifierOk] = await Promise.all([
+    enforceRateLimit(`password-recovery:ip:${ip}`, { max: 10, windowMs: 15 * 60 * 1000 }),
+    enforceRateLimit(`password-recovery:identifier:${identifier}`, { max: 5, windowMs: 15 * 60 * 1000 }),
+  ]);
+  if (!ipOk || !identifierOk) {
     return { error: RATE_LIMIT_ERROR };
   }
 
@@ -476,35 +322,58 @@ export async function resetPassword(
     return { error: "Passwords don't match." };
   }
 
-  const record = await db.passwordResetToken.findUnique({
-    where: { tokenHash: hashResetToken(token) },
-  });
-
-  if (!record || record.usedAt || record.expiresAt < new Date()) {
-    return { error: "This link is invalid or has expired. Request a new one." };
+  // Hashed before the lookup so response time doesn't reveal whether an
+  // email/mobile identifier belongs to an account (same concern as login()'s
+  // DUMMY_HASH).
+  const passwordHash = await bcrypt.hash(password, 12);
+  const user = await findUserByIdentifier(identifier, identifierRaw);
+  const genericError = { error: "That username and recovery code don't match. Check both and try again." };
+  // Internal system accounts must never become loggable-into — treated
+  // identically to a nonexistent account, same as login().
+  if (!user || (user.email && isInternalSystemAccountEmail(user.email)) || user.status !== "active") {
+    return genericError;
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
-  await db.$transaction([
-    db.user.update({ where: { id: record.userId }, data: { passwordHash } }),
-    // Covers this token plus any stragglers requestPasswordReset's own
-    // invalidation missed (e.g. one requested concurrently) in one query.
-    db.passwordResetToken.updateMany({
-      where: { userId: record.userId, usedAt: null },
-      data: { usedAt: new Date() },
-    }),
-    // No session to spare here — the caller isn't authenticated, so every
-    // session (including any a stolen-credential attacker is mid-using)
-    // gets killed, not just this one.
-    db.session.deleteMany({ where: { userId: record.userId } }),
-  ]);
+  const ok = await db.$transaction(async (tx) => {
+    if (!(await consumePasswordRecoveryCode(user.id, code, tx))) return false;
+    await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
+    // No session to spare — the caller isn't authenticated, so every session
+    // (including any a stolen-credential attacker is mid-using) is killed.
+    await tx.session.deleteMany({ where: { userId: user.id } });
+    return true;
+  });
+  if (!ok) return genericError;
 
   // Same reasoning destroySession gives for its own dynamic import: keeps
   // this file from statically depending on push.ts.
   const { clearWebPushTokensForUser } = await import("@/lib/push");
-  await clearWebPushTokensForUser(record.userId);
+  await clearWebPushTokensForUser(user.id);
 
   redirect("/reset-password/success");
+}
+
+export type RecoveryCodesState = { error?: string; codes?: string[] } | undefined;
+
+// Security settings: issue a fresh set of recovery codes (invalidating the
+// old ones). Current-password re-entry, same gate as every other sensitive
+// account change. Returned straight to the form rather than via a cookie —
+// this action doesn't touch the session, so the page doesn't re-render.
+export async function regeneratePasswordRecoveryCodes(
+  _prevState: RecoveryCodesState,
+  formData: FormData
+): Promise<RecoveryCodesState> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
+  const ok = await enforceRateLimit(`recovery-codes:user:${user.id}`, { max: 5, windowMs: 15 * 60 * 1000 });
+  if (!ok) return { error: RATE_LIMIT_ERROR };
+
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    return { error: "Current password is incorrect." };
+  }
+
+  return { codes: await issuePasswordRecoveryCodes(user.id) };
 }
 
 export async function changePassword(
@@ -546,7 +415,7 @@ export async function changePassword(
 
   // Kill every *other* session — standard practice after a credential
   // change, closes the "stolen session survives a password change" gap —
-  // but spare the one making this request, unlike resetPassword's
+  // but spare the one making this request, unlike recoverPassword's
   // kill-everything (there, the caller isn't authenticated at all; here
   // logging the user straight back out after they just saved would be a
   // worse experience for no added security).

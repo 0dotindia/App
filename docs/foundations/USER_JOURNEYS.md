@@ -7,18 +7,18 @@ Legend: **Live** (works today, verified in Chrome), **Planned** (has a phase spe
 ## New user onboarding — Live
 
 1. Visitor lands on `/` → a minimal marketing hero (`MarketingNav` + `DigitalHomeVisual`), not an embedded form. `MarketingNav`'s "Create your 0dot" (or clicking any `DigitalHomeVisual` node) is the only path onward — no signup form on this page anymore (see `INFORMATION_ARCHITECTURE.md`'s `"/"` row; `AuthTabs`/`LandingLiveShowcase` are superseded, see `COMPONENT_LIBRARY.md`).
-2. On `/signup`: fills displayName + username + email + password in one step (no separate "claim username" step — collapsed intentionally to reduce friction). While typing the username, `UsernameField` debounces (~400ms) a call to `checkUsernameAvailability` (`auth.ts`) and shows live checking/available/taken/reserved/invalid/network-error states — a preview only, `signup()` re-validates format and availability itself regardless of what the field reported.
-3. Submits → account + username + profile created in one transaction, verification email sent via **Resend** when `RESEND_API_KEY` is set (falls back to an SMTP relay, then to a console-log stub that also surfaces the link on-screen in dev), redirected to `/verify/sent?token=...`.
-4. Clicks the verification link → `/verify` Route Handler validates token, creates session, redirects to the user's own new profile (`/{username}`) — the "here's your new page" moment, deliberately not `/feed`.
-5. `/verify/sent` has a **resend-verification action** (`resendVerificationEmail`, surfaces send failures) — the "no resend action yet" gap earlier revisions flagged is closed. Real email delivery is live in production; the console-log stub only applies when no provider is configured.
+2. On `/signup` (or the landing page's `AuthTabs`): fills name + username + password — nothing else. No email, phone, or date of birth, and **no email/OTP verification step** (removed 2026-09-26: the platform doesn't send onboarding mail or SMS). While typing the username, `UsernameField` debounces (~400ms) a call to `checkUsernameAvailability` (`auth.ts`) and shows live checking/available/taken/reserved/invalid/network-error states — a preview only, `signup()` re-validates format and availability itself regardless of what the field reported.
+3. Submits → account + username + profile + wallet accounts + 10 password recovery codes created in one transaction, session created immediately, redirected to `/signup/recovery-codes`, which shows the codes once (carried there in a short-lived encrypted httpOnly cookie) and requires "I've saved my recovery codes" before continuing.
+4. Continue → the user's own new profile (`/{username}`) — the "here's your new page" moment, deliberately not `/feed`. `AgeGatePrompt` then asks once for date of birth (unknown DOB = protective restrictions, phase-12 §8.2).
+5. Abuse resistance without email: per-IP/per-handle signup rate limits, the honeypot field, and account-age gates (24h) on coin transfers and referral rewards (`wallet/eligibility.ts`, `wallet/referral.ts`).
 
 ## Log in — Live
 
-1. `/login` → email + password → if the account has TOTP 2FA enabled, `/login/2fa` (6-digit code or a recovery code) before a session is issued → `createSession` → if unverified, `/verify/sent`; if verified, `/feed` (not back to own profile — a returning user wants to see what's new, not their own page every time).
+1. `/login` → username (or email/mobile if the account has one) + password → if the account has TOTP 2FA enabled, `/login/2fa` (6-digit code or a recovery code) before a session is issued → `createSession` → `/feed` (not back to own profile — a returning user wants to see what's new, not their own page every time).
 
 ## Manage account security — Live
 
-`/s/{username}/security` — change password; `/security/sessions` lists active sessions with revoke-one / revoke-all-others; `/security/contact` changes email or phone (verification-gated); `/two-factor` enrolls/disables TOTP and regenerates recovery codes. All mirrored under `/api/v1/account/*` for the mobile app.
+`/s/{username}/security` — change password and regenerate password recovery codes; `/security/sessions` lists active sessions with revoke-one / revoke-all-others; `/security/contact` changes email or phone (verification-gated); `/two-factor` enrolls/disables TOTP and regenerates recovery codes. All mirrored under `/api/v1/account/*` for the mobile app.
 
 ## Log out — Live
 
@@ -34,7 +34,7 @@ Owner-only: `AddLinkForm` appends a link; each link row has up/down reorder butt
 
 ## Publish a post — Live
 
-Logged-in + verified user only (`requireVerifiedUser` guard). Compose box on `/feed` → `createPost` (1–500 chars) → appears at top of `/feed` and on the author's profile Posts section, `#hashtag`/`@mention` tokens styled and linked at render time.
+Logged-in user in good standing (`requireVerifiedUser` guard — name kept, but it no longer requires a verified email). Compose box on `/feed` → `createPost` (1–500 chars) → appears at top of `/feed` and on the author's profile Posts section, `#hashtag`/`@mention` tokens styled and linked at render time.
 
 ## Like / unlike a post — Live
 
@@ -74,4 +74,4 @@ Follow button on another user's profile (`followUser`/`unfollowUser`, `src/app/a
 
 ## Recover a forgotten password — Live
 
-`/forgot-password` → `/forgot-password/sent`, `/reset-password` → `/reset-password/success` (`src/app/actions/auth.ts`). No longer the gap flagged in earlier revisions of this document.
+`/forgot-password`: username + one unused recovery code + new password (`recoverPassword`, `src/app/actions/auth.ts`) → `/reset-password/success`; the code is consumed and every session is revoked. Replaced the emailed reset link on 2026-09-26. If the codes are lost too, an admin issues a fresh set at `/admin/account-recovery` after verifying identity out-of-band.

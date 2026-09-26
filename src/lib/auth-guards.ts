@@ -4,14 +4,17 @@ import { getCurrentUser } from "@/lib/session";
 import { db } from "@/lib/db";
 import { PLATFORM_ROLE_RANK } from "@/lib/platform-roles";
 
-// Shared by every "use server" action file that needs an authenticated,
-// verified user (posts, follow, block, notifications) — extracted once
+// Shared by every "use server" action file that needs a signed-in user in
+// good standing (posts, follow, block, notifications) — extracted once
 // enough call sites needed the identical check that copy-pasting it a
-// third/fourth time would drift.
+// third/fourth time would drift. The name predates dropping email
+// verification from signup (accounts are usable immediately, no email/OTP
+// step); it's kept because ~400 call sites use it. Account standing
+// (suspended/deactivated/deleted) is enforced inside getCurrentUser(), which
+// treats any non-active account as signed out.
 export async function requireVerifiedUser() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (!user.emailVerifiedAt) redirect("/verify/sent");
   return user;
 }
 

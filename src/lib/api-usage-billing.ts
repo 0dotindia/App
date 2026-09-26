@@ -131,7 +131,7 @@ export async function createApiPlanCheckoutSession(params: {
   appId: string;
   plan: "pay_as_you_go" | "committed";
   payerUserId: string;
-  payerEmail: string;
+  payerEmail: string | null;
   successUrl: string;
   cancelUrl: string;
 }): Promise<{ checkoutUrl: string }> {

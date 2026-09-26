@@ -22,18 +22,19 @@ describe("transfer eligibility", () => {
     expect((await getWalletBalance(a.id)).spendableUnits).toBe(1000);
   });
 
-  it("blocks a brand-new account and an unverified account", async () => {
+  it("blocks a brand-new account, but not an established one without a verified email", async () => {
     const fresh = await createUser({ createdAt: new Date() });
-    const unverified = await createUser({ emailVerifiedAt: null });
+    const noEmailVerification = await createUser({ emailVerifiedAt: null });
     const recipient = await createUser();
     await fundWallet(fresh.id, 10, "spendable");
-    await fundWallet(unverified.id, 10, "spendable");
+    await fundWallet(noEmailVerification.id, 10, "spendable");
 
     const r1 = await transferCoinsCore({ fromUserId: fresh.id, toUserId: recipient.id, coins: 1, idempotencyKey: key() });
     expect("error" in r1 && r1.error).toMatch(/new accounts/i);
 
-    const r2 = await transferCoinsCore({ fromUserId: unverified.id, toUserId: recipient.id, coins: 1, idempotencyKey: key() });
-    expect("error" in r2 && r2.error).toMatch(/verify your email/i);
+    // Signup has no email verification step any more — account age is the gate.
+    const r2 = await transferCoinsCore({ fromUserId: noEmailVerification.id, toUserId: recipient.id, coins: 1, idempotencyKey: key() });
+    expect("error" in r2).toBe(false);
   });
 });
 

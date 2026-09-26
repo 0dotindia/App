@@ -44,12 +44,11 @@ export async function POST(request: Request) {
   const user = await db.user.findUnique({
     where: { id: ctx.userId },
     select: {
-      emailVerifiedAt: true,
       username: { select: { handle: true } },
       profile: { select: { displayName: true, avatarUrl: true, isVerified: true } },
     },
   });
-  if (!user?.emailVerifiedAt) return apiError("Your account must have a verified email to post.", 403);
+  if (!user) return apiError("Account not found.", 404);
 
   const isMultipart = (request.headers.get("content-type") ?? "").startsWith("multipart/form-data");
   let body: string;

@@ -81,7 +81,7 @@ async function main() {
 
     const platformName = await prisma.username.findUnique({ where: { handle }, select: { userId: true, user: { select: { email: true, createdAt: true } } } });
     if (!platformName) throw new Error(`No account with handle @${handle}.`);
-    if (platformName.user.email.endsWith(`@${SEED_EMAIL_DOMAIN}`)) throw new Error(`@${handle} is a seeded dot, not the platform account.`);
+    if (platformName.user.email?.endsWith(`@${SEED_EMAIL_DOMAIN}`)) throw new Error(`@${handle} is a seeded dot, not the platform account.`);
     const P = platformName.userId;
 
     const seeded = await prisma.user.findMany({

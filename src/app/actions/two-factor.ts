@@ -33,7 +33,7 @@ export async function startTwoFactorEnrollment(): Promise<{ error: string } | { 
   const secret = generateSecret();
   await db.user.update({ where: { id: user.id }, data: { twoFactorSecret: secret } });
 
-  const { otpauthUrl, qrDataUrl } = await buildEnrollmentUri(secret, user.email);
+  const { otpauthUrl, qrDataUrl } = await buildEnrollmentUri(secret, user.email ?? `@${user.username?.handle ?? user.id}`);
   return { otpauthUrl, qrDataUrl };
 }
 
@@ -156,6 +156,5 @@ export async function verifyLoginTwoFactor(_prevState: ActionState, formData: Fo
   await clearTwoFactorChallenge();
   await createSession(user.id);
 
-  if (!user.emailVerifiedAt) redirect("/verify/sent");
   redirect("/feed");
 }

@@ -33,8 +33,10 @@ is always the bare `0dot.in/yourname`.
 
 ## Getting started (about 10 minutes)
 
-1. **Claim your username.** Sign up at `0dot.in/signup`, verify your email,
-   and pick your handle. Choose carefully — it's your permanent address.
+1. **Claim your username.** Sign up at `0dot.in/signup` with just your name,
+   a handle, and a password — no email or verification code. Choose the
+   handle carefully — it's your permanent address. Save the recovery codes
+   you're shown next: they're how you get back in if you forget your password.
 2. **Set up your profile.** Add an avatar and cover image, write a short bio,
    pick a theme from the curated presets, and link your other social
    accounts.
@@ -235,14 +237,14 @@ Every transaction goes through an auditable ledger. Premium subscribers pay a
 - **Signup grant** — new accounts get a small starter grant (currently 1
   coin), marked *restricted*: non-transferable and it expires after 90 days.
 - **Referral rewards** — invite someone with your referral link (from the
-  Wallet page); once they verify their email and take a real action, **you
+  Wallet page); once their account is a day old and they take a real action, **you
   and they each get 3 coins** (promo bucket, 90-day expiry, with an
   anti-farming cap).
 - **Earning**, not buying — coins come from the signup grant, referrals,
   creator earnings, refunds, and promos. There's no bank top-up yet.
 - **Spending** — today, coins buy a **Premium Profile** subscription.
 - **Transfers** — you can send transferable coins to another user, subject to
-  account-age and verification checks that keep the system from being farmed.
+  account-age checks that keep the system from being farmed.
 
 Every wallet movement is a double-entry ledger transaction you can see in
 your activity list.

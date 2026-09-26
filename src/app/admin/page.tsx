@@ -9,6 +9,7 @@ const SECTIONS = [
   { href: "/admin/businesses", label: "Businesses", description: "Pending business listings awaiting approval." },
   { href: "/admin/payments", label: "Payments", description: "IAP (Apple/Google) payout batches." },
   { href: "/admin/wallet", label: "Wallet", description: "Coin economy overview, issuance audit, and the grant tool." },
+  { href: "/admin/account-recovery", label: "Account recovery", description: "Issue new password recovery codes to a verified user who lost theirs (admin+)." },
   { href: "/admin/platform-roles", label: "Platform roles", description: "Grant/revoke staff access to this admin area (super_admin only)." },
 ];
 

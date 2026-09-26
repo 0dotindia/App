@@ -30,7 +30,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       onBeforeGenerateToken: async (pathname) => {
         const user = await getCurrentUser();
         if (!user) throw new Error("You must be signed in to upload.");
-        if (!user.emailVerifiedAt) throw new Error("Verify your email address to upload images.");
         if (!ALLOWED_PATHNAME.test(pathname)) throw new Error("Invalid upload path.");
         if (
           !(await enforceRateLimit(`post-media-upload:user:${user.id}`, {

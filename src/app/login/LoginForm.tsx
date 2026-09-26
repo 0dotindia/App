@@ -49,7 +49,7 @@ export function LoginForm() {
           <h1>Log in</h1>
 
           <div className="field">
-            <label htmlFor="identifier">Email, username, or mobile number</label>
+            <label htmlFor="identifier">Username, email, or mobile number</label>
             <input
               id="identifier"
               name="identifier"

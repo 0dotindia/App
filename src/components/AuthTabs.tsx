@@ -11,9 +11,9 @@ import { Skeleton } from "./Skeleton";
 // Lazy rather than static imports: this is the landing page's LCP element
 // (the "Create your account" <h1> just below lives in the same tree), and
 // Lighthouse traced ~2.4s of "element render delay" on it — not network, the
-// main thread staying busy parsing/executing/hydrating these three pieces
-// (password-strength scoring, the debounced username-availability checker,
-// and a ~195-entry country list) before the browser got a free slot to paint
+// main thread staying busy parsing/executing/hydrating these pieces
+// (password-strength scoring, the debounced username-availability checker)
+// before the browser got a free slot to paint
 // the already-server-rendered heading. next/dynamic's default ssr:true keeps
 // them in the server HTML (no content flash, nothing lost for no-JS/SEO) but
 // splits their JS into separate chunks behind a Suspense boundary, so
@@ -23,9 +23,6 @@ const PasswordField = dynamic(() => import("./PasswordField").then((m) => m.Pass
 });
 const UsernameField = dynamic(() => import("./UsernameField").then((m) => m.UsernameField), {
   loading: () => <FieldSkeleton />,
-});
-const CountryCodeSelect = dynamic(() => import("./CountryCodeSelect").then((m) => m.CountryCodeSelect), {
-  loading: () => <Skeleton height="2.7rem" width="6rem" style={{ flex: "0 0 auto", display: "block" }} />,
 });
 
 // Matches the label + input shape PasswordField/UsernameField each render
@@ -101,17 +98,6 @@ export function AuthTabs() {
 
             <UsernameField id="username" />
 
-            <div className="field">
-              <label htmlFor="signup-email">Email</label>
-              <input
-                id="signup-email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-              />
-            </div>
-
             <PasswordField
               id="signup-password"
               name="password"
@@ -121,34 +107,6 @@ export function AuthTabs() {
               required
               showStrength
             />
-
-            <div className="field">
-              <label htmlFor="signup-phoneNumber">Mobile number</label>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <CountryCodeSelect />
-                <input
-                  id="signup-phoneNumber"
-                  name="phoneNumber"
-                  type="tel"
-                  inputMode="numeric"
-                  autoComplete="tel-national"
-                  placeholder="9876543210"
-                  style={{ flex: "1 1 0%", minWidth: 0 }}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="field">
-              <label htmlFor="signup-dateOfBirth">Date of birth</label>
-              <input
-                id="signup-dateOfBirth"
-                name="dateOfBirth"
-                type="date"
-                autoComplete="bday"
-                required
-              />
-            </div>
 
             {signupState?.error && (
               <p className="errorText">{signupState.error}</p>
@@ -174,7 +132,7 @@ export function AuthTabs() {
             style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
           >
             <div className="field">
-              <label htmlFor="login-identifier">Email, username, or mobile number</label>
+              <label htmlFor="login-identifier">Username, email, or mobile number</label>
               <input
                 id="login-identifier"
                 name="identifier"

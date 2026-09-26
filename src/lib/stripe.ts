@@ -36,11 +36,13 @@ export const stripe: Stripe = new Proxy({} as Stripe, {
 // Cached on User.stripeCustomerId so a payer reuses one Stripe Customer
 // across every checkout (premium profile, business subscription) instead
 // of Stripe minting a new one per session.
-export async function getOrCreateStripeCustomerId(userId: string, email: string): Promise<string> {
+// `email` is null for accounts created without one (signup no longer asks);
+// Stripe Checkout collects it from the payer in that case.
+export async function getOrCreateStripeCustomerId(userId: string, email: string | null): Promise<string> {
   const user = await db.user.findUniqueOrThrow({ where: { id: userId }, select: { stripeCustomerId: true } });
   if (user.stripeCustomerId) return user.stripeCustomerId;
 
-  const customer = await stripe.customers.create({ email, metadata: { userId } });
+  const customer = await stripe.customers.create({ email: email ?? undefined, metadata: { userId } });
   await db.user.update({ where: { id: userId }, data: { stripeCustomerId: customer.id } });
   return customer.id;
 }

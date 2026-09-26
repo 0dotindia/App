@@ -12,8 +12,8 @@ vi.mock("next/headers", () => ({
     set: (name: string, value: string) => {
       cookieJar.set(name, value);
     },
-    delete: (name: string) => {
-      cookieJar.delete(name);
+    delete: (nameOrOptions: string | { name: string }) => {
+      cookieJar.delete(typeof nameOrOptions === "string" ? nameOrOptions : nameOrOptions.name);
     },
   }),
   headers: async () => ({

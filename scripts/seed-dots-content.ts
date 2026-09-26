@@ -359,7 +359,7 @@ async function main() {
     let dotLikes = 0;
     let dotComments = 0;
     let dotSubs = 0;
-    if (platform && !platform.user.email.endsWith(`@${SEED_EMAIL_DOMAIN}`)) {
+    if (platform && platform.user.email && !platform.user.email.endsWith(`@${SEED_EMAIL_DOMAIN}`)) {
       const P = platform.userId;
       const [likedBefore, commentedBefore] = await Promise.all([
         prisma.reaction.count({ where: { userId: P, subjectType: "article" } }),

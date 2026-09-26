@@ -164,26 +164,6 @@ function renderActionEmail(params: { heading: string; bodyHtml: string; ctaLabel
 </html>`;
 }
 
-export function renderVerifyEmailHtml(verifyUrl: string): string {
-  return renderActionEmail({
-    heading: "Verify your email",
-    bodyHtml: "Confirm this address to finish setting up your 0dot.in account.",
-    ctaLabel: "Verify email",
-    ctaUrl: verifyUrl,
-    footnote: "This link expires in 24 hours. If you didn't create a 0dot.in account, you can ignore this email.",
-  });
-}
-
-export function renderPasswordResetEmailHtml(resetUrl: string): string {
-  return renderActionEmail({
-    heading: "Reset your password",
-    bodyHtml: "We got a request to reset the password on your 0dot.in account.",
-    ctaLabel: "Reset password",
-    ctaUrl: resetUrl,
-    footnote: "This link expires in 1 hour. If you didn't request this, you can ignore this email — your password won't change.",
-  });
-}
-
 export function renderEmailChangeEmailHtml(confirmUrl: string): string {
   return renderActionEmail({
     heading: "Confirm your new email",
@@ -204,9 +184,10 @@ export function renderEmailChangeEmailHtml(confirmUrl: string): string {
 // check below and the settings page's toggle list
 // (notifications/page.tsx), so the two can't drift apart.
 //
-// Deliberately empty: email is reserved for account-critical mail only
-// (signup verification, password reset, email-change confirmation —
-// signup(), resendVerificationEmail(), requestPasswordReset() below).
+// Deliberately empty: email is reserved for account-critical mail only —
+// today just the optional email-change confirmation (account-contact.ts).
+// Signup verification and emailed password-reset links were removed when
+// signup dropped its email/OTP step (recovery codes replace the latter).
 // Every in-app notification type (message, new_follower, tip_received,
 // etc.) still gets push/in-app delivery via notifications.ts; it never
 // bought a Resend send. Re-enable a type here only for something that
@@ -238,7 +219,10 @@ export async function dispatchEmailEvent(args: { recipientId: string; type: stri
     if (pref && !pref.enabled) return;
 
     const recipient = await db.user.findUnique({ where: { id: args.recipientId }, select: { email: true, emailVerifiedAt: true } });
-    if (!recipient || !recipient.emailVerifiedAt) return; // unverified addresses never receive mail, same posture as every other outbound sender in this codebase
+    // Accounts created without an email have nothing to send to; unverified
+    // addresses never receive mail either, same posture as every other
+    // outbound sender in this codebase.
+    if (!recipient?.email || !recipient.emailVerifiedAt) return;
 
     const { getNotificationVerb } = await import("@/lib/notifications");
     const verb = getNotificationVerb(args.type, args.subjectType, args.subjectId);

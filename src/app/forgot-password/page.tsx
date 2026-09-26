@@ -2,11 +2,12 @@
 
 import { useActionState } from "react";
 import Link from "next/link";
-import { requestPasswordReset } from "@/app/actions/auth";
+import { recoverPassword } from "@/app/actions/auth";
 import { ThemeToggleLogo } from "@/components/ThemeToggleLogo";
+import { PasswordField } from "@/components/PasswordField";
 
 export default function ForgotPasswordPage() {
-  const [state, formAction, pending] = useActionState(requestPasswordReset, undefined);
+  const [state, formAction, pending] = useActionState(recoverPassword, undefined);
 
   return (
     <div className="authWrap">
@@ -17,19 +18,58 @@ export default function ForgotPasswordPage() {
         </div>
         <h1>Forgot password</h1>
         <p className="mutedText">
-          Enter the email or mobile number on your account and we&apos;ll send a reset link to your registered email.
+          Enter your username and one of the recovery codes you saved when you signed up, then
+          choose a new password.
         </p>
 
         <div className="field">
-          <label htmlFor="identifier">Email or mobile number</label>
+          <label htmlFor="identifier">Username</label>
           <input id="identifier" name="identifier" type="text" autoComplete="username" required />
         </div>
+
+        <div className="field">
+          <label htmlFor="recoveryCode">Recovery code</label>
+          <input
+            id="recoveryCode"
+            name="recoveryCode"
+            type="text"
+            autoComplete="one-time-code"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="xxxx-xxxx-xxxx"
+            required
+          />
+        </div>
+
+        <PasswordField
+          id="password"
+          name="password"
+          label="New password"
+          autoComplete="new-password"
+          minLength={8}
+          required
+          showStrength
+        />
+
+        <PasswordField
+          id="confirmPassword"
+          name="confirmPassword"
+          label="Confirm new password"
+          autoComplete="new-password"
+          minLength={8}
+          required
+        />
 
         {state?.error && <p className="errorText">{state.error}</p>}
 
         <button type="submit" className="button" disabled={pending}>
-          {pending ? "Sending…" : "Send reset link"}
+          {pending ? "Resetting…" : "Reset password"}
         </button>
+
+        <p className="mutedText" style={{ fontSize: "0.8rem" }}>
+          Lost your recovery codes too? Contact 0dot support — after confirming it&apos;s your
+          account, they can issue you a new set.
+        </p>
 
         <p className="authFooter">
           <Link href="/login">Back to log in</Link>

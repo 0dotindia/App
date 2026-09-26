@@ -53,7 +53,7 @@ export interface PaymentProcessor {
   // (see src/lib/stripe-connect-countries.ts) — Accounts v2 requires
   // identity.country before it will let a create call request the recipient
   // configuration's stripe_transfers capability.
-  createPayoutAccount(entity: { id: string; email: string; country: string }): Promise<{
+  createPayoutAccount(entity: { id: string; email: string | null; country: string }): Promise<{
     processorAccountId: string;
     status: PayoutAccountStatus;
   }>;
@@ -68,7 +68,7 @@ export interface PaymentProcessor {
     amount: number;
     currency: string;
     payerId: string;
-    payerEmail: string;
+    payerEmail: string | null;
     payeeProcessorAccountId: string;
     applicationFeeAmount: number;
     description: string;
@@ -85,7 +85,7 @@ export interface PaymentProcessor {
     currency: string;
     billingInterval: string;
     payerId: string;
-    payerEmail: string;
+    payerEmail: string | null;
     payeeProcessorAccountId: string;
     applicationFeePercent: number;
     description: string;
@@ -105,9 +105,9 @@ export interface PaymentProcessor {
 class StripeConnectPaymentProcessor implements PaymentProcessor {
   readonly name = "stripe_connect";
 
-  async createPayoutAccount(entity: { id: string; email: string; country: string }) {
+  async createPayoutAccount(entity: { id: string; email: string | null; country: string }) {
     const account = await stripe.v2.core.accounts.create({
-      contact_email: entity.email,
+      contact_email: entity.email ?? undefined,
       dashboard: "express",
       identity: { country: entity.country },
       defaults: {
@@ -142,7 +142,7 @@ class StripeConnectPaymentProcessor implements PaymentProcessor {
     amount: number;
     currency: string;
     payerId: string;
-    payerEmail: string;
+    payerEmail: string | null;
     payeeProcessorAccountId: string;
     applicationFeeAmount: number;
     description: string;
@@ -185,7 +185,7 @@ class StripeConnectPaymentProcessor implements PaymentProcessor {
     currency: string;
     billingInterval: string;
     payerId: string;
-    payerEmail: string;
+    payerEmail: string | null;
     payeeProcessorAccountId: string;
     applicationFeePercent: number;
     description: string;
