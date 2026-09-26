@@ -37,6 +37,23 @@ export async function cleanupSeedWallet(prisma: PrismaClient, domain = SEED_EMAI
   const seedSet = new Set(seedAccounts);
   const touching = await prisma.ledgerPosting.findMany({ where: { accountId: { in: seedAccounts } }, select: { transactionId: true }, distinct: ["transactionId"] });
   const txIds = touching.map((t) => t.transactionId);
+  // A coin escrow is two transactions: the hold (payer → system_escrow) touches the seeded payer, but
+  // its hold_capture (escrow → payee + fee) may touch only non-seed/system accounts (e.g. a seeded dot
+  // buying @dot's coin ticket). Reverse the pair together, or escrow would be left short and the
+  // payee would keep coins whose source was deleted (seed-dots-event-extras.ts creates these).
+  const holdIds: string[] = [];
+  for (let i = 0; i < txIds.length; i += 500) {
+    holdIds.push(...(await prisma.ledgerHold.findMany({ where: { transactionId: { in: txIds.slice(i, i + 500) } }, select: { id: true } })).map((h) => h.id));
+  }
+  const txSet = new Set(txIds);
+  for (let i = 0; i < holdIds.length; i += 500) {
+    const captures = await prisma.ledgerTransaction.findMany({ where: { kind: { in: ["hold_capture", "hold_release"] }, relatedObjectId: { in: holdIds.slice(i, i + 500) } }, select: { id: true } });
+    for (const c of captures) {
+      if (txSet.has(c.id)) continue;
+      txSet.add(c.id);
+      txIds.push(c.id);
+    }
+  }
   for (let i = 0; i < txIds.length; i += 500) {
     const part = txIds.slice(i, i + 500);
     const others = (await prisma.ledgerPosting.findMany({ where: { transactionId: { in: part } }, select: { accountId: true, amount: true } })).filter((p) => !seedSet.has(p.accountId));
@@ -46,8 +63,10 @@ export async function cleanupSeedWallet(prisma: PrismaClient, domain = SEED_EMAI
     const ptIds = (await prisma.ledgerTransaction.findMany({ where: { id: { in: part }, paymentTransactionId: { not: null } }, select: { paymentTransactionId: true } })).map((t) => t.paymentTransactionId!);
     if (ptIds.length) {
       await prisma.tip.deleteMany({ where: { paymentTransactionId: { in: ptIds } } });
+      await prisma.ticket.deleteMany({ where: { paymentTransactionId: { in: ptIds } } }); // coin-paid tickets (Restrict FK)
       await prisma.paymentTransaction.deleteMany({ where: { id: { in: ptIds } } });
     }
+    await prisma.ledgerHold.deleteMany({ where: { transactionId: { in: part } } }); // Restrict FK on the hold's transaction
     await prisma.ledgerPosting.deleteMany({ where: { transactionId: { in: part } } });
     await prisma.ledgerTransaction.deleteMany({ where: { id: { in: part } } });
   }
