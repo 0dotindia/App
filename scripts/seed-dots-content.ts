@@ -9,6 +9,11 @@ import { PEOPLE, type RoleKey } from "./seed-dots-data";
 import { ARTICLES, ARTICLE_COMMENTS, BOOKS, CHAT_LINES, COMMUNITY_WIKI, NEWSLETTERS, WIKI, articleBody } from "./seed-dots-content-data";
 import { COURSES, FILES, LIVESTREAMS, PODCASTS } from "./seed-dots-media-data";
 
+// Source prices are written in INR; every price is a coin price now
+// (addendum-wallet-only-payments.md §4.1), converted at ₹100 = 1 coin —
+// the same rate as the convert_inr_prices_to_coins migration.
+const inrToCoins = (inr: number): number => Math.round(inr) / 100;
+
 // Fills the Content section for the seeded dots (seed-dots.ts): articles/tutorials/notes for
 // all 99 (with tags, likes, comments), books with chapters, profile and community wiki pages,
 // newsletters with sent issues and subscribers, courses (text lessons, learners, progress,
@@ -259,7 +264,7 @@ async function main() {
           const createdAt = createdAfter(creator, [5, 30]);
           const course = await prisma.course.create({
             data: {
-              creatorId: creator.id, title: t.title, description: t.description, price: t.price, currency: "INR", status: "active", createdAt,
+              creatorId: creator.id, title: t.title, description: t.description, price: inrToCoins(t.price), currency: "usd", status: "active", createdAt,
               modules: { create: t.modules.map(([title, lessons], mi) => ({ title, position: mi, lessons: { create: lessons.map(([lt, body], li) => ({ title: lt, position: li, contentType: "text", body })) } })) },
             },
             select: { id: true, modules: { select: { lessons: { select: { id: true } } } } },

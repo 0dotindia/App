@@ -9,6 +9,11 @@ import { PEOPLE, type RoleKey } from "./seed-dots-data";
 import { BUSINESSES } from "./seed-dots-orgs-data";
 import { COVER_NOTES, EVENTS, EVENT_CITY_COORDS, JOBS, VENUES, type EventT } from "./seed-dots-jobs-events-data";
 
+// Source prices are written in INR; every price is a coin price now
+// (addendum-wallet-only-payments.md §4.1), converted at ₹100 = 1 coin —
+// the same rate as the convert_inr_prices_to_coins migration.
+const inrToCoins = (inr: number): number => Math.round(inr) / 100;
+
 // Jobs and Events for the seeded dots (seed-dots.ts) and the platform account (@dot):
 //   Jobs   - 3-4 openings per seeded business (+2 for @dot's business), applications from dots
 //            (submitted/reviewed/rejected/hired, with notifications both ways), job alerts and
@@ -298,9 +303,10 @@ async function main() {
         attendeeListVisibility: e.visibility ?? (chance(0.7) ? "public" : "attendees_only"), createdAt, updatedAt: createdAt,
       });
       // ---- ticket types ----
-      const typeIds = e.tickets.map(([name, price, total]) => {
+      const typeIds = e.tickets.map(([name, inrPrice, total]) => {
         const tid = randomUUID();
-        ticketTypeRows.push({ id: tid, eventId: id, name, price, currency: price === null ? null : "INR", quantityTotal: total, quantitySold: 0, salesStartAt: createdAt, salesEndAt: startsAt, createdAt });
+        const price = inrPrice === null ? null : inrToCoins(inrPrice);
+        ticketTypeRows.push({ id: tid, eventId: id, name, price, currency: price === null ? null : "usd", quantityTotal: total, quantitySold: 0, salesStartAt: createdAt, salesEndAt: startsAt, createdAt });
         return { id: tid, price, total, sold: 0 };
       });
       const paid = typeIds.some((t) => t.price !== null);
@@ -357,7 +363,7 @@ async function main() {
     for (const part of chunk(rsvpRows, 500)) await prisma.eventRSVP.createMany({ data: part });
     for (const part of chunk(ptRows, 400)) {
       await prisma.paymentTransaction.createMany({
-        data: part.map((p) => ({ id: p.id, kind: "ticket_purchase", payerId: p.payerId, payeeId: p.payeeId, payeeBusinessId: p.payeeBusinessId, amount: p.amount, currency: "inr", platformFee: p.platformFee, processor: "stripe_connect", processorReference: p.ref, status: p.status, relatedObjectType: "ticket", relatedObjectId: p.ticketId, createdAt: p.createdAt })),
+        data: part.map((p) => ({ id: p.id, kind: "ticket_purchase", payerId: p.payerId, payeeId: p.payeeId, payeeBusinessId: p.payeeBusinessId, amount: p.amount, currency: "usd", platformFee: p.platformFee, processor: "stripe_connect", processorReference: p.ref, status: p.status, relatedObjectType: "ticket", relatedObjectId: p.ticketId, createdAt: p.createdAt })),
       });
     }
     for (const part of chunk(ticketRows, 400)) await prisma.ticket.createMany({ data: part.map((t) => ({ id: t.id, ticketTypeId: t.ticketTypeId, ownerId: t.ownerId, paymentTransactionId: t.ptId, status: t.status, qrCodeToken: t.qr, checkedInAt: t.checkedInAt, createdAt: t.createdAt })) });

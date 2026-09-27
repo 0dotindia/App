@@ -389,7 +389,7 @@ async function main() {
         for (const buyer of buyers) {
           const quantity = o.kind === "product" ? between(1, 3) : 1;
           const at = when(buyer, owner, 60, 0);
-          const row = pay({ kind: "business_purchase", payer: buyer.id, business: b.id, amount: round2((o.price ?? 0) * quantity), currency: (o.currency ?? "INR").toLowerCase(), related: ["offering", o.id], at });
+          const row = pay({ kind: "business_purchase", payer: buyer.id, business: b.id, amount: round2((o.price ?? 0) * quantity), currency: (o.currency ?? "usd").toLowerCase(), related: ["offering", o.id], at });
           offeringPurchaseRows.push({ offeringId: o.id, buyerId: buyer.id, ptId: row.id, status: chance(0.8) ? "fulfilled" : "pending", quantity, at });
         }
       }
