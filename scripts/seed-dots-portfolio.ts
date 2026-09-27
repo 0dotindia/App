@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import { mkdirSync, writeFileSync } from "fs";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";

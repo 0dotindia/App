@@ -4,7 +4,6 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { PALETTES, avatarSvg, coverSvg } from "./seed-dots-art";
 import { SEED_EMAIL_DOMAIN, recountNonSeed } from "./seed-dots-cleanup";
-import { REPLIES } from "./seed-dots-data";
 import { REVIEW_BODIES, REVIEW_RESPONSES } from "./seed-dots-orgs-data";
 
 // Makes the platform account (@dot by default) part of the communities and

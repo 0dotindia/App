@@ -31,7 +31,6 @@ try {
 }
 
 const DAY = 24 * 60 * 60 * 1000;
-const HOUR = 60 * 60 * 1000;
 const COIN = 100; // minor units per coin
 const SYSTEM = {
   revenue: "00000000-0000-4000-8000-000000000001",
@@ -92,7 +91,6 @@ async function main() {
     type U = { id: string; handle: string; createdAt: number; pop: number };
     const dotUser: U = { id: P, handle, createdAt: platformName.user.createdAt.getTime(), pop: 99 };
     const people: U[] = [dotUser, ...seeded.map((u) => ({ id: u.id, handle: u.username!.handle, createdAt: u.createdAt.getTime(), pop: (u.profile?.followerCount ?? 0) + 1 }))];
-    const byId = new Map(people.map((u) => [u.id, u]));
 
     // ---------- accounts ----------
     const haveAcct = new Set((await prisma.ledgerAccount.findMany({ where: { ownerUserId: { in: people.map((u) => u.id) }, type: { in: ["user_wallet", "user_promo"] } }, select: { type: true, ownerUserId: true } })).map((a) => `${a.type}:${a.ownerUserId}`));

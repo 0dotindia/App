@@ -4,7 +4,6 @@ import { mkdirSync, writeFileSync } from "fs";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { validateUsernameFormat } from "../src/lib/reserved-usernames";
-import { PALETTES, avatarSvg, coverSvg } from "./seed-dots-art";
 import { coverArtSvg, portraitSvg } from "./seed-dots-portrait-art";
 import { cleanupBeforeSeedDelete, recountNonSeed } from "./seed-dots-cleanup";
 import { PEOPLE, ROLES, GENERIC_POSTS, REPLIES, DM_SCRIPTS, type RoleKey } from "./seed-dots-data";
@@ -157,8 +156,7 @@ async function main() {
         ? `${title[0].toUpperCase()}${title.slice(1)}, freelance · 📍 ${city}. ${pick(persona.taglines)}`
         : `${employer} · 📍 ${city}. ${pick(persona.taglines)}`;
 
-      const palette = PALETTES[(i * 5 + int(3)) % PALETTES.length];
-      const initials = `${first[0]}${last[0]}`.toUpperCase();
+      int(3); // formerly picked an unused palette — kept so the seeded RNG sequence (and output) is unchanged
       writeFileSync(`public/uploads/dot-${handle}.svg`, portraitSvg(gender, i + 1));
       writeFileSync(
         `public/uploads/dot-${handle}-cover.svg`,

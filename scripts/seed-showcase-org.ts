@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "crypto";
 import { mkdirSync, writeFileSync } from "fs";
 import {
-  DAY, HOUR, MIN, SHOWCASE_HANDLE, SCALE_COLORS, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, ringsCoverSvg, round2, type NotifRow,
+  DAY, HOUR, MIN, SCALE_COLORS, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, ringsCoverSvg, round2, type NotifRow,
 } from "./seed-showcase-common";
 import { SCALES } from "./seed-showcase-data";
 import { APPLICATION_NOTES, BUSINESS, BUSINESS_FORM, CAMPAIGNS, COMMUNITY, DOC_FILES, EVENTS, JOBS, TEAM_TITLES } from "./seed-showcase-org-data";
