@@ -39,7 +39,7 @@ describe("coin marketplace purchase", () => {
     await loginAs(buyer.id);
     const listing = await createListing({ sellerUserId: seller.id });
 
-    const first = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id, payWith: "coins" }));
+    const first = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id }));
     expect(first?.success).toBe(true);
 
     const purchases = await db.marketplacePurchase.findMany({ where: { listingId: listing.id } });
@@ -53,7 +53,7 @@ describe("coin marketplace purchase", () => {
     expect((await getWalletBalance(seller.id)).spendableUnits).toBe(900); // 10 − 10% fee
     expect((await getWalletBalance(buyer.id)).spendableUnits).toBe(4000);
 
-    const second = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id, payWith: "coins" }));
+    const second = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id }));
     expect(second?.error).toMatch(/already own/i);
     expect((await getWalletBalance(buyer.id)).spendableUnits).toBe(4000);
 
@@ -68,7 +68,7 @@ describe("coin marketplace purchase", () => {
     await loginAs(buyer.id);
     const listing = await createListing({ sellerBusinessId: business.id }, 20);
 
-    const result = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id, payWith: "coins" }));
+    const result = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id }));
     expect(result?.success).toBe(true);
     expect((await getBusinessWalletBalance(business.id)).spendableUnits).toBe(1800);
     expect((await getWalletBalance(buyer.id)).spendableUnits).toBe(0);
@@ -81,14 +81,14 @@ describe("coin marketplace purchase", () => {
     await loginAs(buyer.id);
     const listing = await createListing({ sellerUserId: seller.id });
 
-    const result = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id, payWith: "coins" }));
+    const result = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id }));
     expect(result?.error).toMatch(/enough coins/i);
     expect(await db.marketplacePurchase.findMany({ where: { listingId: listing.id } })).toHaveLength(0);
     expect((await getWalletBalance(buyer.id)).spendableUnits).toBe(500);
 
     // The failed attempt must not consume the deterministic idempotency key.
     await fundWallet(buyer.id, 5, "spendable");
-    const retry = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id, payWith: "coins" }));
+    const retry = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id }));
     expect(retry?.success).toBe(true);
     expect(await db.marketplacePurchase.findMany({ where: { listingId: listing.id } })).toHaveLength(1);
   });
@@ -99,7 +99,7 @@ describe("coin marketplace purchase", () => {
     await loginAs(seller.id);
     const listing = await createListing({ sellerUserId: seller.id });
 
-    const result = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id, payWith: "coins" }));
+    const result = await purchaseMarketplaceListing(undefined, fd({ listingId: listing.id }));
     expect(result?.error).toMatch(/own listing/i);
   });
 });

@@ -174,7 +174,7 @@ async function main() {
       });
       const repliers = shuffle(audience).slice(0, between(4, 8));
       const hallReplies: PostRow[] = repliers.map((s, i) => ({ id: randomUUID(), authorId: s.id, body: HALL_REPLIES[(i + int(3)) % HALL_REPLIES.length], createdAt: after(createdAt.getTime(), 3), communityId: hall!.id, replyToId: id }));
-      let replyCount = hallReplies.length;
+      const replyCount = hallReplies.length;
       hallReplies.forEach((r) => notifs.push({ recipientId: P, actorId: r.authorId, type: "comment", subjectType: "post", subjectId: id, createdAt: r.createdAt, readAt: readMaybe(r.createdAt, true) }));
       for (const r of hallReplies) {
         if (!chance(0.5)) continue;

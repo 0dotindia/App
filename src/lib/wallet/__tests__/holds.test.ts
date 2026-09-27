@@ -93,7 +93,7 @@ describe("event ticket — coin path (placeHold → captureHold)", () => {
       data: { eventId: event.id, name: "GA", price: 10, currency: "usd", quantityTotal: 5 },
     });
 
-    const result = await purchaseTicket(undefined, fd({ ticketTypeId: tt.id, payWith: "coins" }));
+    const result = await purchaseTicket(undefined, fd({ ticketTypeId: tt.id }));
     expect(result).toBeUndefined(); // success path returns undefined
 
     const tickets = await db.ticket.findMany({ where: { ticketTypeId: tt.id } });
@@ -124,7 +124,7 @@ describe("event ticket — coin path (placeHold → captureHold)", () => {
     });
     const tt = await db.ticketType.create({ data: { eventId: event.id, name: "GA", price: 10, currency: "usd" } });
 
-    const result = await purchaseTicket(undefined, fd({ ticketTypeId: tt.id, payWith: "coins" }));
+    const result = await purchaseTicket(undefined, fd({ ticketTypeId: tt.id }));
     expect(result?.error).toMatch(/enough coins/i);
     expect(await db.ticket.findMany({ where: { ticketTypeId: tt.id } })).toHaveLength(0);
   });
@@ -141,7 +141,7 @@ describe("membership — first period in coins", () => {
       data: { creatorId: creator.id, name: "Supporter", level: 1, price: 6, currency: "usd", billingInterval: "monthly", status: "active" },
     });
 
-    const result = await subscribeToTier(undefined, fd({ tierId: tier.id, payWith: "coins" }));
+    const result = await subscribeToTier(undefined, fd({ tierId: tier.id }));
     expect(result?.success).toBe(true);
 
     const sub = await db.membershipSubscription.findFirstOrThrow({ where: { tierId: tier.id, fanId: fan.id } });

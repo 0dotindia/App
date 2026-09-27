@@ -34,6 +34,7 @@ export default async function BusinessWalletPage({ params }: { params: Promise<{
     getActiveBusinessSubscription(business.id),
     db.contactMessage.count({ where: { businessId: business.id, status: "new" } }),
   ]);
+  const renewal = subscription ? describeRenewal(subscription) : null;
 
   return (
     <div className="profileCard">
@@ -59,10 +60,10 @@ export default async function BusinessWalletPage({ params }: { params: Promise<{
       </p>
 
       <p className="sectionHeading">Subscription</p>
-      {subscription ? (
+      {renewal ? (
         <p className="mutedText" style={{ fontSize: "0.9rem" }}>
-          {RENEWAL_PREFIX[describeRenewal(subscription).kind]}
-          {describeRenewal(subscription).date.toLocaleDateString()}.
+          {RENEWAL_PREFIX[renewal.kind]}
+          {renewal.date.toLocaleDateString()}.
         </p>
       ) : canSpend ? (
         <BusinessSubscribeWithCoinsForm businessId={business.id} prices={PLAN_PRICES.business_subscription} />

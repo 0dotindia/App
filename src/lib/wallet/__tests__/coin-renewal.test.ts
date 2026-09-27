@@ -189,7 +189,7 @@ describe("coin membership auto-renew", () => {
     const tier = await db.membershipTier.create({
       data: { creatorId: creator.id, name: "Supporter", level: 1, price: 6, currency: "usd", billingInterval: "monthly", status: "active" },
     });
-    expect((await subscribeToTier(undefined, fd({ tierId: tier.id, payWith: "coins" })))?.success).toBe(true);
+    expect((await subscribeToTier(undefined, fd({ tierId: tier.id })))?.success).toBe(true);
     const sub = await db.membershipSubscription.findFirstOrThrow({ where: { tierId: tier.id, fanId: fan.id } });
     return { fan, creator, tier, sub };
   }

@@ -250,7 +250,7 @@ export async function purchaseOffering(_prevState: ActionState, formData: FormDa
   // Revenue lands in the seller's user wallet, or — for a business-owned
   // offering — the business wallet (§6.5). No payout account required (§6.4).
   if (!offering.businessId && !offering.sellerUserId) {
-    return { error: "This offering can't be bought with coins." };
+    return { error: "This offering isn't available for purchase." };
   }
   if (offering.sellerUserId === user.id) return { error: "You can't buy your own offering." };
   const coinAmount = Math.round(offering.price * quantity * 100) / 100;

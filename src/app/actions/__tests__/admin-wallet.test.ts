@@ -81,7 +81,7 @@ describe("refundPaymentAction", () => {
     const creator = await createUser();
     await fundWallet(tipper.id, 10, "spendable");
     await loginAs(tipper.id);
-    await sendTip(undefined, fd({ creatorHandle: creator.username!.handle, amount: "5", message: "", payWith: "coins" }));
+    await sendTip(undefined, fd({ creatorHandle: creator.username!.handle, amount: "5", message: "" }));
     const pt = await db.paymentTransaction.findFirstOrThrow({ where: { payerId: tipper.id, kind: "tip" } });
     return { tipper, creator, pt };
   }
