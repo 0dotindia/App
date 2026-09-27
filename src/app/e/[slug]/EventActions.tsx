@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { rsvpToEvent, purchaseTicket } from "@/app/actions/events";
 import { IdempotencyField } from "@/components/IdempotencyField";
+import { formatCoins } from "@/lib/coins";
 
 type TicketType = {
   id: string;
@@ -49,7 +50,7 @@ function TicketPurchaseRow({ ticketType, viewerCoins }: { ticketType: TicketType
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontWeight: 600 }}>{ticketType.name}</span>
         <span className="mutedText" style={{ fontSize: "0.85rem" }}>
-          {ticketType.price === null ? "Free" : `${ticketType.price} coins`}
+          {ticketType.price === null ? "Free" : formatCoins(ticketType.price)}
         </span>
       </div>
       {ticketType.quantityTotal !== null && (
@@ -66,12 +67,12 @@ function TicketPurchaseRow({ ticketType, viewerCoins }: { ticketType: TicketType
           disabled={pending || soldOut || (ticketType.price !== null && !canAffordCoins)}
           style={{ fontSize: "0.85rem" }}
         >
-          {soldOut ? "Sold out" : pending ? "Purchasing…" : ticketType.price === null ? "Get free ticket" : `Buy ticket — ${ticketType.price} coins`}
+          {soldOut ? "Sold out" : pending ? "Purchasing…" : ticketType.price === null ? "Get free ticket" : `Buy ticket — ${formatCoins(ticketType.price)}`}
         </button>
       </form>
       {state?.error && <p className="errorText">{state.error}</p>}
       {ticketType.price !== null && !soldOut && !canAffordCoins && (
-        <p className="mutedText" style={{ fontSize: "0.75rem" }}>You have {viewerCoins} of {ticketType.price} coins.</p>
+        <p className="mutedText" style={{ fontSize: "0.75rem" }}>You have {formatCoins(viewerCoins)} of {formatCoins(ticketType.price)}.</p>
       )}
     </div>
   );

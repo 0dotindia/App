@@ -3,6 +3,7 @@ import { requirePlatformRole } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { EmptyState } from "@/components/EmptyState";
 import { RefundPaymentForm } from "./RefundPaymentForm";
+import { formatCoins } from "@/lib/coins";
 
 // addendum-wallet-only-payments.md §3.6: refund a coin payment back to the
 // payer's wallet. Lists recent coin payments, optionally narrowed to one
@@ -52,7 +53,7 @@ export default async function AdminRefundsPage({ searchParams }: { searchParams:
           return (
             <div key={pt.id} className="profileLinkItem" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.35rem" }}>
               <span>
-                <strong>{pt.amount} coins</strong> · {pt.kind} · {pt.payer?.username ? `@${pt.payer.username.handle}` : "deleted user"} → {payee}
+                <strong>{formatCoins(pt.amount)}</strong> · {pt.kind} · {pt.payer?.username ? `@${pt.payer.username.handle}` : "deleted user"} → {payee}
               </span>
               <span className="mutedText" style={{ fontSize: "0.8rem" }}>
                 {pt.createdAt.toLocaleString()} · {pt.status}

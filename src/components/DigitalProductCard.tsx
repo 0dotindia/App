@@ -3,6 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import { purchaseProduct, requestDownloadUrl } from "@/app/actions/digital-products";
 import { renderWikiMarkdown } from "@/lib/wiki-markdown";
+import { formatCoins } from "@/lib/coins";
 
 // spec §5: buy form for a non-owner, or a "Download" trigger for a buyer —
 // same useActionState pattern as SubscribeForm.tsx for the purchase side.
@@ -64,11 +65,11 @@ export function DigitalProductCard({
               className="button buttonSmall"
               disabled={pending || viewerCoins < product.price}
             >
-              {pending ? "Buying…" : `${product.price} coins`}
+              {pending ? "Buying…" : formatCoins(product.price)}
             </button>
           </div>
           {viewerCoins < product.price && (
-            <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>You have {viewerCoins} of {product.price} coins.</p>
+            <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>You have {formatCoins(viewerCoins)} of {formatCoins(product.price)}.</p>
           )}
         </form>
       )}

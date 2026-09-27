@@ -32,7 +32,7 @@ export function SubscribeForm({
       </button>
       {!canAffordCoins && (
         <p className="mutedText" style={{ margin: "0.2rem 0", width: "100%", fontSize: "0.8rem" }}>
-          You have {viewerCoins} of {tier.price} coins.
+          You have {formatCoins(viewerCoins)} of {formatCoins(tier.price)}.
         </p>
       )}
     </form>

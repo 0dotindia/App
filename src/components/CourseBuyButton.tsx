@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { purchaseCourse } from "@/app/actions/courses";
+import { formatCoins } from "@/lib/coins";
 
 export function CourseBuyButton({
   courseId,
@@ -25,11 +26,11 @@ export function CourseBuyButton({
           className="button"
           disabled={pending || viewerCoins < price}
         >
-          {pending ? "Buying…" : `${price} coins`}
+          {pending ? "Buying…" : formatCoins(price)}
         </button>
       </div>
       {viewerCoins < price && (
-        <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>You have {viewerCoins} of {price} coins.</p>
+        <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>You have {formatCoins(viewerCoins)} of {formatCoins(price)}.</p>
       )}
     </form>
   );

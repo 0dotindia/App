@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { purchaseMarketplaceListing } from "@/app/actions/marketplace";
+import { formatCoins } from "@/lib/coins";
 
 // spec §4.3/§5.1: nullable price means free — purchaseMarketplaceListing
 // skips the payment backbone entirely for those, same nullable-price-means-
@@ -35,11 +36,11 @@ export function MarketplacePurchaseButton({
               className="button buttonSmall"
               disabled={pending || viewerCoins < price}
             >
-              {pending ? "Buying…" : `${price} coins`}
+              {pending ? "Buying…" : formatCoins(price)}
             </button>
           </div>
           {viewerCoins < price && (
-            <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>You have {viewerCoins} of {price} coins.</p>
+            <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>You have {formatCoins(viewerCoins)} of {formatCoins(price)}.</p>
           )}
         </>
       )}

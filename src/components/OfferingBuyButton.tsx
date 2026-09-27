@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { purchaseOffering } from "@/app/actions/offerings";
 import { IdempotencyField } from "@/components/IdempotencyField";
+import { formatCoins } from "@/lib/coins";
 
 // phase-9 spec §3.1: native in-app checkout for a priced Offering. The coin
 // rail (addendum-coin-wallet-v2.md §6.4) needs no seller payout account, so
@@ -31,11 +32,11 @@ export function OfferingBuyButton({
           className="button buttonSmall"
           disabled={pending || viewerCoins < price}
         >
-          {pending ? "Buying…" : `${price} coins`}
+          {pending ? "Buying…" : formatCoins(price)}
         </button>
       </div>
       {viewerCoins < price && (
-        <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>You have {viewerCoins} of {price} coins.</p>
+        <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>You have {formatCoins(viewerCoins)} of {formatCoins(price)}.</p>
       )}
     </form>
   );

@@ -2,6 +2,6 @@
 // is a coin price). Whole amounts print bare, fractional ones to cents.
 // Dependency-free so client and server components can both use it.
 export function formatCoins(amount: number): string {
-  const n = Number.isInteger(amount) ? amount.toLocaleString() : amount.toFixed(2);
+  const n = Number.isInteger(amount) ? amount.toLocaleString("en-US") : amount.toFixed(2);
   return `${n} coin${amount === 1 ? "" : "s"}`;
 }

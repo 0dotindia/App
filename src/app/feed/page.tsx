@@ -11,6 +11,7 @@ import { getPostableBusinesses } from "@/lib/businesses";
 import { getWalletBalance } from "@/lib/wallet/ledger";
 import { DismissibleNotice } from "@/components/DismissibleNotice";
 import { FeedList } from "./FeedList";
+import { formatCoins } from "@/lib/coins";
 
 export const metadata: Metadata = { title: "Feed" };
 
@@ -112,7 +113,7 @@ async function CreatorStudio({ userId, handle }: { userId: string; handle: strin
       <div className="profileCard" style={{ marginTop: "0.75rem" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
           <Link href="/wallet" className="button buttonSecondary buttonSmall">
-            Wallet: {wallet.total} coins
+            Wallet: {formatCoins(wallet.total)}
           </Link>
           <Link href={`/s/${handle}#memberships`} className="button buttonSecondary buttonSmall">
             Memberships ({tierCount})
