@@ -7,6 +7,8 @@ import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
 import { randomUUID } from "crypto";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
+import { getAffiliateAttribution } from "@/lib/affiliate";
+import { notifyAffiliateConversion } from "@/lib/notifications";
 import { hasCourseAccess } from "@/lib/course-access";
 import { checkCourseCompletion } from "@/lib/learning-completion";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -218,8 +220,10 @@ export async function purchaseCourse(_prevState: ActionState, formData: FormData
   }
 
   // addendum-coin-wallet-v2.md §6.3/§6.4: coins settle now, no creator
-  // payout account required. Affiliate commissions aren't credited on coin
-  // sales (addendum-wallet-only-payments.md §8 #3).
+  // payout account required. An attributed affiliate earns a coin
+  // commission out of the creator's share (addendum-wallet-only-payments.md
+  // §8 #3).
+  const affiliate = await getAffiliateAttribution("course", course.id, user.id);
   const result = await settleCoinPurchase({
     kind: "course_purchase",
     payerId: user.id,
@@ -231,8 +235,10 @@ export async function purchaseCourse(_prevState: ActionState, formData: FormData
     idempotencyKey: `course:coin:${randomUUID()}`,
     metadata: { courseId: course.id },
     createRows: createCoursePurchaseRow,
+    affiliate,
   });
   if ("error" in result) return { error: result.error };
+  if (result.creditedAffiliateId) await notifyAffiliateConversion({ recipientId: result.creditedAffiliateId, actorId: user.id });
   if (!result.alreadySettled) {
     const h = await db.username.findUnique({ where: { userId: course.creatorId }, select: { handle: true } });
     if (h) revalidatePath(`/${h.handle}/courses/${course.id}`);

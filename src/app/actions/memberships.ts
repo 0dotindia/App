@@ -9,7 +9,8 @@ import { chargeWallet } from "@/lib/wallet/charge";
 import { COIN_FUNDED_MARKER, effectivelyActiveWhere } from "@/lib/subscription-access";
 import { WalletError } from "@/lib/wallet/ledger";
 import { coinIdempotencyKey } from "@/lib/wallet/limits";
-import { notifyNewSubscriber } from "@/lib/notifications";
+import { notifyNewSubscriber, notifyAffiliateConversion } from "@/lib/notifications";
+import { getAffiliateAttribution } from "@/lib/affiliate";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { ActionState } from "@/app/actions/auth";
 
@@ -148,12 +149,15 @@ export async function subscribeToTier(_prevState: ActionState, formData: FormDat
   // and the platform-billing sweep auto-renews from the fan's wallet each
   // period after (autoRenew), until the fan cancels or runs out of coins
   // past the grace period. No payout account required on the creator
-  // (coin-wallet v2 §6.4).
+  // (coin-wallet v2 §6.4). An attributed affiliate earns a coin commission
+  // on the first period only, as the card rail did (§8 #3).
+  const affiliate = await getAffiliateAttribution("membership_tier", tier.id, user.id);
   const currentPeriodEnd = new Date();
   if (tier.billingInterval === "yearly") currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
   else currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
 
   let subscribed = false;
+  let creditedAffiliateId: string | null = null;
   try {
     subscribed = await db.$transaction(async (tx) => {
       const charge = await chargeWallet(tx, {
@@ -165,8 +169,10 @@ export async function subscribeToTier(_prevState: ActionState, formData: FormDat
         relatedObjectType: "membership_tier",
         relatedObjectId: tier.id,
         idempotencyKey: coinIdempotencyKey("membership:coin", user.id, tier.id),
+        affiliate,
       });
       if (charge.alreadySettled) return false; // double-click — first click already subscribed
+      creditedAffiliateId = charge.creditedAffiliateId;
       await tx.membershipSubscription.create({
         data: {
           tierId: tier.id,
@@ -188,6 +194,7 @@ export async function subscribeToTier(_prevState: ActionState, formData: FormDat
 
   if (subscribed) {
     await notifyNewSubscriber({ recipientId: tier.creatorId, actorId: user.id });
+    if (creditedAffiliateId) await notifyAffiliateConversion({ recipientId: creditedAffiliateId, actorId: user.id });
     const creatorHandle = (await db.username.findUnique({ where: { userId: tier.creatorId }, select: { handle: true } }))?.handle;
     if (creatorHandle) revalidatePath(`/${creatorHandle}`);
   }

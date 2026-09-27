@@ -8,6 +8,8 @@ import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
 import { saveUploadedImage } from "@/lib/uploads";
 import { randomUUID } from "crypto";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
+import { getAffiliateAttribution } from "@/lib/affiliate";
+import { notifyAffiliateConversion } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
@@ -160,8 +162,10 @@ export async function purchaseProduct(_prevState: ActionState, formData: FormDat
   }
 
   // addendum-coin-wallet-v2.md §6.3/§6.4: coin purchases settle synchronously
-  // and need no payout account on the creator. Affiliate commissions aren't
-  // credited on coin sales (addendum-wallet-only-payments.md §8 #3).
+  // and need no payout account on the creator. An attributed affiliate earns
+  // a coin commission out of the creator's share
+  // (addendum-wallet-only-payments.md §8 #3).
+  const affiliate = await getAffiliateAttribution("digital_product", product.id, user.id);
   const result = await settleCoinPurchase({
     kind: "digital_purchase",
     payerId: user.id,
@@ -173,8 +177,10 @@ export async function purchaseProduct(_prevState: ActionState, formData: FormDat
     idempotencyKey: `digital:coin:${randomUUID()}`,
     metadata: { productId: product.id },
     createRows: createDigitalPurchaseRow,
+    affiliate,
   });
   if ("error" in result) return { error: result.error };
+  if (result.creditedAffiliateId) await notifyAffiliateConversion({ recipientId: result.creditedAffiliateId, actorId: user.id });
   if (!result.alreadySettled) {
     const h = await db.username.findUnique({ where: { userId: product.creatorId }, select: { handle: true } });
     if (h) revalidatePath(`/${h.handle}`);

@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
+import type { AffiliateAttribution } from "@/lib/wallet/charge";
 
 // spec §7.2: last-click within 30 days. Relying on the cookie's own Max-Age
 // to expire is what actually implements "within 30 days" here — once the
@@ -34,3 +35,14 @@ export async function getAttributedAffiliateLink(
   return link;
 }
 
+
+// addendum-wallet-only-payments.md §8 #3: the attribution chargeWallet
+// needs to pay a coin commission on this sale, or null.
+export async function getAffiliateAttribution(
+  offeringType: string,
+  offeringId: string,
+  buyerId: string
+): Promise<AffiliateAttribution | null> {
+  const link = await getAttributedAffiliateLink(offeringType, offeringId, buyerId);
+  return link ? { linkId: link.id, affiliateId: link.affiliateId, commissionPercent: link.program.commissionPercent } : null;
+}
