@@ -187,8 +187,8 @@ export async function settleCoinPurchase(params: {
 // LedgerTransaction(kind:"refund"), linked to the source PT, is the
 // money-movement record — no bogus second PaymentTransaction (a refund
 // doesn't fit the facilitator fee model). Idempotent on the source payment;
-// a replay is a no-op success. A caller (refund policy / admin tool) is
-// still pending the §18 #4 product decision.
+// a replay is a no-op success. Called by the admin refund tool
+// (refundPaymentAction, addendum-wallet-only-payments.md §3.6).
 export async function refundToWallet(params: {
   paymentTransactionId: string;
   amountUsd: number;

@@ -23,9 +23,13 @@ export default async function AdminPaymentsPage() {
         </Link>
       </div>
       <p className="mutedText" style={{ marginBottom: "1.25rem" }}>
-        In-app-purchase (Apple/Google) payout batches — a different domain from the wallet&apos;s internal coin
-        economy.
+        Coin payment refunds, and in-app-purchase (Apple/Google) payout batches.
       </p>
+
+      <Link href="/admin/payments/refunds" className="profileLinkItem" style={{ flexDirection: "column", alignItems: "flex-start", gap: "0.15rem", marginBottom: "0.5rem" }}>
+        <strong>Coin refunds</strong>
+        <span className="mutedText" style={{ fontSize: "0.85rem" }}>Refund a coin payment back to the payer&apos;s wallet</span>
+      </Link>
 
       <Link href="/admin/payments/iap-batches" className="profileLinkItem" style={{ flexDirection: "column", alignItems: "flex-start", gap: "0.15rem" }}>
         <strong>IAP payout batches</strong>

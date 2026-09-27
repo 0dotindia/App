@@ -8,8 +8,24 @@ import { archiveTier, cancelSubscription } from "@/app/actions/memberships";
 import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { TierForm } from "../../TierForm";
+import { COIN_FUNDED_MARKER, describeRenewal, RENEWAL_PREFIX } from "@/lib/subscription-access";
 
 export const metadata: Metadata = { title: "Memberships" };
+
+// The row's status plus, while it still grants access, what happens at the
+// next period boundary (renews / ends / grace after a failed coin renewal).
+function membershipStatusText(sub: {
+  status: string;
+  autoRenew: boolean;
+  processorSubscriptionId: string;
+  currentPeriodEnd: Date;
+  tier: { name: string };
+}): string {
+  const renewal = describeRenewal(sub);
+  if (sub.status !== "active" && renewal.date <= new Date()) return `${sub.tier.name} (${sub.status})`;
+  const next = RENEWAL_PREFIX[renewal.kind].trim().toLowerCase();
+  return `${sub.tier.name} (${sub.status}, ${next} ${renewal.date.toLocaleDateString()})`;
+}
 
 export default async function MembershipsSettingsPage() {
   const currentUser = await getCurrentUser();
@@ -99,9 +115,9 @@ export default async function MembershipsSettingsPage() {
                     "Unknown creator"
                   )
                 }
-                description={`${sub.tier.name} (${sub.status}${sub.status === "cancelled" && sub.currentPeriodEnd > new Date() ? `, access until ${sub.currentPeriodEnd.toLocaleDateString()}` : ""})`}
+                description={membershipStatusText(sub)}
                 trailing={
-                  sub.status === "active" ? (
+                  sub.status === "active" || (sub.status === "past_due" && sub.processorSubscriptionId.startsWith(COIN_FUNDED_MARKER)) ? (
                     <form action={cancelSubscription}>
                       <input type="hidden" name="subscriptionId" value={sub.id} />
                       <button type="submit" className="button buttonSecondary buttonSmall">Cancel</button>

@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 import { db } from "@/lib/db";
 import { getActiveProfileSubscription, FREE_LINK_CAP, PREMIUM_LINK_CAP, FREE_ANALYTICS_WINDOW_DAYS } from "@/lib/platform-billing";
 import { THEME_PRESETS } from "@/lib/theme-presets";
+import { describeRenewal, RENEWAL_PREFIX } from "@/lib/subscription-access";
 import { PremiumBillingForm } from "./PremiumBillingForm";
 
 export const metadata: Metadata = { title: "Premium" };
@@ -16,6 +17,7 @@ export default async function PremiumBillingPage() {
   if (!profileRow) redirect("/claim-username");
 
   const subscription = await getActiveProfileSubscription(profileRow.id);
+  const renewal = subscription ? describeRenewal(subscription) : null;
   const premiumPresetCount = THEME_PRESETS.filter((p) => p.premiumOnly).length;
 
   return (
@@ -34,7 +36,8 @@ export default async function PremiumBillingPage() {
                 id: subscription.id,
                 status: subscription.status,
                 billingInterval: subscription.billingInterval,
-                currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
+                renewalText: RENEWAL_PREFIX[renewal!.kind],
+                renewalDate: renewal!.date.toISOString(),
               }
             : null
         }

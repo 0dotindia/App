@@ -17,6 +17,7 @@ import {
   hasVerifiedListingAccess,
 } from "@/lib/marketplace";
 import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
+import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
 import { getAppOrigin } from "@/lib/email";
 import { canManageCatalog } from "@/lib/businesses";
 import { isCommunityStaff } from "@/lib/communities";
@@ -232,6 +233,32 @@ export async function purchaseMarketplaceListing(_prevState: ActionState, formDa
     return undefined;
   }
 
+  // addendum-wallet-only-payments.md §3.2: synchronous coin settlement,
+  // same shape as digital-products.ts — revenue lands in the seller's user
+  // wallet or, for a business listing, the business wallet (coin-wallet v2
+  // §6.5). No payout account required. The key is deterministic because a
+  // listing is bought at most once per buyer; a failed charge rolls the
+  // ledger back with it, so the key is only ever consumed by a success.
+  if (String(formData.get("payWith") ?? "card") === "coins") {
+    if (listing.sellerUserId === user.id) return { error: "You can't buy your own listing." };
+    const result = await settleCoinPurchase({
+      kind: "marketplace_purchase",
+      payerId: user.id,
+      payeeUserId: listing.sellerBusinessId ? null : listing.sellerUserId,
+      payeeBusinessId: listing.sellerBusinessId ?? null,
+      amountUsd: listing.price,
+      currency: listing.currency ?? "usd",
+      relatedObjectType: "marketplace_listing",
+      relatedObjectId: listing.id,
+      idempotencyKey: `marketplace:coin:${user.id}:${listing.id}`,
+      metadata: { listingId: listing.id },
+      createRows: createMarketplacePurchaseRows,
+    });
+    if ("error" in result) return { error: result.error };
+    revalidatePath(`/m/${listing.id}`);
+    return { success: true };
+  }
+
   let payeeId: string | null = null;
   let payeeBusinessId: string | null = null;
   let payoutAccount;
@@ -271,6 +298,15 @@ export async function purchaseMarketplaceListing(_prevState: ActionState, formDa
   redirect(checkoutUrl);
 }
 
+// The purchase rows — one place, both rails (coin-wallet v2 §6.2).
+export async function createMarketplacePurchaseRows(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
+  const listingId = s.metadata.listingId;
+  await tx.marketplacePurchase.create({
+    data: { listingId, buyerId: s.payerId, paymentTransactionId: s.paymentTransactionId },
+  });
+  await tx.marketplaceListing.update({ where: { id: listingId }, data: { purchaseCount: { increment: 1 } } });
+}
+
 // Called from the Stripe webhook once checkout.session.completed confirms
 // payment — mirrors purchaseMarketplaceListing's former synchronous shape.
 // Idempotent on processorReference.
@@ -295,10 +331,14 @@ export async function activateMarketplacePurchase(metadata: Record<string, strin
         relatedObjectType: "marketplace_listing",
         relatedObjectId: listingId,
       });
-      await tx.marketplacePurchase.create({
-        data: { listingId, buyerId: payerId, paymentTransactionId: transaction.id },
+      await createMarketplacePurchaseRows(tx, {
+        paymentTransactionId: transaction.id,
+        payerId,
+        payeeId: payeeId || null,
+        amount,
+        currency,
+        metadata,
       });
-      await tx.marketplaceListing.update({ where: { id: listingId }, data: { purchaseCount: { increment: 1 } } });
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {

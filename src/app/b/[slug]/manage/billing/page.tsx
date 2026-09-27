@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { isBusinessStaff } from "@/lib/businesses";
 import { getActiveBusinessSubscription, PLAN_PRICES } from "@/lib/platform-billing";
+import { describeRenewal, RENEWAL_PREFIX } from "@/lib/subscription-access";
 import { getDnsInstructions } from "@/lib/custom-domains";
 import {
   BusinessSubscribeForm,
@@ -73,8 +74,8 @@ export default async function BusinessBillingPage({
             {subscription.billingInterval}
           </p>
           <p className="mutedText" style={{ fontSize: "0.85rem" }}>
-            {subscription.status === "cancelled" ? "Access continues until " : "Renews "}
-            {subscription.currentPeriodEnd.toLocaleDateString()}.
+            {RENEWAL_PREFIX[describeRenewal(subscription).kind]}
+            {describeRenewal(subscription).date.toLocaleDateString()}.
           </p>
           {subscription.status !== "cancelled" && <BusinessCancelSubscriptionButton subscriptionId={subscription.id} />}
         </div>

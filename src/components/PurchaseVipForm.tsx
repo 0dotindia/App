@@ -16,7 +16,7 @@ export function PurchaseVipForm({
   prices,
   coinBalance,
 }: {
-  subscription: { billingInterval: string; currentPeriodEnd: string; coinFunded: boolean } | null;
+  subscription: { billingInterval: string; renewalText: string; renewalDate: string; coinFunded: boolean } | null;
   prices: { monthly: number; yearly: number };
   coinBalance: number;
 }) {
@@ -36,7 +36,7 @@ export function PurchaseVipForm({
           <strong>VIP active</strong>
         </div>
         <p className="mutedText" style={{ fontSize: "0.85rem" }}>
-          Billed {subscription.billingInterval} · renews {new Date(subscription.currentPeriodEnd).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
+          Billed {subscription.billingInterval} · {subscription.renewalText.trim().toLowerCase()} {new Date(subscription.renewalDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
         </p>
         {subscription.coinFunded && (
           <form action={formAction} style={{ marginTop: "0.4rem" }}>
@@ -69,7 +69,7 @@ export function PurchaseVipForm({
       <p className="mutedText" style={{ fontSize: "0.85rem", marginBottom: "0.6rem" }}>
         One purchase unlocks every Premium perk platform-wide — raised link cap, full analytics history, extra theme
         presets, a custom domain, and a reduced platform fee on your earnings. Paid straight out of your coin balance
-        (1 coin = $1); renew with a fresh coin charge each period.
+        (1 coin = $1) and renewed automatically from it each period — cancel anytime under Settings → Billing → Premium.
       </p>
       <IdempotencyField />
       <div style={{ display: "flex", gap: "1rem", marginBottom: "0.5rem" }}>

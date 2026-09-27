@@ -1800,6 +1800,11 @@ model PlatformSubscription {
   // Same monthly|yearly shape MembershipTier.billingInterval already uses.
   billingInterval          String        @default("monthly") // monthly | yearly
   processorSubscriptionId  String // external recurring-billing object is the source of truth for renewal state — same principle as MembershipSubscription (phase-5 §4.1)
+  // addendum-wallet-only-payments.md §3.3: a coin-funded row (processorSubscriptionId
+  // "coin:…") with autoRenew set is re-charged from the payer's wallet each
+  // period by the platform-billing sweep. Default false so rows bought before
+  // auto-renew existed keep lapsing at period end, as they were sold.
+  autoRenew                Boolean       @default(false)
   currentPeriodEnd         DateTime
   createdAt                DateTime      @default(now())
 
@@ -1912,6 +1917,8 @@ model MembershipSubscription {
   status                  String         @default("active") // active | past_due | cancelled
   currentPeriodEnd        DateTime
   processorSubscriptionId String
+  // Same meaning as PlatformSubscription.autoRenew (addendum-wallet-only-payments.md §3.3).
+  autoRenew               Boolean        @default(false)
   createdAt               DateTime       @default(now())
 
   @@index([fanId, status])

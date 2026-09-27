@@ -3,8 +3,9 @@
 import { useActionState } from "react";
 import { subscribeToTier } from "@/app/actions/memberships";
 
-// spec §4: subscribe-to-a-tier form. Coins pay the first period only
-// (addendum-coin-wallet-v2.md §6.3) and need no creator payout account, so
+// spec §4: subscribe-to-a-tier form. Coins pay the first period and then
+// auto-renew from the wallet (addendum-wallet-only-payments.md §3.3); they
+// need no creator payout account, so
 // this renders for any signed-in viewer; `cardAvailable` toggles the card
 // button.
 export function SubscribeForm({

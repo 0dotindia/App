@@ -9,6 +9,8 @@ import { chargeWallet } from "@/lib/wallet/charge";
 import { SYSTEM_ACCOUNT_IDS } from "@/lib/wallet/accounts";
 import { coinsToUnits, coinActionKey } from "@/lib/wallet/limits";
 import { logger } from "@/lib/logger";
+import { notifySubscriptionRenewalFailed } from "@/lib/notifications";
+import { COIN_FUNDED_MARKER, COIN_RENEWAL_GRACE_MS, effectivelyActiveWhere } from "@/lib/subscription-access";
 
 // See payments.ts's checkoutIdempotencyKey for why: collapses a retried
 // subscribe() call (double-click, network retry) onto the same Checkout
@@ -156,15 +158,14 @@ export function priceFor(plan: string, billingInterval: string): { amount: numbe
   return { amount: billingInterval === "yearly" ? price.yearly : price.monthly, currency: price.currency };
 }
 
-// Same "effective access computed live from status + currentPeriodEnd"
-// shape as tier-access.ts's effectivelyActiveSubscription — a cancelled but
-// not-yet-expired subscription still counts (premium-profiles addendum
-// §4.2 / phase-5 §4.3's cancel-through-period-end rule).
-const effectivelyActive = { OR: [{ status: "active" }, { status: "cancelled", currentPeriodEnd: { gt: new Date() } }] };
+// Effective access (subscription-access.ts): a cancelled but not-yet-expired
+// subscription still counts (premium-profiles addendum §4.2 / phase-5
+// §4.3's cancel-through-period-end rule), as does a coin row in its
+// renewal grace period.
 
 export function getActiveProfileSubscription(profileId: string, plan = "profile_premium") {
   return db.platformSubscription.findFirst({
-    where: { subscriberProfileId: profileId, plan, ...effectivelyActive },
+    where: { subscriberProfileId: profileId, plan, ...effectivelyActiveWhere() },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -179,7 +180,7 @@ export async function isProfilePremium(profileId: string): Promise<boolean> {
 // this by userId, not profileId.
 export async function isProfilePremiumByUserId(userId: string): Promise<boolean> {
   const subscription = await db.platformSubscription.findFirst({
-    where: { plan: "profile_premium", subscriberProfile: { userId }, ...effectivelyActive },
+    where: { plan: "profile_premium", subscriberProfile: { userId }, ...effectivelyActiveWhere() },
     select: { id: true },
   });
   return subscription !== null;
@@ -187,7 +188,7 @@ export async function isProfilePremiumByUserId(userId: string): Promise<boolean>
 
 export function getActiveBusinessSubscription(businessId: string) {
   return db.platformSubscription.findFirst({
-    where: { subscriberBusinessId: businessId, plan: "business_subscription", ...effectivelyActive },
+    where: { subscriberBusinessId: businessId, plan: "business_subscription", ...effectivelyActiveWhere() },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -339,14 +340,19 @@ export async function syncSubscriptionFromStripe(processorSubscriptionId: string
 // this row marked cancelled while Stripe keeps billing it.
 export async function cancelPlatformSubscription(subscriptionId: string): Promise<void> {
   const subscription = await db.platformSubscription.findUnique({ where: { id: subscriptionId } });
-  if (!subscription || subscription.status !== "active") return;
+  if (!subscription) return;
+  const coinFunded = subscription.processorSubscriptionId.startsWith(COIN_FUNDED_MARKER);
+  // A coin row that's past_due (renewal failed, in grace) can be cancelled
+  // too — that stops the sweep retrying the charge.
+  if (!(subscription.status === "active" || (coinFunded && subscription.status === "past_due"))) return;
   // Coin-funded rows (purchaseProfilePremiumWithCoins below) have no real
   // Stripe subscription behind processorSubscriptionId — nothing to cancel
   // upstream, and calling Stripe with that id would just throw.
-  if (!subscription.processorSubscriptionId.startsWith(COIN_FUNDED_MARKER)) {
+  if (!coinFunded) {
     await subscriptionProcessor.cancelSubscription(subscription.processorSubscriptionId);
   }
   await db.platformSubscription.update({ where: { id: subscription.id }, data: { status: "cancelled" } });
+  if (subscription.subscriberProfileId) await reconcileLinkActivationForProfile(subscription.subscriberProfileId);
 }
 
 // wallet.ts's alternate payment rail into this exact same
@@ -357,8 +363,8 @@ export async function cancelPlatformSubscription(subscriptionId: string): Promis
 // the real PLAN_PRICES value (1 coin = $1, addendum-coin-wallet-v2.md §14).
 // Marked via a processorSubscriptionId prefix rather than a new column,
 // same "string discriminator" shape this schema already uses for
-// subscriberType/plan/status.
-export const COIN_FUNDED_MARKER = "coin:";
+// subscriberType/plan/status (COIN_FUNDED_MARKER, subscription-access.ts).
+export { COIN_FUNDED_MARKER };
 
 function addBillingInterval(date: Date, billingInterval: string): Date {
   const next = new Date(date);
@@ -417,7 +423,9 @@ export async function purchaseProfilePremiumWithCoins(userId: string, profileId:
       if (existing) {
         await tx.platformSubscription.update({
           where: { id: existing.id },
-          data: { currentPeriodEnd: addBillingInterval(existing.currentPeriodEnd, billingInterval), billingInterval },
+          // Buying again re-opts into auto-renew, including on a row the
+          // payer had cancelled or that is past_due in its grace period.
+          data: { currentPeriodEnd: addBillingInterval(existing.currentPeriodEnd, billingInterval), billingInterval, status: "active", autoRenew: true },
         });
       } else {
         await tx.platformSubscription.create({
@@ -429,6 +437,7 @@ export async function purchaseProfilePremiumWithCoins(userId: string, profileId:
             billingInterval,
             processorSubscriptionId: `${COIN_FUNDED_MARKER}${randomUUID()}`,
             currentPeriodEnd: addBillingInterval(new Date(), billingInterval),
+            autoRenew: true,
           },
         });
       }
@@ -488,7 +497,9 @@ export async function purchaseBusinessPlanWithCoins(
       if (existing) {
         await tx.platformSubscription.update({
           where: { id: existing.id },
-          data: { currentPeriodEnd: addBillingInterval(existing.currentPeriodEnd, billingInterval), billingInterval },
+          // Buying again re-opts into auto-renew, including on a row the
+          // payer had cancelled or that is past_due in its grace period.
+          data: { currentPeriodEnd: addBillingInterval(existing.currentPeriodEnd, billingInterval), billingInterval, status: "active", autoRenew: true },
         });
       } else {
         await tx.platformSubscription.create({
@@ -500,6 +511,7 @@ export async function purchaseBusinessPlanWithCoins(
             billingInterval,
             processorSubscriptionId: `${COIN_FUNDED_MARKER}${randomUUID()}`,
             currentPeriodEnd: addBillingInterval(new Date(), billingInterval),
+            autoRenew: true,
           },
         });
       }
@@ -560,9 +572,11 @@ async function sweepLinkActivation(): Promise<void> {
 // it. This is the coin-rail's only "period ended" signal, so it must run
 // before sweepLinkActivation each tick (which relies on status already
 // reflecting the lapse to know which profiles need their links deactivated).
+// Auto-renewing rows are left to renewCoinPlatformSubscriptions, which
+// ends them itself once a failed renewal's grace period runs out.
 async function expireLapsedCoinSubscriptions(): Promise<void> {
   const lapsed = await db.platformSubscription.findMany({
-    where: { status: "active", processorSubscriptionId: { startsWith: COIN_FUNDED_MARKER }, currentPeriodEnd: { lt: new Date() } },
+    where: { status: "active", autoRenew: false, processorSubscriptionId: { startsWith: COIN_FUNDED_MARKER }, currentPeriodEnd: { lt: new Date() } },
     select: { id: true, subscriberProfileId: true },
   });
   if (!lapsed.length) return;
@@ -577,19 +591,200 @@ async function expireLapsedCoinSubscriptions(): Promise<void> {
 }
 
 // addendum-coin-wallet-v2.md §6.3 — the coin-membership equivalent of
-// expireLapsedCoinSubscriptions. A coin-funded MembershipSubscription
-// (processorSubscriptionId "coin:…") pays one period only and has no
-// Stripe webhook to advance it, so this is its sole "period ended" signal:
-// flip it to "cancelled" once currentPeriodEnd passes, ending gated access.
+// expireLapsedCoinSubscriptions. A non-renewing coin-funded
+// MembershipSubscription (processorSubscriptionId "coin:…") has no Stripe
+// webhook to advance it, so this is its sole "period ended" signal: flip it
+// to "cancelled" once currentPeriodEnd passes, ending gated access.
 async function expireLapsedCoinMemberships(): Promise<void> {
   await db.membershipSubscription.updateMany({
     where: {
       status: "active",
+      autoRenew: false,
       processorSubscriptionId: { startsWith: COIN_FUNDED_MARKER },
       currentPeriodEnd: { lt: new Date() },
     },
     data: { status: "cancelled" },
   });
+}
+
+// addendum-wallet-only-payments.md §3.3 — coin auto-renew. A due row
+// (autoRenew, active or past_due, currentPeriodEnd reached) is charged one
+// period from its payer's wallet and advanced in the same transaction. The
+// idempotency key is pinned to the period being paid for, so overlapping
+// sweeps can never charge one period twice. A failed charge moves an active
+// row to past_due (access kept for COIN_RENEWAL_GRACE_MS, payer notified
+// once); a past_due row is retried each tick and cancelled when grace ends.
+// currentPeriodEnd is not moved while past_due, so a late success still
+// pays from the original boundary.
+type RenewalCharge = (tx: Prisma.TransactionClient, idempotencyKey: string) => Promise<boolean>; // true = charged now, false = idempotency hit
+
+async function renewOrLapse(params: {
+  row: { id: string; status: string; currentPeriodEnd: Date };
+  model: "platform" | "membership";
+  now: Date;
+  charge: RenewalCharge;
+  advance: (tx: Prisma.TransactionClient) => Promise<void>;
+  markStatus: (status: "past_due" | "cancelled") => Promise<void>;
+  notify: () => Promise<void>;
+}): Promise<"renewed" | "past_due" | "lapsed" | "unchanged"> {
+  const { row } = params;
+  const idempotencyKey = `renew:${params.model}:${row.id}:${row.currentPeriodEnd.toISOString()}`;
+  try {
+    const charged = await db.$transaction(async (tx) => {
+      const created = await params.charge(tx, idempotencyKey);
+      if (created) await params.advance(tx);
+      return created;
+    });
+    return charged ? "renewed" : "unchanged";
+  } catch (err) {
+    if (!(err instanceof WalletError && err.code === "INSUFFICIENT_FUNDS")) throw err;
+  }
+
+  if (row.status === "active") {
+    await params.markStatus("past_due");
+    await params.notify();
+    return "past_due";
+  }
+  if (row.currentPeriodEnd.getTime() + COIN_RENEWAL_GRACE_MS <= params.now.getTime()) {
+    await params.markStatus("cancelled");
+    return "lapsed";
+  }
+  return "unchanged";
+}
+
+const dueForCoinRenewal = (now: Date) => ({
+  autoRenew: true,
+  status: { in: ["active", "past_due"] },
+  processorSubscriptionId: { startsWith: COIN_FUNDED_MARKER },
+  currentPeriodEnd: { lte: now },
+});
+
+async function renewCoinPlatformSubscriptions(now: Date): Promise<void> {
+  const due = await db.platformSubscription.findMany({
+    where: dueForCoinRenewal(now),
+    include: {
+      subscriberProfile: { select: { userId: true, user: { select: { status: true } } } },
+      subscriberBusiness: { select: { slug: true, members: { where: { role: "owner" }, select: { userId: true } } } },
+    },
+  });
+
+  for (const sub of due) {
+    try {
+      const { amount } = priceFor(sub.plan, sub.billingInterval);
+      const profile = sub.subscriberProfile;
+      const business = sub.subscriberBusiness;
+      // Never charge a suspended/deactivated account — stop renewing and let
+      // expireLapsedCoinSubscriptions end the row like a one-off purchase.
+      if ((!profile && !business) || (profile && profile.user.status !== "active")) {
+        await db.platformSubscription.update({ where: { id: sub.id }, data: { autoRenew: false, status: "active" } });
+        continue;
+      }
+
+      const outcome = await renewOrLapse({
+        row: sub,
+        model: "platform",
+        now,
+        charge: async (tx, idempotencyKey) => {
+          if (business) {
+            const spend = await spendBusinessCoins(tx, {
+              businessId: sub.subscriberBusinessId!,
+              units: coinsToUnits(amount),
+              creditAccountId: SYSTEM_ACCOUNT_IDS.system_platform_revenue,
+              kind: "purchase",
+              idempotencyKey,
+              relatedObjectType: "platform_subscription",
+              relatedObjectId: sub.id,
+              memo: "Business subscription renewal (coins)",
+            });
+            return spend.created;
+          }
+          const charge = await chargeWallet(tx, {
+            payerId: profile!.userId,
+            amountUsd: amount,
+            currency: "usd",
+            kind: "platform_subscription_charge",
+            relatedObjectType: "platform_subscription",
+            relatedObjectId: sub.id,
+            idempotencyKey,
+          });
+          return !charge.alreadySettled;
+        },
+        advance: async (tx) => {
+          await tx.platformSubscription.update({
+            where: { id: sub.id },
+            data: { status: "active", currentPeriodEnd: addBillingInterval(sub.currentPeriodEnd, sub.billingInterval) },
+          });
+        },
+        markStatus: async (status) => {
+          await db.platformSubscription.update({ where: { id: sub.id }, data: { status } });
+        },
+        notify: async () => {
+          if (business) {
+            for (const { userId } of business.members) {
+              await notifySubscriptionRenewalFailed({ recipientId: userId, path: `b/${business.slug}/manage/wallet` });
+            }
+          } else {
+            await notifySubscriptionRenewalFailed({ recipientId: profile!.userId, path: "wallet" });
+          }
+        },
+      });
+      if (outcome !== "unchanged" && sub.subscriberProfileId) await reconcileLinkActivationForProfile(sub.subscriberProfileId);
+    } catch (err) {
+      logger.error("coin renewal: platform subscription failed", err, { subscriptionId: sub.id });
+    }
+  }
+}
+
+async function renewCoinMemberships(now: Date): Promise<void> {
+  const due = await db.membershipSubscription.findMany({
+    where: dueForCoinRenewal(now),
+    include: {
+      tier: { select: { id: true, creatorId: true, price: true, currency: true, billingInterval: true, status: true } },
+      fan: { select: { status: true } },
+    },
+  });
+
+  for (const sub of due) {
+    try {
+      // A retired tier or an inactive fan account stops renewing; the row
+      // then ends at period end via expireLapsedCoinMemberships.
+      if (sub.tier.status !== "active" || sub.fan.status !== "active") {
+        await db.membershipSubscription.update({ where: { id: sub.id }, data: { autoRenew: false, status: "active" } });
+        continue;
+      }
+
+      await renewOrLapse({
+        row: sub,
+        model: "membership",
+        now,
+        charge: async (tx, idempotencyKey) => {
+          const charge = await chargeWallet(tx, {
+            payerId: sub.fanId,
+            payeeUserId: sub.tier.creatorId,
+            amountUsd: sub.tier.price,
+            currency: sub.tier.currency,
+            kind: "membership_charge",
+            relatedObjectType: "membership_tier",
+            relatedObjectId: sub.tier.id,
+            idempotencyKey,
+          });
+          return !charge.alreadySettled;
+        },
+        advance: async (tx) => {
+          await tx.membershipSubscription.update({
+            where: { id: sub.id },
+            data: { status: "active", currentPeriodEnd: addBillingInterval(sub.currentPeriodEnd, sub.tier.billingInterval) },
+          });
+        },
+        markStatus: async (status) => {
+          await db.membershipSubscription.update({ where: { id: sub.id }, data: { status } });
+        },
+        notify: () => notifySubscriptionRenewalFailed({ recipientId: sub.fanId, path: "wallet" }),
+      });
+    } catch (err) {
+      logger.error("coin renewal: membership failed", err, { subscriptionId: sub.id });
+    }
+  }
 }
 
 const LAPSE_SWEEP_INTERVAL_MS = 15 * 60 * 1000; // frequent enough that a lapsed link cap doesn't stay visible for long, cheap enough given the narrow candidate query above
@@ -607,6 +802,10 @@ export function startPlatformBillingScheduler(): void {
 
 // Cron entry point (web-pro-upgrade addendum M1) — see runTrendingRecomputeOnce.
 export async function runPlatformBillingSweepOnce(): Promise<void> {
+  // Renew first: a row that renews here must not be expired below.
+  const now = new Date();
+  await renewCoinPlatformSubscriptions(now);
+  await renewCoinMemberships(now);
   await expireLapsedCoinSubscriptions();
   await expireLapsedCoinMemberships();
   await sweepLinkActivation();

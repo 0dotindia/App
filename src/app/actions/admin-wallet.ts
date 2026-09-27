@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requirePlatformRole } from "@/lib/auth-guards";
 import { issuePromoGrant, adminAdjust } from "@/lib/wallet/grants";
+import { refundToWallet } from "@/lib/wallet/charge";
 import type { ActionState } from "@/app/actions/auth";
 
 // addendum-coin-wallet-v2.md §13.3 — the admin grant tool. Caps + required
@@ -40,5 +41,29 @@ export async function grantCoinsAction(_prevState: ActionState, formData: FormDa
   if ("error" in result) return { error: result.error };
 
   revalidatePath("/admin/wallet");
+  return { success: true };
+}
+
+// addendum-wallet-only-payments.md §3.6 — the admin caller for
+// refundToWallet (coin-wallet v2 §18 #4: every refund is a coin refund).
+// Full refunds of coin payments only; the refund is funded from
+// system_refund_source, so the seller keeps their earnings (§8 #2) and the
+// buyer keeps whatever the payment bought.
+export async function refundPaymentAction(_prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const { user: admin } = await requirePlatformRole("admin");
+
+  const paymentTransactionId = String(formData.get("paymentTransactionId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (reason.length < 3) return { error: "A reason is required." };
+
+  const pt = await db.paymentTransaction.findUnique({ where: { id: paymentTransactionId } });
+  if (!pt) return { error: "Unknown payment." };
+  if (pt.processor !== "wallet") return { error: "Only coin payments can be refunded here." };
+  if (pt.status !== "succeeded") return { error: "Only a succeeded payment can be refunded." };
+
+  const result = await refundToWallet({ paymentTransactionId: pt.id, amountUsd: pt.amount, reason, actorUserId: admin.id });
+  if ("error" in result) return { error: result.error };
+
+  revalidatePath("/admin/payments/refunds");
   return { success: true };
 }

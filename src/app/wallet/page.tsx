@@ -4,6 +4,7 @@ import { Coins } from "lucide-react";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { getActiveProfileSubscription, COIN_FUNDED_MARKER, premiumCoinPrice } from "@/lib/platform-billing";
+import { describeRenewal, RENEWAL_PREFIX } from "@/lib/subscription-access";
 import { getWalletBalance, listTransactions } from "@/lib/wallet/ledger";
 import { walletActivityLabel } from "@/lib/wallet/activity-labels";
 import { getReferralStats } from "@/lib/wallet/referral";
@@ -56,7 +57,8 @@ export default async function WalletPage({
             subscription
               ? {
                   billingInterval: subscription.billingInterval,
-                  currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
+                  renewalText: RENEWAL_PREFIX[describeRenewal(subscription).kind],
+                  renewalDate: describeRenewal(subscription).date.toISOString(),
                   coinFunded: subscription.processorSubscriptionId.startsWith(COIN_FUNDED_MARKER),
                 }
               : null

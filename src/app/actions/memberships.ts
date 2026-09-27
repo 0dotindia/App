@@ -9,6 +9,7 @@ import { saveUploadedImage } from "@/lib/uploads";
 import { randomUUID } from "crypto";
 import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
 import { chargeWallet } from "@/lib/wallet/charge";
+import { COIN_FUNDED_MARKER, effectivelyActiveWhere } from "@/lib/subscription-access";
 import { WalletError } from "@/lib/wallet/ledger";
 import { coinIdempotencyKey } from "@/lib/wallet/limits";
 import { getAppOrigin } from "@/lib/email";
@@ -146,11 +147,7 @@ export async function subscribeToTier(_prevState: ActionState, formData: FormDat
   if (tier.creatorId === user.id) return { error: "You can't subscribe to your own tier." };
 
   const existing = await db.membershipSubscription.findFirst({
-    where: {
-      fanId: user.id,
-      tierId: tier.id,
-      OR: [{ status: "active" }, { status: "cancelled", currentPeriodEnd: { gt: new Date() } }],
-    },
+    where: { fanId: user.id, tierId: tier.id, ...effectivelyActiveWhere() },
   });
   if (existing) return { error: "You're already subscribed to this tier." };
 
@@ -158,11 +155,11 @@ export async function subscribeToTier(_prevState: ActionState, formData: FormDat
     return { error: "You're subscribing too fast. Please slow down." };
   }
 
-  // addendum-coin-wallet-v2.md §6.3: coins pay the FIRST PERIOD ONLY — no
-  // mandate, no auto-renew. currentPeriodEnd is one interval out; the
-  // coin-membership lapse sweep (platform-billing.ts) flips it to past_due
-  // when it elapses, and the fan re-subscribes with coins. Mirrors the
-  // coin-Premium model. No payout account required on the creator (§6.4).
+  // addendum-wallet-only-payments.md §3.3: coins pay the first period now
+  // and the platform-billing sweep auto-renews from the fan's wallet each
+  // period after (autoRenew), until the fan cancels or runs out of coins
+  // past the grace period. No payout account required on the creator
+  // (coin-wallet v2 §6.4).
   if (String(formData.get("payWith") ?? "card") === "coins") {
     const currentPeriodEnd = new Date();
     if (tier.billingInterval === "yearly") currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
@@ -188,7 +185,8 @@ export async function subscribeToTier(_prevState: ActionState, formData: FormDat
             fanId: user.id,
             status: "active",
             currentPeriodEnd,
-            processorSubscriptionId: `coin:${randomUUID()}`,
+            processorSubscriptionId: `${COIN_FUNDED_MARKER}${randomUUID()}`,
+            autoRenew: true,
           },
         });
         return true;
@@ -353,9 +351,14 @@ export async function cancelSubscription(formData: FormData): Promise<void> {
 
   const subscription = await db.membershipSubscription.findUnique({ where: { id: subscriptionId } });
   if (!subscription || subscription.fanId !== user.id) return;
-  if (subscription.status !== "active") return;
+  const coinFunded = subscription.processorSubscriptionId.startsWith(COIN_FUNDED_MARKER);
+  // A past_due coin row (renewal failed, in grace) can be cancelled too,
+  // which stops the renewal sweep retrying it.
+  if (!(subscription.status === "active" || (coinFunded && subscription.status === "past_due"))) return;
 
-  await getPaymentProcessor().cancelSubscription(subscription.processorSubscriptionId);
+  // A coin row has no Stripe subscription behind it — calling Stripe with
+  // its "coin:…" id would throw.
+  if (!coinFunded) await getPaymentProcessor().cancelSubscription(subscription.processorSubscriptionId);
   await db.membershipSubscription.update({ where: { id: subscription.id }, data: { status: "cancelled" } });
 
   if (user.username) revalidatePath(`/s/${user.username.handle}`);

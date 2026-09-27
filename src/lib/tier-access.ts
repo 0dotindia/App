@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { effectivelyActiveWhere } from "@/lib/subscription-access";
 
 // spec §4.3's third literal acceptance criterion: "cancelling a
 // subscription retains access through current_period_end, not
@@ -8,8 +9,8 @@ import { db } from "@/lib/db";
 // processor webhook to flip status at the exact expiry moment, so
 // "effective access" is computed live from status + currentPeriodEnd
 // rather than trusting status alone. Shared by both access-check shapes
-// below so the two never drift into checking this differently.
-const effectivelyActiveSubscription = { OR: [{ status: "active" }, { status: "cancelled", currentPeriodEnd: { gt: new Date() } }] };
+// below (and PlatformSubscription's) via subscription-access.ts so they
+// never drift into checking this differently.
 
 // phase-5 spec §4.2: the one gating rule reused (adapted per entity) by
 // §5/§8/§9/§10/§11 — never a second parallel access check. A viewer has
@@ -35,7 +36,7 @@ export async function hasTierAccess(
   const subscription = await db.membershipSubscription.findFirst({
     where: {
       fanId: viewerId,
-      ...effectivelyActiveSubscription,
+      ...effectivelyActiveWhere(),
       tier: { creatorId, level: { gte: requiredTier.level } },
     },
     select: { id: true },
@@ -50,7 +51,7 @@ export async function hasTierAccess(
 // creator they're subscribed to.
 export async function getActiveMaxTierLevelsByCreator(viewerId: string): Promise<Map<string, number>> {
   const subscriptions = await db.membershipSubscription.findMany({
-    where: { fanId: viewerId, ...effectivelyActiveSubscription },
+    where: { fanId: viewerId, ...effectivelyActiveWhere() },
     select: { tier: { select: { creatorId: true, level: true } } },
   });
   const maxLevels = new Map<string, number>();
