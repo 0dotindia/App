@@ -1,7 +1,7 @@
 # Addendum — Wallet-Only Payments (Remove Stripe)
 
-Status: **Phase 1 built** (2026-09-27) — §3.2, §3.3, §3.6. Phases 2–5
-not started.
+Status: **Phases 1–2 built** (2026-09-27) — §3.2, §3.3, §3.4, §3.6.
+Phases 3–5 not started.
 Owner: TBD
 Related: [addendum-coin-wallet-v2.md](addendum-coin-wallet-v2.md),
 [addendum-platform-billing.md](addendum-platform-billing.md),
@@ -147,20 +147,31 @@ Resolves coin-wallet v2 §18 #5: **coins auto-renew**.
 
 ### 3.4 Developer API plans
 
-Replace Stripe Billing + Meters with wallet charges from the app owner
-(`resolveAppPayerUserId`; the business wallet for business-owned apps):
+**Built.** Stripe Billing + Meters are replaced by wallet charges
+(`api-usage-billing.ts`) from the app owner's wallet, or the business
+wallet for a business-owned app. Plan changes go through `switchApiPlan`
+and settle synchronously — no checkout redirect.
 
-- **committed**: charge `COMMITTED_PLAN_FLAT_PRICE` coins up front when
-  the plan is chosen, then each `BILLING_PERIOD_MS` in the existing
-  `sweepDueSettlements`. Failure → downgrade to `free`, notify.
-- **pay_as_you_go**: at each period boundary, `settleAppUsage` computes
-  overage exactly as today and charges
-  `ceil(overage / 1000) * PRICE_PER_1000_REQUESTS_OVER` coins.
-  On insufficient balance, charge nothing (no partial charge), downgrade
-  to `free`, notify, and log the unpaid overage so an admin can see it.
-  This is the simplest honest behaviour; revisit if it gets abused.
-- Delete `apiSubscriptionId`, meter/price bootstrap code, and
-  `recordApiUsageInvoicePaid`.
+- **committed**: `COMMITTED_PLAN_FLAT_PRICE` coins charged up front when
+  chosen (refused, plan unchanged, if the wallet is short), then each
+  `BILLING_PERIOD_MS`, keyed by the period it pays for.
+- **pay_as_you_go**: nothing up front. Overage beyond
+  `INCLUDED_FREE_REQUESTS_PER_PERIOD` is charged **as it accrues** —
+  every settlement sweep charges whole 1,000-request blocks not yet billed
+  (`DeveloperApp.billedOverageRequests`), and the partial remainder when
+  the period closes or the app leaves the plan. Charging only at period
+  end would let an app with no coins run uncapped for a whole period. The
+  idempotency key is the cumulative billed level, so no request is billed
+  twice.
+- Any charge the wallet can't cover moves the app to `free` (rate-limited
+  again), logs the unpaid amount, and notifies the owner
+  (`api_plan_downgraded`). No debt is carried.
+- Apps with an existing Stripe `apiSubscriptionId` keep being billed by
+  Stripe until drained (§6); choosing any plan cancels it first.
+  `createApiPlanCheckoutSession` and the Stripe price/meter bootstrap are
+  deleted; the webhook-side `activateApiPlanSubscription` /
+  `recordApiUsageInvoicePaid` and meter reporting remain for those legacy
+  apps and go in §5.
 
 ### 3.5 Remove payouts
 

@@ -769,6 +769,20 @@ export async function notifySubscriptionRenewalFailed(args: { recipientId: strin
   await dispatchPushEvent({ recipientId: args.recipientId, type: "subscription_renewal_failed", subjectType: "subscription", subjectId: args.path });
 }
 
+// addendum-wallet-only-payments.md §3.4: sent when a developer app's
+// coin-paid API plan charge fails and the app is moved back to the free
+// plan (api-usage-billing.ts's downgradeUnpaid). Same system-initiated
+// shape as notifySubscriptionRenewalFailed; subjectId is the app id.
+export async function notifyApiPlanDowngraded(args: { recipientId: string; appId: string }): Promise<void> {
+  await db.notification.create({
+    data: { recipientId: args.recipientId, actorId: null, type: "api_plan_downgraded", subjectType: "developer_app", subjectId: args.appId },
+  });
+  publishToUsers([args.recipientId], { type: "notification" });
+
+  const { dispatchPushEvent } = await import("@/lib/push");
+  await dispatchPushEvent({ recipientId: args.recipientId, type: "api_plan_downgraded", subjectType: "developer_app", subjectId: args.appId });
+}
+
 export function notifyTicketPurchased(args: { recipientId: string; eventSlug: string }): Promise<void> {
   return createSystemEventNotification({ recipientId: args.recipientId, type: "ticket_purchased", eventSlug: args.eventSlug });
 }
@@ -887,6 +901,8 @@ export function getNotificationVerb(type: string, subjectType?: string, subjectI
       return "Reminder: an event you're attending starts soon";
     case "subscription_renewal_failed":
       return "Your subscription couldn't renew — not enough coins";
+    case "api_plan_downgraded":
+      return "Your app's API plan moved to Free — not enough coins";
     // phase-11 spec §4.3: sent on an upheld ModerationFlag outcome — actor
     // is always null (system-initiated), so GroupDescription's "Someone"
     // fallback reads as the platform, not a masked user.
@@ -1010,6 +1026,8 @@ export function getNotificationHref(
       return `/e/${n.subjectId}`;
     case "subscription_renewal_failed":
       return `/${n.subjectId}`;
+    case "api_plan_downgraded":
+      return recipientHandle ? `/s/${recipientHandle}/developer/${n.subjectId}` : "/notifications";
     // phase-12 spec §5/§11 step 8: routes to the one page a recipient can
     // actually act on either notification from — the appeals list
     // (/trust-safety) — rather than the report_acknowledged default below

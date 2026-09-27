@@ -9,6 +9,7 @@ import { rotateClientSecret, requestScope, deleteWebhookSubscription } from "@/a
 import { RedirectUrisForm } from "@/components/RedirectUrisForm";
 import { WebhookSubscriptionForm } from "@/components/WebhookSubscriptionForm";
 import { EditDeveloperAppForm } from "@/components/EditDeveloperAppForm";
+import { API_PLAN_PRICING } from "@/lib/api-usage-billing";
 import { BillingPlanForm } from "./BillingPlanForm";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -166,10 +167,11 @@ export default async function DeveloperAppDetailPage({
       <div>
         <p className="sectionHeading">Billing plan</p>
         <p className="mutedText" style={{ fontSize: "0.85rem", marginBottom: "0.5rem" }}>
-          Free apps are rate-limited once they exceed their included hourly requests. Pay-as-you-go and
-          committed apps aren&apos;t hard-capped — usage settles periodically as a platform charge instead.
+          Free apps are rate-limited once they exceed their included hourly requests. Paid plans aren&apos;t
+          hard-capped and are paid in coins from {app.ownerBusinessId ? "the business wallet" : "your wallet"}; if a
+          charge can&apos;t be covered, the app moves back to Free.
         </p>
-        <BillingPlanForm appId={app.id} billingPlan={app.billingPlan} />
+        <BillingPlanForm appId={app.id} billingPlan={app.billingPlan} pricing={API_PLAN_PRICING} />
       </div>
     </div>
   );
