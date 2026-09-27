@@ -32,14 +32,16 @@ import path from "path";
 import { put, list, del } from "@vercel/blob";
 
 function resolveDumpTarget() {
-  const url = process.env.DATABASE_URL;
+  // Trimmed: a secret stored via `cmd | gh secret set` keeps the trailing
+  // newline, which silently breaks the authToken query parameter.
+  const url = process.env.DATABASE_URL?.trim();
   if (!url) throw new Error("DATABASE_URL is not set");
   if (url.startsWith("file:")) {
     throw new Error(
       "DATABASE_URL is a local file: URL — use `node scripts/backup-db.mjs` for that, not this script (which is only for remote libsql/Turso URLs)."
     );
   }
-  const authToken = process.env.DATABASE_AUTH_TOKEN;
+  const authToken = process.env.DATABASE_AUTH_TOKEN?.trim();
   if (!authToken) throw new Error("DATABASE_AUTH_TOKEN is not set");
 
   // `.dump` over a URL is an HTTP GET to <url>/dump, which the CLI's HTTP
