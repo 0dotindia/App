@@ -31,7 +31,7 @@ function parseAndValidateProductFields(formData: FormData): { error: string } | 
   if (description.length > 2000) return { error: "Description must be 2000 characters or fewer." };
 
   const price = Number(formData.get("price"));
-  if (!Number.isFinite(price) || price <= 0) return { error: "Price must be a positive number." };
+  if (!Number.isFinite(price) || price < 0.01) return { error: "Price must be a positive number." };
 
   const currency = String(formData.get("currency") ?? "usd").trim().toLowerCase() || "usd";
 

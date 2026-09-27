@@ -351,7 +351,7 @@ export async function createTicketType(_prevState: ActionState, formData: FormDa
   let price: number | null = null;
   if (priceRaw.length > 0) {
     price = Math.round(Number(priceRaw) * 100) / 100;
-    if (!Number.isFinite(price) || price <= 0) return { error: "Price must be a positive amount, or left blank for a free ticket." };
+    if (!Number.isFinite(price) || price < 0.01) return { error: "Price must be a positive amount, or left blank for a free ticket." };
     if (event.hostedByCommunityId) return { error: "Community-hosted events can't sell paid tickets — RSVP-only for now." };
   }
 
@@ -425,6 +425,7 @@ export async function purchaseTicket(_prevState: ActionState, formData: FormData
   // ticket and pays the host (a user wallet, or the business wallet for a
   // business-hosted event). No payout account required (§6.4).
   const hostUserId = event.hostedByBusinessId ? null : (event.hostedByUserId ?? event.createdBy);
+  if (hostUserId === user.id) return { error: "You can't buy a paid ticket to your own event." };
   let alreadySettled: boolean;
   try {
     alreadySettled = await db.$transaction(async (tx) => {

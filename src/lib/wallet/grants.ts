@@ -7,6 +7,7 @@ import { ensureUserAccounts, ensureBusinessAccounts, SYSTEM_ACCOUNT_IDS } from "
 import { WALLET_LIMITS, coinsToUnits, launchPromoEndsAt } from "@/lib/wallet/limits";
 import { notifyCoinsReceived } from "@/lib/notifications";
 import { logger } from "@/lib/logger";
+import { PLATFORM_ACCOUNT_EMAIL } from "@/lib/first-party-apps";
 
 // addendum-coin-wallet-v2.md §7.1 — the audited signup grant. Called from
 // auth.ts signup inside the user-creation transaction; the idempotencyKey
@@ -64,8 +65,10 @@ const ALLOWANCE_PAGE_SIZE = 500;
 // it, so one that becomes active mid-month is picked up the next day. The
 // idempotency key allows one per account per calendar month (UTC), so a
 // rerun or an overlapping cron is a no-op. Eligible = active status, no
-// pending deletion, old enough, and a web session seen or an app token
-// issued (tokens refresh while the mobile app is in use) recently.
+// pending deletion, old enough, and a web session seen or a first-party
+// app token issued (tokens refresh while the mobile app is in use)
+// recently. Third-party apps don't count: their servers can refresh a
+// token with the user never opening 0dot.
 export async function runMonthlyAllowanceSweepOnce(now: Date = new Date()) {
   const month = now.toISOString().slice(0, 7); // yyyy-mm
   const activeSince = new Date(now.getTime() - WALLET_LIMITS.MONTHLY_ALLOWANCE_ACTIVE_WITHIN_DAYS * DAY_MS);
@@ -82,15 +85,25 @@ export async function runMonthlyAllowanceSweepOnce(now: Date = new Date()) {
         status: "active",
         deletionScheduledFor: null,
         createdAt: { lte: createdBefore },
+        // Keyset paging, not a Prisma cursor: a cursor row deleted between
+        // pages makes the next page come back empty and ends the sweep.
+        ...(cursor ? { id: { gt: cursor } } : {}),
         OR: [
           { sessions: { some: { lastSeenAt: { gte: activeSince } } } },
-          { oauthAuthorizations: { some: { status: "active", tokens: { some: { createdAt: { gte: activeSince } } } } } },
+          {
+            oauthAuthorizations: {
+              some: {
+                status: "active",
+                app: { ownerUser: { email: PLATFORM_ACCOUNT_EMAIL } },
+                tokens: { some: { createdAt: { gte: activeSince } } },
+              },
+            },
+          },
         ],
       },
       select: { id: true },
       orderBy: { id: "asc" },
       take: ALLOWANCE_PAGE_SIZE,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
     if (users.length === 0) break;
     cursor = users[users.length - 1].id;

@@ -74,7 +74,7 @@ function parseAndValidateFields(formData: FormData): { error: string } | Offerin
   let currency: string | null = null;
   if (priceRaw) {
     const parsedPrice = Number(priceRaw);
-    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) return { error: "Price must be a positive number." };
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0.01) return { error: "Price must be a positive number." };
     price = parsedPrice;
     // Prices are coin prices (addendum-wallet-only-payments.md §4.1); the
     // currency column is kept set-iff-priced until it's retired.
@@ -252,6 +252,7 @@ export async function purchaseOffering(_prevState: ActionState, formData: FormDa
   if (!offering.businessId && !offering.sellerUserId) {
     return { error: "This offering can't be bought with coins." };
   }
+  if (offering.sellerUserId === user.id) return { error: "You can't buy your own offering." };
   const coinAmount = Math.round(offering.price * quantity * 100) / 100;
   const result = await settleCoinPurchase({
     kind: offering.businessId ? "business_purchase" : "freelance_purchase",

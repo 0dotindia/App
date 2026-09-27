@@ -44,7 +44,7 @@ async function parseAndValidateCourseFields(formData: FormData, creatorId: strin
   let currency: string | null = null;
   if (priceRaw) {
     price = Number(priceRaw);
-    if (!Number.isFinite(price) || price <= 0) return { error: "Price must be a positive number." };
+    if (!Number.isFinite(price) || price < 0.01) return { error: "Price must be a positive number." };
     currency = String(formData.get("currency") ?? "usd").trim().toLowerCase() || "usd";
   }
 

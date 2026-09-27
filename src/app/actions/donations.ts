@@ -101,6 +101,7 @@ export async function donate(_prevState: ActionState, formData: FormData): Promi
   if (campaign.organizerType !== "user" || !campaign.organizerUserId) {
     return { error: "This campaign's payout route isn't supported yet." };
   }
+  if (campaign.organizerUserId === user.id) return { error: "You can't donate to your own campaign." };
 
   // addendum-coin-wallet-v2.md §6.3: coins settle now, no payout account
   // needed on the organizer.

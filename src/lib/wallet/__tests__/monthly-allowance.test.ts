@@ -6,6 +6,7 @@ import { runPromoExpirySweepOnce } from "@/lib/wallet/expiry";
 import { getWalletBalance } from "@/lib/wallet/ledger";
 import { runWalletReconciliationOnce } from "@/lib/wallet/reconcile";
 import { WALLET_LIMITS } from "@/lib/wallet/limits";
+import { PLATFORM_ACCOUNT_EMAIL } from "@/lib/first-party-apps";
 
 const DAY = 24 * 60 * 60 * 1000;
 const ALLOWANCE = WALLET_LIMITS.MONTHLY_ALLOWANCE_COINS;
@@ -58,26 +59,45 @@ describe("monthly allowance", () => {
     for (const u of [fresh, idle, stale, suspended, leaving]) expect(await restricted(u.id)).toBe(0);
   });
 
-  it("counts recent mobile-app use (a fresh OAuth token) as active", async () => {
-    const user = await account({ webSession: false });
+  // An OAuth app owned by `ownerUserId` with a fresh token for `userId`.
+  async function appToken(userId: string, ownerUserId: string) {
     const app = await db.developerApp.create({
       data: {
         ownerType: "user",
-        ownerUserId: user.id,
-        name: "Mobile",
+        ownerUserId,
+        name: "App",
         description: "test",
         clientId: `client_${crypto.randomUUID()}`,
         clientSecretHash: "unused",
         redirectUrisJson: "[]",
       },
     });
-    const authorization = await db.oAuthAuthorization.create({ data: { appId: app.id, userId: user.id, grantedScopesJson: "[]" } });
+    const authorization = await db.oAuthAuthorization.create({ data: { appId: app.id, userId, grantedScopesJson: "[]" } });
     await db.oAuthToken.create({
       data: { authorizationId: authorization.id, accessTokenHash: crypto.randomUUID(), expiresAt: new Date(Date.now() + DAY) },
     });
+  }
+
+  it("counts recent mobile-app use (a fresh first-party OAuth token) as active", async () => {
+    const user = await account({ webSession: false });
+    const platform = await db.user.upsert({
+      where: { email: PLATFORM_ACCOUNT_EMAIL },
+      create: { email: PLATFORM_ACCOUNT_EMAIL, passwordHash: "unused", status: "active" },
+      update: {},
+    });
+    await appToken(user.id, platform.id);
 
     await runMonthlyAllowanceSweepOnce();
     expect(await restricted(user.id)).toBe(ALLOWANCE);
+  });
+
+  it("doesn't count a third-party app's token refreshes as activity", async () => {
+    const user = await account({ webSession: false });
+    const developer = await createUser();
+    await appToken(user.id, developer.id);
+
+    await runMonthlyAllowanceSweepOnce();
+    expect(await restricted(user.id)).toBe(0);
   });
 
   it("expires unspent allowance with the other grants", async () => {

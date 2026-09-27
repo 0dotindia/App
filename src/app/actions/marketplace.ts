@@ -75,7 +75,7 @@ export async function createMarketplaceListing(_prevState: ActionState, formData
   let currency: string | null = null;
   if (priceRaw) {
     const parsedPrice = Number(priceRaw);
-    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) return { error: "Price must be a positive number." };
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0.01) return { error: "Price must be a positive number." };
     price = parsedPrice;
     // Prices are coin prices (addendum-wallet-only-payments.md §4.1); the
     // currency column is kept set-iff-priced until it's retired.
@@ -133,7 +133,7 @@ export async function updateMarketplaceListing(_prevState: ActionState, formData
   let currency: string | null = null;
   if (priceRaw) {
     const parsedPrice = Number(priceRaw);
-    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) return { error: "Price must be a positive number." };
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0.01) return { error: "Price must be a positive number." };
     price = parsedPrice;
     // Prices are coin prices (addendum-wallet-only-payments.md §4.1); the
     // currency column is kept set-iff-priced until it's retired.

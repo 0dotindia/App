@@ -42,7 +42,7 @@ function parseAndValidateTierFields(formData: FormData): { error: string } | Tie
   if (!Number.isInteger(level) || level < 1) return { error: "Level must be a positive whole number." };
 
   const price = Number(formData.get("price"));
-  if (!Number.isFinite(price) || price <= 0) return { error: "Price must be a positive number." };
+  if (!Number.isFinite(price) || price < 0.01) return { error: "Price must be a positive number." };
 
   const currency = String(formData.get("currency") ?? "usd").trim().toLowerCase() || "usd";
 

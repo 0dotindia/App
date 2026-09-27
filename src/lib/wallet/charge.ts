@@ -33,6 +33,11 @@ export async function chargeWallet(
   if (params.payeeUserId && params.payeeBusinessId) {
     throw new WalletError("BAD_REQUEST", "a charge has at most one payee");
   }
+  // Paying yourself would move restricted (promo) coins into your own
+  // spendable wallet, laundering non-transferable, expiring grants.
+  if (params.payeeUserId === params.payerId) {
+    throw new WalletError("BAD_REQUEST", "you can't pay yourself");
+  }
 
   // Fee: same rule recordPaymentTransaction applies — a percentage of the
   // sale for an external payee (premium creators keep their reduced rate),
@@ -170,6 +175,10 @@ export async function settleCoinPurchase(params: {
   } catch (err) {
     if (err instanceof WalletError && err.code === "INSUFFICIENT_FUNDS") {
       return { error: "You don't have enough coins for this purchase." };
+    }
+    // Self-payment, or a legacy row priced below one coin cent.
+    if (err instanceof WalletError && err.code === "BAD_REQUEST") {
+      return { error: "This can't be bought right now." };
     }
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       // Concurrent double-purchase — the whole transaction, charge included,
