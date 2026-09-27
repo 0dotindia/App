@@ -83,14 +83,14 @@ export async function findCollidingActiveBusiness(name: string): Promise<{ id: s
 // Otherwise it stays `pending` — invisible/unsearchable until a platform
 // admin approves it from /admin/businesses.
 export async function computeInitialBusinessStatus(args: {
-  creatorEmail: string;
+  creatorEmail: string | null; // null for accounts created without an email — no domain signal then
   creatorIsVerified: boolean;
   website: string | null;
   name: string;
 }): Promise<"active" | "pending"> {
   if (await findCollidingActiveBusiness(args.name)) return "pending";
   if (args.creatorIsVerified) return "active";
-  if (args.website) {
+  if (args.website && args.creatorEmail) {
     const emailDomain = extractEmailDomain(args.creatorEmail);
     const websiteDomain = extractWebsiteDomain(args.website);
     if (emailDomain && websiteDomain && emailDomain === websiteDomain) return "active";

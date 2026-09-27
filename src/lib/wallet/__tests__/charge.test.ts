@@ -25,7 +25,7 @@ describe("coin tip (Phase 2 acceptance)", () => {
     await fundWallet(tipper.id, 10, "spendable");
     await loginAs(tipper.id);
 
-    const result = await sendTip(undefined, fd({ creatorHandle: creator.username!.handle, amount: "5", message: "nice work", payWith: "coins" }));
+    const result = await sendTip(undefined, fd({ creatorHandle: creator.username!.handle, amount: "5", message: "nice work" }));
     expect(result?.success).toBe(true);
 
     const pts = await db.paymentTransaction.findMany({ where: { kind: "tip", payeeId: creator.id } });
@@ -61,7 +61,7 @@ describe("coin tip (Phase 2 acceptance)", () => {
     await fundWallet(tipper.id, 2, "spendable");
     await loginAs(tipper.id);
 
-    const result = await sendTip(undefined, fd({ creatorHandle: creator.username!.handle, amount: "5", message: "", payWith: "coins" }));
+    const result = await sendTip(undefined, fd({ creatorHandle: creator.username!.handle, amount: "5", message: "" }));
     expect(result?.error).toMatch(/enough coins/i);
     expect(await db.tip.findMany({ where: { toCreatorId: creator.id } })).toHaveLength(0);
     expect(await db.paymentTransaction.findMany({ where: { payeeId: creator.id } })).toHaveLength(0);
@@ -75,7 +75,7 @@ describe("coin tip (Phase 2 acceptance)", () => {
     await fundWallet(tipper.id, 3, "spendable");
     await loginAs(tipper.id);
 
-    const result = await sendTip(undefined, fd({ creatorHandle: creator.username!.handle, amount: "4", message: "", payWith: "coins" }));
+    const result = await sendTip(undefined, fd({ creatorHandle: creator.username!.handle, amount: "4", message: "" }));
     expect(result?.success).toBe(true);
     // promo drawn first: 300 units promo + 100 units wallet spent.
     const b = await getWalletBalance(tipper.id);
@@ -95,12 +95,12 @@ describe("coin digital-product purchase", () => {
       data: { creatorId: creator.id, title: "Preset Pack", description: "", price: 10, currency: "usd", status: "active", fileKey: "k", fileMimeType: "application/zip", fileSizeBytes: 10 },
     });
 
-    const first = await purchaseProduct(undefined, fd({ productId: product.id, payWith: "coins" }));
+    const first = await purchaseProduct(undefined, fd({ productId: product.id }));
     expect(first?.success).toBe(true);
     expect(await db.digitalProductPurchase.findMany({ where: { productId: product.id } })).toHaveLength(1);
     expect((await getWalletBalance(creator.id)).spendableUnits).toBe(900); // $10 − 10% fee
 
-    const second = await purchaseProduct(undefined, fd({ productId: product.id, payWith: "coins" }));
+    const second = await purchaseProduct(undefined, fd({ productId: product.id }));
     expect(second?.error).toMatch(/already own/i);
   });
 });
@@ -115,7 +115,7 @@ describe("refundToWallet", () => {
     const product = await db.digitalProduct.create({
       data: { creatorId: creator.id, title: "X", description: "", price: 10, currency: "usd", status: "active", fileKey: "k2", fileMimeType: "application/zip", fileSizeBytes: 1 },
     });
-    await purchaseProduct(undefined, fd({ productId: product.id, payWith: "coins" }));
+    await purchaseProduct(undefined, fd({ productId: product.id }));
     const pt = await db.paymentTransaction.findFirstOrThrow({ where: { kind: "digital_purchase", payerId: buyer.id } });
 
     expect((await getWalletBalance(buyer.id)).spendableUnits).toBe(1000); // 20 coins − 10 spent

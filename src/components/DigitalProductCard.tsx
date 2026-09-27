@@ -3,6 +3,7 @@
 import { useActionState, useState, useTransition } from "react";
 import { purchaseProduct, requestDownloadUrl } from "@/app/actions/digital-products";
 import { renderWikiMarkdown } from "@/lib/wiki-markdown";
+import { formatCoins } from "@/lib/coins";
 
 // spec §5: buy form for a non-owner, or a "Download" trigger for a buyer —
 // same useActionState pattern as SubscribeForm.tsx for the purchase side.
@@ -13,12 +14,10 @@ import { renderWikiMarkdown } from "@/lib/wiki-markdown";
 export function DigitalProductCard({
   product,
   owned,
-  cardAvailable,
   viewerCoins,
 }: {
   product: { id: string; title: string; description: string; price: number; currency: string; coverImageUrl: string | null };
   owned: boolean;
-  cardAvailable: boolean;
   viewerCoins: number;
 }) {
   const [state, formAction, pending] = useActionState(purchaseProduct, undefined);
@@ -61,23 +60,16 @@ export function DigitalProductCard({
           {state?.error && <p className="errorText" style={{ margin: "0.2rem 0" }}>{state.error}</p>}
           {state?.success && <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>Purchased — refresh to download.</p>}
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-            {cardAvailable && (
-              <button type="submit" name="payWith" value="card" className="button buttonSmall" disabled={pending}>
-                {pending ? "Buying…" : `Buy — ${product.price.toFixed(2)} ${product.currency.toUpperCase()}`}
-              </button>
-            )}
             <button
               type="submit"
-              name="payWith"
-              value="coins"
-              className={cardAvailable ? "button buttonSmall buttonSecondary" : "button buttonSmall"}
+              className="button buttonSmall"
               disabled={pending || viewerCoins < product.price}
             >
-              {pending ? "Buying…" : `${product.price} coins`}
+              {pending ? "Buying…" : formatCoins(product.price)}
             </button>
           </div>
           {viewerCoins < product.price && (
-            <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>You have {viewerCoins} of {product.price} coins.</p>
+            <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>You have {formatCoins(viewerCoins)} of {formatCoins(product.price)}.</p>
           )}
         </form>
       )}

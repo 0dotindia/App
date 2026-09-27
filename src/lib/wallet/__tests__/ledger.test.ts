@@ -99,12 +99,9 @@ describe("signup() wiring", () => {
   it("gives a new account a signup_grant LedgerTransaction and a launch-promo grant", async () => {
     const fd = new FormData();
     fd.set("displayName", "Grant Tester");
-    fd.set("username", `grant${Date.now().toString(36)}`);
-    fd.set("email", `grant-${Date.now()}@example.com`);
+    const handle = `grant${Date.now().toString(36)}`;
+    fd.set("username", handle);
     fd.set("password", "correct-horse-battery-staple");
-    fd.set("phoneDialCode", "1");
-    fd.set("phoneNumber", `415${Math.floor(1000000 + Math.random() * 8999999)}`);
-    fd.set("dateOfBirth", "2000-01-01");
 
     let state;
     try {
@@ -114,7 +111,7 @@ describe("signup() wiring", () => {
     }
     expect(state?.error, `signup returned an error: ${state?.error}`).toBeUndefined();
 
-    const created = await db.user.findFirstOrThrow({ where: { email: { startsWith: "grant-" } }, orderBy: { createdAt: "desc" } });
+    const created = await db.user.findFirstOrThrow({ where: { username: { handle } } });
     const grant = await db.ledgerTransaction.findUnique({ where: { idempotencyKey: `signup_grant:${created.id}` } });
     expect(grant).not.toBeNull();
     const launch = await db.ledgerTransaction.findUnique({ where: { idempotencyKey: `launch_promo:${created.id}` } });

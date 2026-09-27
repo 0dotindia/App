@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "crypto";
 import dns from "dns/promises";
 import { db } from "@/lib/db";
+import { effectivelyActiveWhere } from "@/lib/subscription-access";
 import type { CustomDomain } from "@/generated/prisma/client";
 
 const EDGE_HOST = "edge.0dot.in";
@@ -231,11 +232,8 @@ async function releaseExpiredClaims(): Promise<void> {
 // spec §8.2: grace period -> suspended_nonpayment -> dormant, driven off
 // whether the owner currently holds an effectively-active PlatformSubscription
 // for the plan that gates this domain (profile_premium for a profile-owned
-// domain, business_subscription for a business-owned one) — mirrors
-// platform-billing.ts's effectivelyActive shape rather than importing it,
-// same "avoid a needless cross-module coupling for one shared where-clause"
-// call made in payments.ts's fee-discount check.
-const effectivelyActive = { OR: [{ status: "active" }, { status: "cancelled", currentPeriodEnd: { gt: new Date() } }] };
+// domain, business_subscription for a business-owned one) — the shared,
+// dependency-free subscription-access.ts clause.
 
 async function sweepBillingLapse(): Promise<void> {
   const rows = await db.customDomain.findMany({ where: { status: { in: ["active", "suspended_nonpayment"] } } });
@@ -244,7 +242,7 @@ async function sweepBillingLapse(): Promise<void> {
     const plan = row.ownerType === "profile" ? "profile_premium" : "business_subscription";
     const subscriberWhere = row.ownerType === "profile" ? { subscriberProfileId: row.ownerProfileId } : { subscriberBusinessId: row.ownerBusinessId };
 
-    const activeSubscription = await db.platformSubscription.findFirst({ where: { plan, ...subscriberWhere, ...effectivelyActive } });
+    const activeSubscription = await db.platformSubscription.findFirst({ where: { plan, ...subscriberWhere, ...effectivelyActiveWhere() } });
     if (activeSubscription) {
       if (row.status === "suspended_nonpayment") {
         await db.customDomain.update({ where: { id: row.id }, data: { status: "active" } });

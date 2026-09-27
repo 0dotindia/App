@@ -8,12 +8,21 @@ import { coinsToUnits } from "@/lib/wallet/limits";
 import { notifyCoinsReceived } from "@/lib/notifications";
 
 // addendum-coin-wallet-v2.md §6.1 — the bridge from the coin ledger to
-// PaymentTransaction. A coin sale writes the same money-movement row a
-// Stripe sale does (so analytics + admin views are rail-agnostic) with
+// PaymentTransaction. Every sale writes one PaymentTransaction (so
+// analytics + admin views have a single money-movement table) with
 // processor "wallet" and processorReference pointing at the backing
-// LedgerTransaction. 1 coin = $1, so a USD price maps straight to coin
-// units at ×100 (cents precision, §4.1). Must run inside the caller's
+// LedgerTransaction. A price maps straight to coin units at ×100 (cents
+// precision, §4.1). Must run inside the caller's
 // db.$transaction.
+//
+// An affiliate attribution (addendum-wallet-only-payments.md §8 #3) splits
+// the payee's share: the commission — a percentage of the sale, capped at
+// what the payee would receive — goes to the affiliate's spendable wallet
+// in the same ledger transaction, and the platform fee is unchanged. It is
+// recorded like the card rail did: an affiliate_commission
+// PaymentTransaction plus an AffiliateConversion row.
+export type AffiliateAttribution = { linkId: string; affiliateId: string; commissionPercent: number };
+
 export async function chargeWallet(
   tx: Prisma.TransactionClient,
   params: {
@@ -26,12 +35,23 @@ export async function chargeWallet(
     relatedObjectType?: string;
     relatedObjectId?: string;
     idempotencyKey: string;
+    affiliate?: AffiliateAttribution | null;
   },
-): Promise<{ paymentTransactionId: string; ledgerTransactionId: string; alreadySettled: boolean }> {
+): Promise<{
+  paymentTransactionId: string;
+  ledgerTransactionId: string;
+  alreadySettled: boolean;
+  creditedAffiliateId: string | null;
+}> {
   const amountUnits = coinsToUnits(params.amountUsd);
   if (amountUnits <= 0) throw new WalletError("BAD_REQUEST", "charge amount must be positive");
   if (params.payeeUserId && params.payeeBusinessId) {
     throw new WalletError("BAD_REQUEST", "a charge has at most one payee");
+  }
+  // Paying yourself would move restricted (promo) coins into your own
+  // spendable wallet, laundering non-transferable, expiring grants.
+  if (params.payeeUserId === params.payerId) {
+    throw new WalletError("BAD_REQUEST", "you can't pay yourself");
   }
 
   // Fee: same rule recordPaymentTransaction applies — a percentage of the
@@ -44,6 +64,19 @@ export async function chargeWallet(
     : params.amountUsd;
   const feeUnits = Math.round(platformFeeUsd * 100);
   const payeeUnits = amountUnits - feeUnits; // remainder to the payee, exact (§4.1)
+
+  // No commission to the payer (getAttributedAffiliateLink already excludes
+  // them) or to the payee themselves, and none without an external payee.
+  const affiliate =
+    params.affiliate &&
+    hasExternalPayee &&
+    params.affiliate.affiliateId !== params.payerId &&
+    params.affiliate.affiliateId !== params.payeeUserId
+      ? params.affiliate
+      : null;
+  const commissionUnits = affiliate
+    ? Math.min(Math.max(payeeUnits, 0), Math.round((amountUnits * affiliate.commissionPercent) / 100))
+    : 0;
 
   const payer = await ensureUserAccounts(tx, params.payerId);
   const promo = await tx.ledgerAccount.findUniqueOrThrow({
@@ -58,13 +91,18 @@ export async function chargeWallet(
   if (fromWallet > 0) postings.push({ accountId: payer.walletId, amount: -fromWallet });
   if (feeUnits > 0) postings.push({ accountId: SYSTEM_ACCOUNT_IDS.system_platform_revenue, amount: feeUnits });
 
+  const payeeNetUnits = payeeUnits - commissionUnits;
+  if (commissionUnits > 0) {
+    const affiliateAccounts = await ensureUserAccounts(tx, affiliate!.affiliateId);
+    postings.push({ accountId: affiliateAccounts.walletId, amount: commissionUnits });
+  }
   if (payeeUnits > 0) {
     if (params.payeeUserId) {
       const payee = await ensureUserAccounts(tx, params.payeeUserId);
-      postings.push({ accountId: payee.walletId, amount: payeeUnits });
+      if (payeeNetUnits > 0) postings.push({ accountId: payee.walletId, amount: payeeNetUnits });
     } else if (params.payeeBusinessId) {
       const payee = await ensureBusinessAccounts(tx, params.payeeBusinessId);
-      postings.push({ accountId: payee.walletId, amount: payeeUnits });
+      if (payeeNetUnits > 0) postings.push({ accountId: payee.walletId, amount: payeeNetUnits });
     } else {
       // 0dot is the payee — any rounding remainder is still platform revenue.
       postings.push({ accountId: SYSTEM_ACCOUNT_IDS.system_platform_revenue, amount: payeeUnits });
@@ -86,6 +124,7 @@ export async function chargeWallet(
       paymentTransactionId: ledgerTxn.paymentTransactionId ?? "",
       ledgerTransactionId: ledgerTxn.id,
       alreadySettled: true,
+      creditedAffiliateId: null,
     };
   }
 
@@ -107,7 +146,34 @@ export async function chargeWallet(
     data: { paymentTransactionId: pt.id },
   });
 
-  return { paymentTransactionId: pt.id, ledgerTransactionId: ledgerTxn.id, alreadySettled: false };
+  if (commissionUnits > 0) {
+    const commission = commissionUnits / 100;
+    const commissionPt = await tx.paymentTransaction.create({
+      data: {
+        kind: "affiliate_commission",
+        payerId: null,
+        payeeId: affiliate!.affiliateId,
+        amount: commission,
+        currency: params.currency,
+        platformFee: 0, // the sale's fee is taken once, on the sale row
+        processor: "wallet",
+        processorReference: `${ledgerTxn.id}_aff`,
+        status: "succeeded",
+        relatedObjectType: "affiliate_link",
+        relatedObjectId: affiliate!.linkId,
+      },
+    });
+    await tx.affiliateConversion.create({
+      data: { affiliateLinkId: affiliate!.linkId, paymentTransactionId: commissionPt.id, commissionAmount: commission },
+    });
+  }
+
+  return {
+    paymentTransactionId: pt.id,
+    ledgerTransactionId: ledgerTxn.id,
+    alreadySettled: false,
+    creditedAffiliateId: commissionUnits > 0 ? affiliate!.affiliateId : null,
+  };
 }
 
 // The object a feature's row-creation needs, whichever rail settled the
@@ -122,12 +188,11 @@ export type FeatureSettlement = {
   metadata: Record<string, string>;
 };
 
-// The coin counterpart of a Stripe-webhook activateXxx: charge the payer's
-// wallet, record the PaymentTransaction, and run the feature's own row
-// creation — all in one transaction, so a coin tip lands its Tip row and
-// its LedgerTransaction together or not at all (§6.2's acceptance
-// criterion). Feature-specific notifications/revalidation stay with the
-// caller, mirroring the webhook path.
+// Charge the payer's wallet, record the PaymentTransaction, and run the
+// feature's own row creation — all in one transaction, so a coin tip lands
+// its Tip row and its LedgerTransaction together or not at all (§6.2's
+// acceptance criterion). Feature-specific notifications/revalidation stay
+// with the caller.
 export async function settleCoinPurchase(params: {
   kind: string;
   payerId: string;
@@ -140,7 +205,11 @@ export async function settleCoinPurchase(params: {
   idempotencyKey: string;
   metadata: Record<string, string>;
   createRows: (tx: Prisma.TransactionClient, settlement: FeatureSettlement) => Promise<void>;
-}): Promise<{ ok: true; alreadySettled: boolean; paymentTransactionId: string } | { error: string }> {
+  affiliate?: AffiliateAttribution | null;
+}): Promise<
+  | { ok: true; alreadySettled: boolean; paymentTransactionId: string; creditedAffiliateId: string | null }
+  | { error: string }
+> {
   try {
     const outcome = await db.$transaction(async (tx) => {
       const charge = await chargeWallet(tx, {
@@ -153,9 +222,10 @@ export async function settleCoinPurchase(params: {
         relatedObjectType: params.relatedObjectType,
         relatedObjectId: params.relatedObjectId,
         idempotencyKey: params.idempotencyKey,
+        affiliate: params.affiliate,
       });
       if (charge.alreadySettled) {
-        return { alreadySettled: true, paymentTransactionId: charge.paymentTransactionId };
+        return { alreadySettled: true, paymentTransactionId: charge.paymentTransactionId, creditedAffiliateId: null };
       }
       await params.createRows(tx, {
         paymentTransactionId: charge.paymentTransactionId,
@@ -165,12 +235,20 @@ export async function settleCoinPurchase(params: {
         currency: params.currency,
         metadata: params.metadata,
       });
-      return { alreadySettled: false, paymentTransactionId: charge.paymentTransactionId };
+      return {
+        alreadySettled: false,
+        paymentTransactionId: charge.paymentTransactionId,
+        creditedAffiliateId: charge.creditedAffiliateId,
+      };
     });
     return { ok: true, ...outcome };
   } catch (err) {
     if (err instanceof WalletError && err.code === "INSUFFICIENT_FUNDS") {
       return { error: "You don't have enough coins for this purchase." };
+    }
+    // Self-payment, or a legacy row priced below one coin cent.
+    if (err instanceof WalletError && err.code === "BAD_REQUEST") {
+      return { error: "This can't be bought right now." };
     }
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       // Concurrent double-purchase — the whole transaction, charge included,
@@ -187,8 +265,8 @@ export async function settleCoinPurchase(params: {
 // LedgerTransaction(kind:"refund"), linked to the source PT, is the
 // money-movement record — no bogus second PaymentTransaction (a refund
 // doesn't fit the facilitator fee model). Idempotent on the source payment;
-// a replay is a no-op success. A caller (refund policy / admin tool) is
-// still pending the §18 #4 product decision.
+// a replay is a no-op success. Called by the admin refund tool
+// (refundPaymentAction, addendum-wallet-only-payments.md §3.6).
 export async function refundToWallet(params: {
   paymentTransactionId: string;
   amountUsd: number;

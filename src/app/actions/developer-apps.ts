@@ -4,13 +4,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
-import { getAppOrigin } from "@/lib/email";
 import { saveUploadedImage } from "@/lib/uploads";
 import type { ActionState } from "@/app/actions/auth";
 import { resolveDeveloperAppOwner, generateClientCredentials, parseRedirectUris, requireOwnedDeveloperApp } from "@/lib/developer-apps";
 import { requestDeveloperAppScope, revokeOAuthAuthorization, seedOAuthScopes } from "@/lib/oauth";
 import { ALLOWED_WEBHOOK_EVENT_TYPES, generateWebhookSecret } from "@/lib/webhooks";
-import { createApiPlanCheckoutSession, downgradeApiPlanToFree, resolveAppPayerUserId } from "@/lib/api-usage-billing";
+import { switchApiPlan } from "@/lib/api-usage-billing";
 
 const MAX_LOGO_BYTES = 5 * 1024 * 1024;
 
@@ -130,11 +129,9 @@ const BILLING_PLAN_VALUES = new Set(["free", "pay_as_you_go", "committed"]);
 
 // billing addendum §4.1: an app's own owner chooses its billing plan —
 // switching to pay_as_you_go/committed lifts api-rate-limit.ts's hard cap
-// in exchange for being metered by api-usage-billing.ts's real Stripe
-// subscription instead. Moving to a paid plan starts a Checkout redirect
-// (a subscription can't be confirmed synchronously); billingPlan itself is
-// only ever set by the webhook (activateApiPlanSubscription) once that
-// confirms, or immediately here for the free/no-payment-needed case.
+// in exchange for paying for usage in coins (addendum-wallet-only-payments.md
+// §3.4, api-usage-billing.ts's switchApiPlan). Settles synchronously — no
+// checkout redirect.
 export async function updateBillingPlan(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
   const appId = String(formData.get("appId") ?? "");
@@ -144,30 +141,10 @@ export async function updateBillingPlan(_prevState: ActionState, formData: FormD
   const billingPlan = String(formData.get("billingPlan") ?? "");
   if (!BILLING_PLAN_VALUES.has(billingPlan)) return { error: "Choose a valid billing plan." };
 
-  const handle = await handleFor(user.id);
-  const base = `${getAppOrigin()}/s/${handle}/developer/${appId}`;
-
-  if (billingPlan === "free") {
-    await downgradeApiPlanToFree(appId);
-    revalidatePath(`${base}`);
-    return undefined;
-  }
-
-  const payerUserId = await resolveAppPayerUserId(app);
-  if (!payerUserId) return { error: "This app has no owner to bill." };
-  const payer = await db.user.findUnique({ where: { id: payerUserId }, select: { email: true } });
-  if (!payer) return { error: "This app has no owner to bill." };
-
-  const { checkoutUrl } = await createApiPlanCheckoutSession({
-    appId,
-    plan: billingPlan as "pay_as_you_go" | "committed",
-    payerUserId,
-    payerEmail: payer.email,
-    successUrl: `${base}?checkout=success`,
-    cancelUrl: `${base}?checkout=cancelled`,
-  });
-
-  redirect(checkoutUrl);
+  const result = await switchApiPlan(appId, billingPlan as "free" | "pay_as_you_go" | "committed");
+  revalidatePath(`/s/${await handleFor(user.id)}/developer/${appId}`);
+  if (result.error) return { error: result.error };
+  return { success: true };
 }
 
 export async function requestScope(formData: FormData): Promise<void> {

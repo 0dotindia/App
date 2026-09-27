@@ -145,20 +145,11 @@ export function MarketplaceListingForm({
         <input
           type="text"
           name="price"
-          placeholder="Price (optional — blank = free)"
+          placeholder="Price in coins (optional — blank = free)"
           defaultValue={existing?.price ?? ""}
           inputMode="decimal"
           className="textInput"
           style={{ flex: 1 }}
-        />
-        <input
-          type="text"
-          name="currency"
-          placeholder="USD"
-          defaultValue={existing?.currency ?? ""}
-          maxLength={3}
-          className="textInput"
-          style={{ width: "5rem" }}
         />
       </div>
 

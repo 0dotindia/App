@@ -25,6 +25,18 @@ export const WALLET_LIMITS = {
   LAUNCH_PROMO_COINS: 6, // = one month of profile_premium
   LAUNCH_PROMO_TTL_DAYS: 90,
 
+  // Monthly allowance (addendum-wallet-only-payments.md §4) — with no way to
+  // buy coins, this is the steady supply: every active account gets this
+  // many coins once per calendar month (UTC). Restricted + expiring like
+  // every other grant, so it can be spent but not transferred, and an idle
+  // account can stack at most TTL/30 months of it. Active = a web session
+  // or app token used within the window; the minimum account age keeps a
+  // fresh throwaway from collecting.
+  MONTHLY_ALLOWANCE_COINS: 10,
+  MONTHLY_ALLOWANCE_TTL_DAYS: 90,
+  MONTHLY_ALLOWANCE_ACTIVE_WITHIN_DAYS: 30,
+  MONTHLY_ALLOWANCE_MIN_ACCOUNT_AGE_DAYS: 7,
+
   // Referral rewards (§7.5) — paid only after the invitee verifies their
   // email AND does one meaningful action, so a throwaway account earns
   // nothing. Both sides land in the restricted (promo) bucket.
@@ -43,7 +55,7 @@ export const WALLET_LIMITS = {
   TRANSFER_MIN_ACCOUNT_AGE_HOURS: 24, // fixes #16 — no fresh-account faucet
 
   // Grant kinds whose unspent remainder the promo-expiry sweep claws back.
-  GRANT_KINDS: ["signup_grant", "promo_grant", "referral_reward"] as const,
+  GRANT_KINDS: ["signup_grant", "promo_grant", "referral_reward", "monthly_allowance"] as const,
 
   // Admin issuance controls (§11.3, fixes #15). The dual-control threshold
   // is, for now, a hard ceiling on the self-serve grant tool — amounts over

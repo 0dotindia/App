@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { Prisma } from "@/generated/prisma/client";
 import { requirePlatformRole } from "@/lib/auth-guards";
 import { ROLE_VALUES } from "@/lib/platform-roles";
+import { findUserForAdmin } from "@/lib/admin-user-lookup";
 import type { ActionState } from "@/app/actions/auth";
 
 // True if this change would leave zero super_admins — the target currently
@@ -25,18 +26,18 @@ async function wouldOrphanSuperAdmins(
   return superAdminCount <= 1;
 }
 
-// super_admin-only. Grants an *existing* 0dot user a platform role by
-// email — the first in-app path this ever had; before this every grant
+// super_admin-only. Grants an *existing* 0dot user a platform role by email
+// or username — the first in-app path this ever had; before this every grant
 // (including the very first super_admin) required direct DB access.
 export async function grantPlatformRole(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const { user } = await requirePlatformRole("super_admin");
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const identifier = String(formData.get("identifier") ?? "");
   const roleRaw = String(formData.get("role") ?? "");
 
   if (!ROLE_VALUES.has(roleRaw)) return { error: "Choose a role." };
 
-  const targetUser = await db.user.findUnique({ where: { email }, select: { id: true } });
-  if (!targetUser) return { error: "No 0dot account exists with that email yet." };
+  const targetUser = await findUserForAdmin(identifier);
+  if (!targetUser) return { error: "No 0dot account exists with that username or email." };
 
   await db.platformRole.upsert({
     where: { userId: targetUser.id },

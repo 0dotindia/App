@@ -14,8 +14,8 @@ export function isProfilePagePath(pathname: string): boolean {
 // The landing page ("/"), /login and /signup each render their own
 // self-contained hero/auth card with no site chrome at all — matching the
 // classic split-layout marketing pattern (logo/pitch beside a login form,
-// no header, no nav). /forgot-password, /reset-password, /verify/sent, and
-// /claim-username already use the same chromeless .authWrap/.authCard CSS
+// no header, no nav). /forgot-password, /reset-password/success,
+// /signup/recovery-codes, and /claim-username already use the same chromeless .authWrap/.authCard CSS
 // (globals.css) but were missing from this set (live-site QA pass,
 // 2026-08-25) — they rendered with the full SiteHeader/Sidebar shell wrapped
 // around a card visually designed to stand alone, which looked broken.
@@ -24,8 +24,8 @@ const CHROMELESS_PATHS = new Set([
   "/login",
   "/signup",
   "/forgot-password",
-  "/reset-password",
-  "/verify/sent",
+  "/reset-password/success",
+  "/signup/recovery-codes",
   "/claim-username",
   // Public app-download landing page (src/app/download/page.tsx) — the
   // link shared from app-store listings, QR codes, and social bios, so it

@@ -44,12 +44,9 @@ describe("referral code + attribution", () => {
 
     const fd = new FormData();
     fd.set("displayName", "Referred User");
-    fd.set("username", `ref${Date.now().toString(36)}`);
-    fd.set("email", `referred-${Date.now()}@example.com`);
+    const handle = `ref${Date.now().toString(36)}`;
+    fd.set("username", handle);
     fd.set("password", "correct-horse-battery-staple");
-    fd.set("phoneDialCode", "1");
-    fd.set("phoneNumber", `415${Math.floor(1000000 + Math.random() * 8999999)}`);
-    fd.set("dateOfBirth", "2000-01-01");
 
     try {
       await signup(undefined, fd);
@@ -59,7 +56,7 @@ describe("referral code + attribution", () => {
       cookieJar.delete("ref");
     }
 
-    const created = await db.user.findFirstOrThrow({ where: { email: { startsWith: "referred-" } }, orderBy: { createdAt: "desc" } });
+    const created = await db.user.findFirstOrThrow({ where: { username: { handle } } });
     expect(created.referredByUserId).toBe(inviter.id);
   });
 });
@@ -96,7 +93,7 @@ describe("maybeGrantReferralReward", () => {
     expect((await runWalletReconciliationOnce()).healthy).toBe(true);
   });
 
-  it("won't pay for an unverified invitee or a too-new inviter", async () => {
+  it("won't pay for a too-new invitee or a too-new inviter", async () => {
     const freshInviter = await createUser({ createdAt: new Date() });
     await getOrCreateReferralCode(freshInviter.id);
     const invitee1 = await createUser();
@@ -106,10 +103,12 @@ describe("maybeGrantReferralReward", () => {
 
     const inviter = await createUser();
     await getOrCreateReferralCode(inviter.id);
-    const unverified = await createUser({ emailVerifiedAt: null });
-    await attribute(unverified.id, await getOrCreateReferralCode(inviter.id));
-    await createPost({ authorId: unverified.id });
-    expect((await maybeGrantReferralReward(unverified.id)).reason).toBe("unverified");
+    // No email verification exists to gate on, so a same-day throw-away
+    // invitee is held back by account age instead.
+    const freshInvitee = await createUser({ createdAt: new Date() });
+    await attribute(freshInvitee.id, await getOrCreateReferralCode(inviter.id));
+    await createPost({ authorId: freshInvitee.id });
+    expect((await maybeGrantReferralReward(freshInvitee.id)).reason).toBe("invitee_too_new");
   });
 
   it("the sweep grants pending rewards", async () => {

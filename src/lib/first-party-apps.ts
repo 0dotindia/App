@@ -9,7 +9,7 @@ import { OAUTH_SCOPES, seedOAuthScopes } from "@/lib/oauth";
 // DeveloperApp rows owned by a designated platform User, rather than
 // widening DeveloperApp.owner_type with a "platform" case for something
 // that happens a handful of times total, not per-customer.
-const PLATFORM_ACCOUNT_EMAIL = "platform-apps@0dot.internal";
+export const PLATFORM_ACCOUNT_EMAIL = "platform-apps@0dot.internal";
 
 // This account (and any future "@0dot.internal" system account) only ever
 // exists to own DeveloperApp rows via ownerUserId — its password hash is an

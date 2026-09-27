@@ -630,8 +630,7 @@ const stubProvider: AIProvider = new StubAIProvider();
 let realProvider: AIProvider | null = null;
 
 export function getAIProvider(): AIProvider {
-  // Lazy construction — unlike stripe.ts's eager module-scope client, this
-  // never constructs (or authenticates) an Anthropic client unless a key is
+  // Lazy construction — this never constructs (or authenticates) an Anthropic client unless a key is
   // actually present, so an unset ANTHROPIC_API_KEY (today's default, and
   // every test/CI run) costs nothing and touches no network.
   if (!process.env.ANTHROPIC_API_KEY) return stubProvider;

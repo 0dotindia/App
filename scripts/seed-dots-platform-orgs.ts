@@ -4,7 +4,6 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { PALETTES, avatarSvg, coverSvg } from "./seed-dots-art";
 import { SEED_EMAIL_DOMAIN, recountNonSeed } from "./seed-dots-cleanup";
-import { REPLIES } from "./seed-dots-data";
 import { REVIEW_BODIES, REVIEW_RESPONSES } from "./seed-dots-orgs-data";
 
 // Makes the platform account (@dot by default) part of the communities and
@@ -97,7 +96,7 @@ async function main() {
   try {
     const platformName = await prisma.username.findUnique({ where: { handle }, select: { userId: true, user: { select: { email: true } } } });
     if (!platformName) throw new Error(`No account with handle @${handle}.`);
-    if (platformName.user.email.endsWith(`@${SEED_EMAIL_DOMAIN}`)) throw new Error(`@${handle} is a seeded dot, not the platform account.`);
+    if (platformName.user.email?.endsWith(`@${SEED_EMAIL_DOMAIN}`)) throw new Error(`@${handle} is a seeded dot, not the platform account.`);
     const P = platformName.userId;
 
     if (process.env.UNDO === "1") {
@@ -174,7 +173,7 @@ async function main() {
       });
       const repliers = shuffle(audience).slice(0, between(4, 8));
       const hallReplies: PostRow[] = repliers.map((s, i) => ({ id: randomUUID(), authorId: s.id, body: HALL_REPLIES[(i + int(3)) % HALL_REPLIES.length], createdAt: after(createdAt.getTime(), 3), communityId: hall!.id, replyToId: id }));
-      let replyCount = hallReplies.length;
+      const replyCount = hallReplies.length;
       hallReplies.forEach((r) => notifs.push({ recipientId: P, actorId: r.authorId, type: "comment", subjectType: "post", subjectId: id, createdAt: r.createdAt, readAt: readMaybe(r.createdAt, true) }));
       for (const r of hallReplies) {
         if (!chance(0.5)) continue;

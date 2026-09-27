@@ -9,8 +9,8 @@ export function GrantRoleForm() {
   return (
     <form action={formAction} className="authCard" style={{ maxWidth: "none" }}>
       <div className="field">
-        <label htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" required />
+        <label htmlFor="identifier">Username or email</label>
+        <input id="identifier" name="identifier" type="text" autoCapitalize="none" spellCheck={false} placeholder="@username" required />
         <span className="mutedText">Must already have a 0dot account.</span>
       </div>
       <div className="field">

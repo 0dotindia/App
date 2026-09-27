@@ -3,20 +3,27 @@
 import { useActionState } from "react";
 import { updateBillingPlan } from "@/app/actions/developer-apps";
 
-const PLAN_LABEL: Record<string, string> = {
-  free: "Free — rate-limited, no charge",
-  pay_as_you_go: "Pay as you go — no hard cap, billed for usage beyond the included amount",
-  committed: "Committed — flat monthly price, no hard cap",
-};
-
-export function BillingPlanForm({ appId, billingPlan }: { appId: string; billingPlan: string }) {
+export function BillingPlanForm({
+  appId,
+  billingPlan,
+  pricing,
+}: {
+  appId: string;
+  billingPlan: string;
+  pricing: { includedRequests: number; per1000Over: number; committed: number };
+}) {
   const [state, formAction, pending] = useActionState(updateBillingPlan, undefined);
+  const planLabel: Record<string, string> = {
+    free: "Free — rate-limited, no charge",
+    pay_as_you_go: `Pay as you go — no hard cap, ${pricing.includedRequests.toLocaleString()} requests/month included, then ${pricing.per1000Over} coins per 1,000`,
+    committed: `Committed — ${pricing.committed} coins/month up front, no hard cap`,
+  };
 
   return (
     <form action={formAction} className="settingsForm">
       <input type="hidden" name="appId" value={appId} />
       <select name="billingPlan" defaultValue={billingPlan} className="textInput" style={{ maxWidth: "28rem" }}>
-        {Object.entries(PLAN_LABEL).map(([value, label]) => (
+        {Object.entries(planLabel).map(([value, label]) => (
           <option key={value} value={value}>
             {label}
           </option>
@@ -26,6 +33,7 @@ export function BillingPlanForm({ appId, billingPlan }: { appId: string; billing
         {pending ? "Saving…" : "Save billing plan"}
       </button>
       {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.success && <p className="mutedText" style={{ fontSize: "0.85rem" }}>Billing plan saved.</p>}
     </form>
   );
 }

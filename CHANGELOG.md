@@ -11,6 +11,29 @@ entries are grouped by date. The mobile app is separately versioned
 
 ---
 
+## 2026-09-26 — Signup without email or OTP verification
+
+- **Signup is name + username + password only.** No email, phone, or date
+  of birth on the form, and no verification step: the account is created,
+  signed in, and fully usable immediately. `User.email` is now optional
+  (migration `optional_email_password_recovery_codes`). Date of birth is
+  still asked for once after sign-in via `AgeGatePrompt`.
+- **Password recovery codes replace emailed reset links.** Signup issues 10
+  one-time codes (new `PasswordRecoveryCode` model,
+  `src/lib/password-recovery.ts`), shown once at `/signup/recovery-codes`;
+  `/forgot-password` takes username + code + new password and signs out
+  every session. Codes can be regenerated at `/s/{username}/security`;
+  admins can issue a fresh set at `/admin/account-recovery`.
+- **Email verification gates removed** from `requireVerifiedUser`,
+  `requireVerifiedApiUser`, posting/uploading, 2FA setup, and username
+  claim. Coin transfers and referral rewards now rely on the 24h
+  account-age gate (now also applied to referral invitees) instead.
+- Admin role grants accept a username, not just an email.
+- Fixed: a username containing 7+ digits (e.g. `john1234567`) was treated
+  as a phone number at login and could never sign in.
+- Removed `/verify/sent`, the resend-verification action, `/forgot-password/sent`,
+  and the token-based `/reset-password` page.
+
 ## 2026-08-31 — Coin Wallet v2 — second review pass (findings 1–8)
 
 - **Repeatable coin purchases carry a per-submission idempotency token.**

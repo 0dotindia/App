@@ -72,7 +72,7 @@ export async function loadDots(prisma: PrismaClient): Promise<Dot[]> {
   });
 }
 
-export type Showcase = { id: string; handle: string; profileId: string; createdAt: number; name: string; email: string };
+export type Showcase = { id: string; handle: string; profileId: string; createdAt: number; name: string; email: string | null };
 
 // The showcase IS the platform account (@dot): its real account is only hours old, so its story is backdated —
 // createdAt is reported as at least 150 days ago (posts, projects, events... are dated relative to that).
@@ -80,7 +80,7 @@ export async function loadShowcase(prisma: PrismaClient): Promise<Showcase> {
   const u = await prisma.username.findUnique({ where: { handle: SHOWCASE_HANDLE }, select: { user: { select: { id: true, createdAt: true, email: true, profile: { select: { id: true, displayName: true } } } } } });
   const user = u?.user;
   if (!user?.profile) throw new Error(`Platform account @${SHOWCASE_HANDLE} not found.`);
-  if (user.email.endsWith(`@${SEED_DOMAIN}`)) throw new Error(`@${SHOWCASE_HANDLE} is a seeded dot, not the platform account.`);
+  if (user.email?.endsWith(`@${SEED_DOMAIN}`)) throw new Error(`@${SHOWCASE_HANDLE} is a seeded dot, not the platform account.`);
   return { id: user.id, handle: SHOWCASE_HANDLE, profileId: user.profile.id, createdAt: Math.min(user.createdAt.getTime(), Date.now() - 150 * DAY), name: user.profile.displayName, email: user.email };
 }
 

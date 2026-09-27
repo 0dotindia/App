@@ -46,9 +46,8 @@ export async function requestEmailChange(_prevState: ActionState, formData: Form
   // that (someone else's) address.
   if (existing) return { success: true };
 
-  // Only the newest request should ever be redeemable — same "invalidate
-  // anything outstanding before issuing a new one" posture as
-  // requestPasswordReset (auth.ts).
+  // Only the newest request should ever be redeemable — invalidate anything
+  // outstanding before issuing a new one.
   await db.pendingEmailChange.deleteMany({ where: { userId: user.id } });
 
   const token = randomBytes(24).toString("hex");

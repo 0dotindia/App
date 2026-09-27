@@ -8,6 +8,7 @@ import { archiveCourse } from "@/app/actions/courses";
 import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { CourseForm } from "../../CourseForm";
+import { formatCoins } from "@/lib/coins";
 
 export const metadata: Metadata = { title: "Courses" };
 
@@ -31,7 +32,7 @@ export default async function CoursesSettingsPage() {
           <SettingsRow
             icon={GraduationCap}
             label={course.title}
-            description={`${course.price !== null ? `${course.price.toFixed(2)} ${course.currency?.toUpperCase()}` : "Tier-only"} · ${course.status}`}
+            description={`${course.price !== null ? formatCoins(course.price) : "Tier-only"} · ${course.status}`}
             trailing={
               <>
                 <Link href={`/s/${handle}/content/courses/${course.id}`} className="button buttonSecondary buttonSmall">Manage</Link>

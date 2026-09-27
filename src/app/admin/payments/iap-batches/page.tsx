@@ -8,12 +8,12 @@ import { EmptyState } from "@/components/EmptyState";
 // recordIapPayoutBatch/reconcileIapPayoutBatch (lib/payments.ts), which
 // existed with no caller anywhere before this page. A dedicated
 // /admin/payments/ area rather than folding into /admin/wallet/ — that
-// area is the internal coin economy, a different domain from
-// PaymentTransaction/Stripe Connect real money.
+// area is the internal coin economy, a different domain from real-money
+// app-store payouts.
 // Deliberately stops at "record the lump sum" and "attribute transactions
 // to it" — the two steps lib/payments.ts already implements. No
 // "disburse" action here: nothing on this page moves money to a creator,
-// and actually paying out through CreatorPayoutAccount per phase-15 §6.3
+// and actually paying creators out per phase-15 §6.3
 // is dedicated finance/ops work this addendum was explicit about not
 // building.
 export default async function AdminIapBatchesPage() {

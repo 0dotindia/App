@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { EmptyState } from "@/components/EmptyState";
+import { formatCoins } from "@/lib/coins";
 
 // Public listing surface for spec §11's course landing pages — mirrors
 // the [username]/articles listing pattern, but Course has no `visibility`
@@ -39,7 +40,7 @@ export default async function AuthorCoursesPage({ params }: { params: Promise<{ 
             <strong>{course.title}</strong>
             {course.description && <span className="mutedText">{course.description}</span>}
             <span className="mutedText" style={{ fontSize: "0.8rem" }}>
-              {course.price ? `${course.price} ${(course.currency ?? "usd").toUpperCase()}` : "Free"}
+              {course.price ? formatCoins(course.price) : "Free"}
             </span>
           </Link>
         ))}

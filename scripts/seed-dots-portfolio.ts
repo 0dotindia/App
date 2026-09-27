@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import { mkdirSync, writeFileSync } from "fs";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
@@ -265,7 +264,7 @@ async function main() {
     let dotLikes = 0;
     let dotComments = 0;
     const platform = await prisma.username.findUnique({ where: { handle }, select: { userId: true, user: { select: { email: true } } } });
-    if (platform && !platform.user.email.endsWith(`@${SEED_EMAIL_DOMAIN}`)) {
+    if (platform && !platform.user.email?.endsWith(`@${SEED_EMAIL_DOMAIN}`)) {
       const P = platform.userId;
       const projects = await prisma.project.findMany({ where: { owner: seedUser, visibility: "public" }, select: { id: true, slug: true, ownerId: true, createdAt: true, likeCount: true } });
       const liked = new Set((await prisma.projectLike.findMany({ where: { userId: P }, select: { projectId: true } })).map((l) => l.projectId));

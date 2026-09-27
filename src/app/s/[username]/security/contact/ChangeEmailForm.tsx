@@ -4,15 +4,17 @@ import { useActionState } from "react";
 import { requestEmailChange } from "@/app/actions/account-contact";
 import { PasswordField } from "@/components/PasswordField";
 
-export function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
+export function ChangeEmailForm({ currentEmail }: { currentEmail: string | null }) {
   const [state, formAction, pending] = useActionState(requestEmailChange, undefined);
 
   return (
     <form action={formAction} className="authCard" style={{ maxWidth: "none" }}>
-      <p className="mutedText">Current email: {currentEmail}</p>
+      <p className="mutedText">
+        {currentEmail ? `Current email: ${currentEmail}` : "No email on your account. Adding one is optional."}
+      </p>
 
       <div className="field">
-        <label htmlFor="newEmail">New email</label>
+        <label htmlFor="newEmail">{currentEmail ? "New email" : "Email"}</label>
         <input id="newEmail" name="newEmail" type="email" autoComplete="email" required />
       </div>
 

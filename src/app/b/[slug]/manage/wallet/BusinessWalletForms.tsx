@@ -3,10 +3,12 @@
 import { useActionState } from "react";
 import { subscribeBusinessWithCoinsAction } from "@/app/actions/platform-billing";
 import { IdempotencyField } from "@/components/IdempotencyField";
+import { formatCoins } from "@/lib/coins";
 
 // addendum-coin-wallet-v2.md §6.5 — spend the business wallet on the 0dot
-// business subscription. Rendered only for owner/admin (the page gates it).
-export function BusinessSubscribeWithCoinsForm({ businessId }: { businessId: string }) {
+// business subscription (the only way to pay for it, addendum-wallet-only-
+// payments.md §3.1). Rendered only for owner/admin (the pages gate it).
+export function BusinessSubscribeWithCoinsForm({ businessId, prices }: { businessId: string; prices: { monthly: number; yearly: number } }) {
   const [state, formAction, pending] = useActionState(subscribeBusinessWithCoinsAction, undefined);
 
   return (
@@ -16,11 +18,11 @@ export function BusinessSubscribeWithCoinsForm({ businessId }: { businessId: str
       <div style={{ display: "flex", gap: "1rem" }}>
         <label style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
           <input type="radio" name="billingInterval" value="monthly" defaultChecked style={{ width: "auto" }} />
-          Monthly
+          Monthly · {formatCoins(prices.monthly)}
         </label>
         <label style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
           <input type="radio" name="billingInterval" value="yearly" style={{ width: "auto" }} />
-          Yearly
+          Yearly · {formatCoins(prices.yearly)}
         </label>
       </div>
       <button type="submit" className="button buttonSecondary" disabled={pending} style={{ alignSelf: "flex-start" }}>

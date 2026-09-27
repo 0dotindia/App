@@ -6,6 +6,8 @@ import { postTransaction, WalletError } from "@/lib/wallet/ledger";
 import { ensureUserAccounts, ensureBusinessAccounts, SYSTEM_ACCOUNT_IDS } from "@/lib/wallet/accounts";
 import { WALLET_LIMITS, coinsToUnits, launchPromoEndsAt } from "@/lib/wallet/limits";
 import { notifyCoinsReceived } from "@/lib/notifications";
+import { logger } from "@/lib/logger";
+import { PLATFORM_ACCOUNT_EMAIL } from "@/lib/first-party-apps";
 
 // addendum-coin-wallet-v2.md §7.1 — the audited signup grant. Called from
 // auth.ts signup inside the user-creation transaction; the idempotencyKey
@@ -53,6 +55,112 @@ export async function issueLaunchPromoIfEligible(tx: Prisma.TransactionClient, u
       { accountId: promoId, amount: units },
     ],
   });
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const ALLOWANCE_PAGE_SIZE = 500;
+
+// addendum-wallet-only-payments.md §4 — the monthly allowance, from the
+// daily cron. Every eligible account without this month's allowance gets
+// it, so one that becomes active mid-month is picked up the next day. The
+// idempotency key allows one per account per calendar month (UTC), so a
+// rerun or an overlapping cron is a no-op. Eligible = active status, no
+// pending deletion, old enough, and a web session seen or a first-party
+// app token issued (tokens refresh while the mobile app is in use)
+// recently. Third-party apps don't count: their servers can refresh a
+// token with the user never opening 0dot.
+//
+// `deadline` (epoch ms) stops the sweep cleanly before the calling cron
+// function's time limit; it logs as incomplete and the next run (hourly
+// and daily cron both call this) picks up the rest, since issuing is
+// idempotent. Without it the platform could kill the run mid-page with
+// nothing logged.
+export async function runMonthlyAllowanceSweepOnce(now: Date = new Date(), { deadline }: { deadline?: number } = {}) {
+  const month = now.toISOString().slice(0, 7); // yyyy-mm
+  const activeSince = new Date(now.getTime() - WALLET_LIMITS.MONTHLY_ALLOWANCE_ACTIVE_WITHIN_DAYS * DAY_MS);
+  const createdBefore = new Date(now.getTime() - WALLET_LIMITS.MONTHLY_ALLOWANCE_MIN_ACCOUNT_AGE_DAYS * DAY_MS);
+  const expiresAt = new Date(now.getTime() + WALLET_LIMITS.MONTHLY_ALLOWANCE_TTL_DAYS * DAY_MS);
+  const units = coinsToUnits(WALLET_LIMITS.MONTHLY_ALLOWANCE_COINS);
+  const keyFor = (userId: string) => `monthly_allowance:${userId}:${month}`;
+
+  const outOfTime = () => deadline !== undefined && Date.now() >= deadline;
+  let issued = 0;
+  let complete = true;
+  let cursor: string | undefined;
+  sweep: for (;;) {
+    if (outOfTime()) {
+      complete = false;
+      break;
+    }
+    const users = await db.user.findMany({
+      where: {
+        status: "active",
+        deletionScheduledFor: null,
+        createdAt: { lte: createdBefore },
+        // Keyset paging, not a Prisma cursor: a cursor row deleted between
+        // pages makes the next page come back empty and ends the sweep.
+        ...(cursor ? { id: { gt: cursor } } : {}),
+        OR: [
+          { sessions: { some: { lastSeenAt: { gte: activeSince } } } },
+          {
+            oauthAuthorizations: {
+              some: {
+                status: "active",
+                app: { ownerUser: { email: PLATFORM_ACCOUNT_EMAIL } },
+                tokens: { some: { createdAt: { gte: activeSince } } },
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+      orderBy: { id: "asc" },
+      take: ALLOWANCE_PAGE_SIZE,
+    });
+    if (users.length === 0) break;
+    cursor = users[users.length - 1].id;
+
+    const alreadyIssued = new Set(
+      (
+        await db.ledgerTransaction.findMany({
+          where: { idempotencyKey: { in: users.map((u) => keyFor(u.id)) } },
+          select: { idempotencyKey: true },
+        })
+      ).map((t) => t.idempotencyKey),
+    );
+
+    for (const { id } of users) {
+      if (alreadyIssued.has(keyFor(id))) continue;
+      if (outOfTime()) {
+        complete = false;
+        break sweep;
+      }
+      try {
+        const { created } = await db.$transaction(async (tx) => {
+          const { promoId } = await ensureUserAccounts(tx, id);
+          return postTransaction(tx, {
+            kind: "monthly_allowance",
+            idempotencyKey: keyFor(id),
+            memo: `Monthly allowance ${month}`,
+            expiresAt,
+            postings: [
+              { accountId: SYSTEM_ACCOUNT_IDS.system_promo_issuance, amount: -units },
+              { accountId: promoId, amount: units },
+            ],
+          });
+        });
+        if (created) issued += 1;
+      } catch (err) {
+        logger.error("monthly-allowance: failed to issue", err, { userId: id, month });
+      }
+    }
+    if (users.length < ALLOWANCE_PAGE_SIZE) break;
+  }
+
+  const result = { month, issued, complete };
+  if (complete) logger.info("monthly-allowance: swept", undefined, result);
+  else logger.warn("monthly-allowance: stopped at the time budget; the next run continues", undefined, result);
+  return result;
 }
 
 export type GrantResult = { ok: true } | { error: string };

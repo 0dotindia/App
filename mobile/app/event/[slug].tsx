@@ -13,6 +13,7 @@ import { haptics } from "../../src/utils/haptics";
 import { API_BASE_URL } from "../../src/config";
 import { useTheme, type Theme } from "../../src/theme";
 import type { EventDetail, EventRsvpStatus } from "../../src/api/types";
+import { formatCoins } from "../../src/utils/formatCoins";
 
 function formatWhen(iso: string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "short" }).format(new Date(iso));
@@ -137,7 +138,7 @@ export default function EventScreen() {
               {event.ticketTypes.map((t) => (
                 <View key={t.id} style={styles.ticketRow}>
                   <Text style={styles.ticketName}>{t.name}</Text>
-                  <Text style={styles.ticketPrice}>{t.price === null ? "Free" : `${(t.currency ?? "usd").toUpperCase()} ${t.price.toFixed(2)}`}</Text>
+                  <Text style={styles.ticketPrice}>{t.price === null ? "Free" : formatCoins(t.price)}</Text>
                 </View>
               ))}
               <Button label="Get tickets" onPress={onGetTickets} style={styles.ticketsButton} />

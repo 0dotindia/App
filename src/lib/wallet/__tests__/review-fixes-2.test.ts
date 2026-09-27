@@ -39,7 +39,7 @@ describe("finding #1 — client idempotency token, not a 30s bucket", () => {
     await fundWallet(tipper.id, 20, "spendable");
     await loginAs(tipper.id);
 
-    const base = { creatorHandle: creator.username!.handle, amount: "5", message: "", payWith: "coins" };
+    const base = { creatorHandle: creator.username!.handle, amount: "5", message: "" };
     const a = await sendTip(undefined, fd({ ...base, idempotencyKey: "replaytokenone" }));
     const b = await sendTip(undefined, fd({ ...base, idempotencyKey: "replaytokentwo" }));
 
@@ -55,7 +55,7 @@ describe("finding #1 — client idempotency token, not a 30s bucket", () => {
     await fundWallet(tipper.id, 20, "spendable");
     await loginAs(tipper.id);
 
-    const form = { creatorHandle: creator.username!.handle, amount: "5", message: "", payWith: "coins", idempotencyKey: "sharedtoken01" };
+    const form = { creatorHandle: creator.username!.handle, amount: "5", message: "", idempotencyKey: "sharedtoken01" };
     const a = await sendTip(undefined, fd(form));
     const b = await sendTip(undefined, fd(form));
 
@@ -74,7 +74,7 @@ describe("finding #2 — wallet activity labels off the PaymentTransaction kind"
     await fundWallet(tipper.id, 20, "spendable");
     await loginAs(tipper.id);
 
-    await sendTip(undefined, fd({ creatorHandle: creator.username!.handle, amount: "5", message: "", payWith: "coins", idempotencyKey: "labeltokenaa" }));
+    await sendTip(undefined, fd({ creatorHandle: creator.username!.handle, amount: "5", message: "", idempotencyKey: "labeltokenaa" }));
 
     const payerEntry = (await listTransactions(tipper.id)).entries[0];
     expect(payerEntry.feature).toBe("tip");
@@ -97,7 +97,7 @@ describe("finding #3 — deduped coin-ticket resubmit fires no second notificati
     });
     const tt = await db.ticketType.create({ data: { eventId: event.id, name: "GA", price: 10, currency: "usd" } });
 
-    const form = { ticketTypeId: tt.id, payWith: "coins", idempotencyKey: "tickettoken01" };
+    const form = { ticketTypeId: tt.id, idempotencyKey: "tickettoken01" };
     expect(await purchaseTicket(undefined, fd(form))).toBeUndefined();
     expect(await purchaseTicket(undefined, fd(form))).toBeUndefined();
 

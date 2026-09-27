@@ -1,13 +1,18 @@
 import { randomBytes, randomUUID } from "crypto";
 import { mkdirSync, writeFileSync } from "fs";
 import {
-  DAY, HOUR, MIN, SHOWCASE_HANDLE, SCALE_COLORS, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, ringsCoverSvg, round2, type NotifRow,
+  DAY, HOUR, MIN, SCALE_COLORS, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, ringsCoverSvg, round2, type NotifRow,
 } from "./seed-showcase-common";
 import { SCALES } from "./seed-showcase-data";
 import { APPLICATION_NOTES, BUSINESS, BUSINESS_FORM, CAMPAIGNS, COMMUNITY, DOC_FILES, EVENTS, JOBS, TEAM_TITLES } from "./seed-showcase-org-data";
 import { ARTICLE_COMMENTS } from "./seed-dots-content-data";
 import { REPLIES } from "./seed-dots-data";
 import { EVENT_CITY_COORDS, VENUES } from "./seed-dots-jobs-events-data";
+
+// Source prices are written in INR; every price is a coin price now
+// (addendum-wallet-only-payments.md §4.1), converted at ₹100 = 1 coin —
+// the same rate as the convert_inr_prices_to_coins migration.
+const inrToCoins = (inr: number): number => Math.round(inr) / 100;
 
 // The organisation around the showcase profile:
 //   ZERO DOT (/b/dot, the platform's business page): verified, with a team, two mapped locations with hours,
@@ -61,15 +66,13 @@ async function main() {
     await prisma.businessMember.updateMany({ where: { businessId: existing.id, userId: me.id }, data: { title: "0dot Platform", isPublic: true } });
     await prisma.contactInfo.upsert({ where: { businessId: existing.id }, create: { businessId: existing.id, ...BUSINESS.contact }, update: BUSINESS.contact });
     await prisma.businessLocation.createMany({ data: BUSINESS.locations.map((l) => ({ businessId: existing.id, label: l.label, address: l.address, latitude: l.lat, longitude: l.lng, hoursJson: JSON.stringify(Object.fromEntries(l.hours[2].map((d) => [d, [{ opens: l.hours[0], closes: l.hours[1] }]]))) })) });
-    await prisma.offering.createMany({ data: BUSINESS.offerings.map((o, i) => ({ businessId: existing.id, kind: o.kind, name: o.name, description: o.description, price: o.price, currency: o.price === null ? null : "INR", status: "active", sku: o.kind === "product" ? `ZDT-${String(i + 1).padStart(3, "0")}` : null, stockStatus: o.kind === "product" ? o.stock : null, isBookable: o.kind === "service" ? false : null, createdAt: new Date(orgStart + DAY) })) });
+    await prisma.offering.createMany({ data: BUSINESS.offerings.map((o, i) => ({ businessId: existing.id, kind: o.kind, name: o.name, description: o.description, price: o.price === null ? null : inrToCoins(o.price), currency: o.price === null ? null : "usd", status: "active", sku: o.kind === "product" ? `ZDT-${String(i + 1).padStart(3, "0")}` : null, stockStatus: o.kind === "product" ? o.stock : null, isBookable: o.kind === "service" ? false : null, createdAt: new Date(orgStart + DAY) })) });
     const business = { id: existing.id, offerings: await prisma.offering.findMany({ where: { businessId: existing.id, status: "active" }, select: { id: true, price: true, kind: true } }) };
     for (const [i, [label, u]] of BUSINESS.links.entries()) await prisma.link.create({ data: { businessId: business.id, label, url: u, position: i, isFeatured: i === 0, clickCount: between(50, 700) } });
     for (const f of DOC_FILES) {
       writeFileSync(`public/uploads/showcase-bindu-${f.filename}`, f.content);
       await prisma.businessDocument.create({ data: { businessId: business.id, title: f.title, fileUrl: `/uploads/showcase-bindu-${f.filename}`, visibility: f.visibility, uploadedBy: me.id, createdAt: spread(pick([0, 1, 2]), 3, 100) } });
     }
-    if (!(await prisma.creatorPayoutAccount.findUnique({ where: { businessId: business.id } }))) await prisma.creatorPayoutAccount.create({ data: { businessId: business.id, processor: "stub", processorAccountId: `acct_seed_${randomBytes(6).toString("hex")}`, country: "IN", status: "active", createdAt: new Date(orgStart + 2 * DAY) } });
-    if (!(await prisma.creatorPayoutAccount.findUnique({ where: { userId: me.id } }))) await prisma.creatorPayoutAccount.create({ data: { userId: me.id, processor: "stub", processorAccountId: `acct_seed_${randomBytes(6).toString("hex")}`, country: "IN", status: "active", createdAt: new Date(me.createdAt + 3 * DAY) } });
     const subAt = new Date(now - 50 * DAY);
     if ((await prisma.platformSubscription.count({ where: { subscriberBusinessId: business.id } })) === 0) await prisma.platformSubscription.create({ data: { subscriberType: "business", subscriberBusinessId: business.id, plan: "business_subscription", status: "active", billingInterval: "yearly", processorSubscriptionId: `sub_seed_${randomBytes(8).toString("hex")}`, currentPeriodEnd: new Date(subAt.getTime() + 365 * DAY), createdAt: subAt } });
     if ((await prisma.platformSubscription.count({ where: { subscriberBusinessId: business.id } })) === 1 && !(await prisma.paymentTransaction.findFirst({ where: { relatedObjectType: "platform_subscription", relatedObjectId: business.id } }))) await prisma.paymentTransaction.create({ data: { kind: "platform_subscription_charge", payerId: me.id, amount: 200, currency: "usd", platformFee: 200, processor: "stripe_connect", processorReference: `in_seed_${randomBytes(8).toString("hex")}`, status: "succeeded", relatedObjectType: "platform_subscription", relatedObjectId: business.id, createdAt: subAt } });
@@ -102,14 +105,14 @@ async function main() {
     for (const part of chunk(bLikes, 800)) await prisma.postLike.createMany({ data: part });
     tally("businessPosts", BUSINESS.posts.length);
 
-    // Sales from the shop (card payments, INR).
+    // Sales from the shop (card payments, priced in coins).
     let sales = 0;
     for (const o of business.offerings.filter((x) => x.price !== null)) {
       for (const buyer of shuffle(reviewers).slice(0, between(3, 12))) {
         const at = after([buyer.createdAt], Math.max(buyer.createdAt, orgStart + 5 * DAY), now - HOUR);
         const qty = o.kind === "product" ? between(1, 3) : 1;
-        const pt = pay({ kind: "business_purchase", payerId: buyer.id, payeeId: null, payeeBusinessId: business.id, amount: (o.price ?? 0) * qty, currency: "inr", related: ["offering", o.id], at });
-        await prisma.paymentTransaction.create({ data: { id: pt.id, kind: pt.kind, payerId: pt.payerId, payeeBusinessId: business.id, amount: pt.amount, currency: "inr", platformFee: pt.platformFee, processor: "stripe_connect", processorReference: pt.ref, status: "succeeded", relatedObjectType: "offering", relatedObjectId: o.id, createdAt: at } });
+        const pt = pay({ kind: "business_purchase", payerId: buyer.id, payeeId: null, payeeBusinessId: business.id, amount: (o.price ?? 0) * qty, currency: "usd", related: ["offering", o.id], at });
+        await prisma.paymentTransaction.create({ data: { id: pt.id, kind: pt.kind, payerId: pt.payerId, payeeBusinessId: business.id, amount: pt.amount, currency: "usd", platformFee: pt.platformFee, processor: "stripe_connect", processorReference: pt.ref, status: "succeeded", relatedObjectType: "offering", relatedObjectId: o.id, createdAt: at } });
         await prisma.offeringPurchase.create({ data: { offeringId: o.id, buyerId: buyer.id, paymentTransactionId: pt.id, quantity: qty, status: chance(0.85) ? "fulfilled" : "pending", createdAt: at } });
         sales++;
       }
@@ -242,8 +245,9 @@ async function main() {
       });
       eventIds[e.slug] = event.id;
       const types = [] as { id: string; price: number | null; total: number | null; sold: number }[];
-      for (const [name, price, total] of e.tickets) {
-        const t = await prisma.ticketType.create({ data: { eventId: event.id, name, price, currency: price === null ? null : "INR", quantityTotal: total, quantitySold: 0, salesStartAt: createdAt, salesEndAt: startsAt, createdAt }, select: { id: true } });
+      for (const [name, inrPrice, total] of e.tickets) {
+        const price = inrPrice === null ? null : inrToCoins(inrPrice);
+        const t = await prisma.ticketType.create({ data: { eventId: event.id, name, price, currency: price === null ? null : "usd", quantityTotal: total, quantitySold: 0, salesStartAt: createdAt, salesEndAt: startsAt, createdAt }, select: { id: true } });
         types.push({ id: t.id, price, total, sold: 0 });
       }
       // RSVPs (going bounded by capacity) and tickets for going attendees.
@@ -271,7 +275,7 @@ async function main() {
           let ptId: string | null = null;
           if (t.price !== null) {
             const payeeIsBusiness = e.host === "business";
-            const pt = await prisma.paymentTransaction.create({ data: { kind: "ticket_purchase", payerId: a.id, payeeId: payeeIsBusiness ? null : me.id, payeeBusinessId: payeeIsBusiness ? business.id : null, amount: t.price, currency: "inr", platformFee: round2(t.price * premiumFee), processor: "stripe_connect", processorReference: `pi_seed_${randomBytes(10).toString("hex")}`, status: "succeeded", relatedObjectType: "ticket", relatedObjectId: "", createdAt: bought }, select: { id: true } });
+            const pt = await prisma.paymentTransaction.create({ data: { kind: "ticket_purchase", payerId: a.id, payeeId: payeeIsBusiness ? null : me.id, payeeBusinessId: payeeIsBusiness ? business.id : null, amount: t.price, currency: "usd", platformFee: round2(t.price * premiumFee), processor: "stripe_connect", processorReference: `pi_seed_${randomBytes(10).toString("hex")}`, status: "succeeded", relatedObjectType: "ticket", relatedObjectId: "", createdAt: bought }, select: { id: true } });
             ptId = pt.id;
           }
           tickets.push({ id: randomUUID(), ticketTypeId: t.id, ownerId: a.id, paymentTransactionId: ptId, status: !upcoming && chance(0.78) ? "checked_in" : "valid", qrCodeToken: randomBytes(24).toString("hex"), checkedInAt: !upcoming ? new Date(startsAt.getTime() + between(0, 40) * MIN) : null, createdAt: bought });

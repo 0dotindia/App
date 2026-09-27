@@ -10,7 +10,6 @@ import { ExploreLiveLink } from "@/components/ExploreLiveLink";
 import { PasswordField } from "@/components/PasswordField";
 import { ThemeToggleLogo } from "@/components/ThemeToggleLogo";
 import { UsernameField } from "@/components/UsernameField";
-import { COUNTRY_CODES } from "@/lib/country-codes";
 
 export function SignupForm() {
   const [state, formAction, pending] = useActionState(signup, undefined);
@@ -66,11 +65,6 @@ export function SignupForm() {
 
         <UsernameField id="username" />
 
-        <div className="field">
-          <label htmlFor="email">Email</label>
-          <input id="email" name="email" type="email" autoComplete="email" required />
-        </div>
-
         <PasswordField
           id="password"
           name="password"
@@ -80,42 +74,6 @@ export function SignupForm() {
           required
           showStrength
         />
-
-        <div className="field">
-          <label htmlFor="phoneNumber">Mobile number</label>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <select
-              id="phoneDialCode"
-              name="phoneDialCode"
-              autoComplete="tel-country-code"
-              defaultValue="91"
-              aria-label="Country dial code"
-              style={{ flex: "0 0 auto" }}
-              required
-            >
-              {COUNTRY_CODES.map((c) => (
-                <option key={c.iso} value={c.dialCode}>
-                  {c.iso} +{c.dialCode}
-                </option>
-              ))}
-            </select>
-            <input
-              id="phoneNumber"
-              name="phoneNumber"
-              type="tel"
-              inputMode="numeric"
-              autoComplete="tel-national"
-              placeholder="9876543210"
-              style={{ flex: "1 1 0%", minWidth: 0 }}
-              required
-            />
-          </div>
-        </div>
-
-        <div className="field">
-          <label htmlFor="dateOfBirth">Date of birth</label>
-          <input id="dateOfBirth" name="dateOfBirth" type="date" autoComplete="bday" required />
-        </div>
 
         {state?.error && <p className="errorText">{state.error}</p>}
 

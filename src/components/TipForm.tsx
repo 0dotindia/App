@@ -4,17 +4,14 @@ import { useActionState } from "react";
 import { sendTip } from "@/app/actions/tips";
 import { IdempotencyField } from "@/components/IdempotencyField";
 
-// phase-5 build plan §1 / spec §6: small amount+message form. The coin rail
-// (addendum-coin-wallet-v2.md §6.4) works with no creator payout account,
-// so this always renders for a signed-in viewer; `cardAvailable` just
-// toggles the card button.
+// phase-5 build plan §1 / spec §6: small amount+message form, paid in coins
+// (addendum-wallet-only-payments.md §3.1) — needs no creator payout
+// account, so it always renders for a signed-in viewer.
 export function TipForm({
   creatorHandle,
-  cardAvailable,
   viewerCoins,
 }: {
   creatorHandle: string;
-  cardAvailable: boolean;
   viewerCoins: number;
 }) {
   const [state, formAction, pending] = useActionState(sendTip, undefined);
@@ -24,7 +21,7 @@ export function TipForm({
       <input type="hidden" name="creatorHandle" value={creatorHandle} />
       <IdempotencyField />
       <div className="field">
-        <label htmlFor="tipAmount">Amount (USD)</label>
+        <label htmlFor="tipAmount">Amount (coins)</label>
         <input id="tipAmount" name="amount" type="number" min="1" max="500" step="0.01" defaultValue="5" required />
       </div>
       <div className="field">
@@ -34,16 +31,9 @@ export function TipForm({
       {state?.error && <p className="errorText">{state.error}</p>}
       {state?.success && <p className="mutedText" style={{ fontSize: "0.85rem" }}>Thanks — your tip was sent.</p>}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        {cardAvailable && (
-          <button type="submit" name="payWith" value="card" className="button" disabled={pending}>
-            {pending ? "Sending…" : "Tip with card"}
-          </button>
-        )}
         <button
           type="submit"
-          name="payWith"
-          value="coins"
-          className={cardAvailable ? "button buttonSecondary" : "button"}
+          className="button"
           disabled={pending || viewerCoins <= 0}
         >
           {pending ? "Sending…" : `Tip with coins${viewerCoins > 0 ? ` · ${viewerCoins} available` : ""}`}

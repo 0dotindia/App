@@ -31,7 +31,7 @@ async function main() {
       const handle = u.username?.handle ? `@${u.username.handle}` : "(no username)";
       const role = u.platformRole ? `platformRole=${u.platformRole.role}` : "platformRole=none";
       console.log(
-        `${handle.padEnd(20)} ${u.email.padEnd(35)} status=${u.status.padEnd(11)} verified=${!!u.emailVerifiedAt} ${role} created=${u.createdAt.toISOString()}`,
+        `${handle.padEnd(20)} ${(u.email ?? "(no email)").padEnd(35)} status=${u.status.padEnd(11)} verified=${!!u.emailVerifiedAt} ${role} created=${u.createdAt.toISOString()}`,
       );
     }
   } finally {

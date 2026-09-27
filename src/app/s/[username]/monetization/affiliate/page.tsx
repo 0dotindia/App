@@ -7,6 +7,7 @@ import { toggleProgramStatus } from "@/app/actions/affiliates";
 import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { AffiliateProgramForm } from "../../AffiliateProgramForm";
+import { formatCoins } from "@/lib/coins";
 
 export const metadata: Metadata = { title: "Affiliate programs" };
 
@@ -33,6 +34,17 @@ export default async function AffiliateSettingsPage() {
   ]);
   const [affiliateTierOptions, affiliateProductOptions, affiliateCourseOptions] = ownedOfferingsForAffiliate;
 
+  // Coins earned per link (addendum-wallet-only-payments.md §8 #3).
+  const earnedByLink = new Map(
+    (
+      await db.affiliateConversion.groupBy({
+        by: ["affiliateLinkId"],
+        where: { affiliateLinkId: { in: myAffiliateLinks.map((l) => l.id) } },
+        _sum: { commissionAmount: true },
+      })
+    ).map((row) => [row.affiliateLinkId, row._sum.commissionAmount ?? 0]),
+  );
+
   return (
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Affiliate programs</h2>
@@ -45,7 +57,7 @@ export default async function AffiliateSettingsPage() {
               key={program.id}
               icon={Percent}
               label={program.offeringType.replace("_", " ")}
-              description={`${program.commissionPercent}% · ${program.status}`}
+              description={`${program.commissionPercent}% commission, paid in coins · ${program.status}`}
               trailing={
                 <form action={toggleProgramStatus}>
                   <input type="hidden" name="programId" value={program.id} />
@@ -85,7 +97,7 @@ export default async function AffiliateSettingsPage() {
                 key={link.id}
                 icon={Link2}
                 label={link.program.creator.username ? `@${link.program.creator.username.handle}` : "Unknown creator"}
-                description={`${link._count.clicks} click${link._count.clicks === 1 ? "" : "s"}, ${link._count.conversions} sale${link._count.conversions === 1 ? "" : "s"} · /aff/${link.code}`}
+                description={`${link._count.clicks} click${link._count.clicks === 1 ? "" : "s"}, ${link._count.conversions} sale${link._count.conversions === 1 ? "" : "s"}, ${formatCoins(earnedByLink.get(link.id) ?? 0)} earned · /aff/${link.code}`}
               />
             ))}
           </div>

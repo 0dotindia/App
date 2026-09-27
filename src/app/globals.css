@@ -4070,6 +4070,29 @@ a.profileMetaItem:hover {
   gap: var(--space-4);
 }
 
+/* Password recovery codes (signup + Security settings, RecoveryCodeList.tsx):
+   two columns of monospace codes on an inset surface so they read as one
+   block to copy or write down. */
+.recoveryCodeList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  list-style: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* A code split across two lines is easy to copy down wrong. */
+.recoveryCodeList li {
+  white-space: nowrap;
+}
+
 /* Redesign Phase 1 (docs/specs/phase-0-redesign.md §5 / D3). One elevation +
    radius + padding language for the generic surface panel. `.postCard`,
    `.profileCard`, `.settingsSection` etc. predate this and aren't retrofitted;

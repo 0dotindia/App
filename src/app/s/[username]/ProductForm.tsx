@@ -58,12 +58,8 @@ export function ProductForm({
       />
       <div className="fieldRow">
         <div className="field">
-          <label htmlFor={`productPrice-${product?.id ?? "new"}`}>Price</label>
+          <label htmlFor={`productPrice-${product?.id ?? "new"}`}>Price (coins)</label>
           <input id={`productPrice-${product?.id ?? "new"}`} name="price" type="number" min="0.01" step="0.01" defaultValue={product?.price} required />
-        </div>
-        <div className="field">
-          <label htmlFor={`productCurrency-${product?.id ?? "new"}`}>Currency</label>
-          <input id={`productCurrency-${product?.id ?? "new"}`} name="currency" defaultValue={product?.currency ?? "usd"} maxLength={3} required />
         </div>
       </div>
       <div className="field">

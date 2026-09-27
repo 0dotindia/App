@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/session";
 import { getPostableBusinesses } from "@/lib/businesses";
 import { getModeratedCommunities } from "@/lib/communities";
 import { canManageListing, hasVerifiedListingAccess } from "@/lib/marketplace";
+import { getWalletBalance } from "@/lib/wallet/ledger";
 import { archiveMarketplaceListing, deleteListingReview, respondToListingReview } from "@/app/actions/marketplace";
 import { MarketplacePurchaseButton } from "@/components/MarketplacePurchaseButton";
 import { MarketplaceListingForm } from "@/components/MarketplaceListingForm";
@@ -113,6 +114,12 @@ export default async function MarketplaceListingPage({ params }: { params: Promi
     ? Boolean(await db.marketplacePurchase.findUnique({ where: { listingId_buyerId: { listingId: listing.id, buyerId: currentUser.id } } }))
     : false;
 
+  // Only needed when the buy button can render (a priced, active listing
+  // the viewer doesn't already own).
+  const showBuy = Boolean(currentUser) && !owns && listing.status === "active" && listing.price !== null;
+  const viewerWallet = showBuy ? await getWalletBalance(currentUser!.id) : null;
+  const viewerCoins = viewerWallet?.total ?? 0;
+
   const [businesses, communities] = currentUser
     ? await Promise.all([getPostableBusinesses(currentUser.id), getModeratedCommunities(currentUser.id)])
     : [[], []];
@@ -183,7 +190,11 @@ export default async function MarketplaceListingPage({ params }: { params: Promi
         ) : listing.status !== "active" ? (
           <p className="mutedText" style={{ fontSize: "0.85rem" }}>Not available.</p>
         ) : listing.category !== "app" || listing.price !== null ? (
-          <MarketplacePurchaseButton listingId={listing.id} price={listing.price} currency={listing.currency} />
+          <MarketplacePurchaseButton
+            listingId={listing.id}
+            price={listing.price}
+            viewerCoins={viewerCoins}
+          />
         ) : null}
 
         {currentUser && listing.status === "active" && listing.category === "app" && (owns || listing.price === null) && (

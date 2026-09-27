@@ -26,6 +26,7 @@ const LEDGER_LABEL: Record<string, string> = {
   promo_grant: "Promo credit",
   admin_adjustment: "Adjustment",
   referral_reward: "Referral reward",
+  monthly_allowance: "Monthly allowance",
   transfer: "Transfer",
   purchase: "Purchase",
   refund: "Refund",

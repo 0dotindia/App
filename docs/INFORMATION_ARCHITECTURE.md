@@ -12,7 +12,9 @@ Before adding a new top-level route, check it against `src/lib/reserved-username
 ├── / ................................ Live — marketing landing (MarketingNav + DigitalHomeVisual hero, no embedded form; redirect → /feed if authed)
 ├── /login ........................... Live — standalone login page
 ├── /signup .......................... Live — standalone signup page
-├── /verify, /verify/sent ............ Live — email verification Route Handler + "check your email" holding page
+├── /signup/recovery-codes ........... Live — one-time password recovery codes shown right after signup
+├── /forgot-password ................. Live — reset password with username + recovery code (no email)
+├── /verify .......................... Legacy — honors pre-2026-09-26 email-verification links only; signup no longer sends them
 ├── /claim-username .................. Live (Phase 1)
 ├── /feed ............................. Live — global reverse-chronological post feed + compose box
 ├── /explore .......................... Live (Phase 2) — global-chronological discovery feed, distinct from Home

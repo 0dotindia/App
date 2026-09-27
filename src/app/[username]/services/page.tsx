@@ -7,6 +7,7 @@ import { getWalletBalance } from "@/lib/wallet/ledger";
 import { requestAppointment } from "@/app/actions/appointments";
 import { OfferingBuyButton } from "@/components/OfferingBuyButton";
 import { RequestSlotButton } from "@/components/RequestSlotButton";
+import { formatCoins } from "@/lib/coins";
 
 const SLOT_WINDOW_DAYS = 14;
 
@@ -50,11 +51,7 @@ export default async function UserServicesPage({
   });
   if (offerings.length === 0 && !isOwner) notFound();
 
-  const [payoutAccount, viewerWallet] = await Promise.all([
-    db.creatorPayoutAccount.findUnique({ where: { userId: username.userId } }),
-    currentUser && !isOwner ? getWalletBalance(currentUser.id) : Promise.resolve(null),
-  ]);
-  const cardCheckoutAvailable = payoutAccount?.status === "active";
+  const viewerWallet = currentUser && !isOwner ? await getWalletBalance(currentUser.id) : null;
   const viewerCoins = viewerWallet?.total ?? 0;
 
   const bookableOfferings = offerings.filter((o) => o.isBookable);
@@ -92,7 +89,7 @@ export default async function UserServicesPage({
                 </span>
               </div>
               <span className="mutedText" style={{ fontSize: "0.85rem" }}>
-                {isPurchasable ? `${offering.currency} ${offering.price!.toFixed(2)}` : "Contact for pricing"}
+                {isPurchasable ? formatCoins(offering.price!) : "Contact for pricing"}
               </span>
               {offering.description && (
                 <p className="mutedText" style={{ fontSize: "0.8rem", margin: 0 }}>
@@ -116,8 +113,6 @@ export default async function UserServicesPage({
                   <OfferingBuyButton
                     offeringId={offering.id}
                     price={offering.price!}
-                    currency={offering.currency!}
-                    cardAvailable={cardCheckoutAvailable}
                     viewerCoins={viewerCoins}
                   />
                 )

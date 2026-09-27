@@ -7,6 +7,11 @@ import { SEED_EMAIL_DOMAIN } from "./seed-dots-cleanup";
 import { REPLIES } from "./seed-dots-data";
 import { BUSINESSES, COMMUNITIES, REVIEW_BODIES, REVIEW_RESPONSES } from "./seed-dots-orgs-data";
 
+// Source prices are written in INR; every price is a coin price now
+// (addendum-wallet-only-payments.md §4.1), converted at ₹100 = 1 coin —
+// the same rate as the convert_inr_prices_to_coins migration.
+const inrToCoins = (inr: number): number => Math.round(inr) / 100;
+
 // Gives the seeded dots (seed-dots.ts) communities and businesses to belong to:
 // 14 communities (owners, moderators, members, rules, tags, posts, replies, likes)
 // and 13 fictional businesses (owner + team, contact info, location and hours,
@@ -244,8 +249,8 @@ async function main() {
               kind: o.kind,
               name: o.name,
               description: o.description,
-              price: o.price,
-              currency: o.price === null ? null : "INR",
+              price: o.price === null ? null : inrToCoins(o.price),
+              currency: o.price === null ? null : "usd",
               status: "active",
               sku: o.kind === "product" ? `${slugStem.slice(0, 4).toUpperCase()}-${String(i + 1).padStart(3, "0")}` : null,
               stockStatus: o.kind === "product" ? (o.stock ?? "in_stock") : null,

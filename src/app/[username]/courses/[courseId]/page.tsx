@@ -13,6 +13,7 @@ import { QuizWidget } from "@/components/QuizWidget";
 import { JsonLd } from "@/components/JsonLd";
 import { SITE_DESCRIPTION } from "@/lib/site-metadata";
 import type { QuizQuestion } from "@/app/actions/quizzes";
+import { formatCoins } from "@/lib/coins";
 
 // Only an `active` course is publicly visible (matching the page
 // component's own gate below).
@@ -107,13 +108,8 @@ export default async function CoursePage({
       )
     : new Set<string>();
 
-  const [payoutAccount, viewerWallet] = await Promise.all([
-    db.creatorPayoutAccount.findUnique({ where: { userId: username.userId }, select: { status: true } }),
-    currentUser && !isOwner ? getWalletBalance(currentUser.id) : Promise.resolve(null),
-  ]);
-  // The coin rail works with no creator payout account (§6.4).
+  const viewerWallet = currentUser && !isOwner ? await getWalletBalance(currentUser.id) : null;
   const canBuy = !isOwner && currentUser && !access && course.price !== null && course.currency !== null;
-  const cardAvailable = payoutAccount?.status === "active";
   const viewerCoins = viewerWallet?.total ?? 0;
 
   return (
@@ -128,7 +124,7 @@ export default async function CoursePage({
       {course.description && <p className="mutedText" style={{ marginTop: "0.3rem" }}>{course.description}</p>}
 
       <p className="mutedText" style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
-        {course.price !== null && course.currency !== null && `${course.price.toFixed(2)} ${course.currency.toUpperCase()}`}
+        {course.price !== null && formatCoins(course.price)}
         {course.price !== null && course.requiredTier && " or "}
         {course.requiredTier && `included with ${course.requiredTier.name} membership`}
       </p>
@@ -141,8 +137,6 @@ export default async function CoursePage({
         <CourseBuyButton
           courseId={course.id}
           price={course.price}
-          currency={course.currency}
-          cardAvailable={cardAvailable}
           viewerCoins={viewerCoins}
         />
       ) : (

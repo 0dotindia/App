@@ -7,7 +7,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 export function PremiumBillingForm({
   subscription,
 }: {
-  subscription: { id: string; status: string; billingInterval: string; currentPeriodEnd: string } | null;
+  subscription: { id: string; status: string; billingInterval: string; renewalText: string; renewalDate: string } | null;
 }) {
   if (subscription) {
     const isCancelling = subscription.status === "cancelled";
@@ -17,8 +17,8 @@ export function PremiumBillingForm({
           <strong>{isCancelling ? "Premium (cancelling)" : "Premium active"}</strong> — billed {subscription.billingInterval}
         </p>
         <p className="mutedText" style={{ fontSize: "0.85rem" }}>
-          {isCancelling ? "Access continues until " : "Renews "}
-          {new Date(subscription.currentPeriodEnd).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}.
+          {subscription.renewalText}
+          {new Date(subscription.renewalDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}.
         </p>
         {!isCancelling && (
           <form action={cancelPremiumAction} style={{ marginTop: "0.3rem" }}>
@@ -41,7 +41,7 @@ export function PremiumBillingForm({
   return (
     <div className="settingsCard">
       <p className="mutedText" style={{ fontSize: "0.85rem" }}>
-        Card payments are off right now — unlock Premium free with your coin balance instead.
+        Premium is paid in coins from your wallet and renews from it automatically.
       </p>
       <Link href="/wallet" className="button buttonSmall" style={{ alignSelf: "flex-start" }}>
         Go to Wallet

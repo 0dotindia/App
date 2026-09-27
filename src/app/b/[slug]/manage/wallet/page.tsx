@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { getBusinessMember, isBusinessStaff } from "@/lib/businesses";
-import { getActiveBusinessSubscription } from "@/lib/platform-billing";
+import { getActiveBusinessSubscription, PLAN_PRICES } from "@/lib/platform-billing";
+import { describeRenewal, RENEWAL_PREFIX } from "@/lib/subscription-access";
 import { getBusinessWalletBalance, listBusinessTransactions } from "@/lib/wallet/ledger";
 import { walletActivityLabel } from "@/lib/wallet/activity-labels";
 import { EmptyState } from "@/components/EmptyState";
@@ -33,6 +34,7 @@ export default async function BusinessWalletPage({ params }: { params: Promise<{
     getActiveBusinessSubscription(business.id),
     db.contactMessage.count({ where: { businessId: business.id, status: "new" } }),
   ]);
+  const renewal = subscription ? describeRenewal(subscription) : null;
 
   return (
     <div className="profileCard">
@@ -49,10 +51,7 @@ export default async function BusinessWalletPage({ params }: { params: Promise<{
         <span className="walletHeroBalance">
           {balance.total} <small>coins</small>
         </span>
-        <span className="walletHeroSub">
-          1 coin = $1
-          {balance.restricted > 0 && ` · ${balance.restricted} restricted (promo credit)`}
-        </span>
+        {balance.restricted > 0 && <span className="walletHeroSub">{balance.restricted} restricted (promo credit)</span>}
       </div>
 
       <p className="mutedText" style={{ fontSize: "0.85rem", marginBottom: "1rem" }}>
@@ -61,13 +60,13 @@ export default async function BusinessWalletPage({ params }: { params: Promise<{
       </p>
 
       <p className="sectionHeading">Subscription</p>
-      {subscription ? (
+      {renewal ? (
         <p className="mutedText" style={{ fontSize: "0.9rem" }}>
-          Active until {subscription.currentPeriodEnd.toLocaleDateString()}
-          {subscription.processorSubscriptionId.startsWith("coin:") ? " (coin-funded)." : "."}
+          {RENEWAL_PREFIX[renewal.kind]}
+          {renewal.date.toLocaleDateString()}.
         </p>
       ) : canSpend ? (
-        <BusinessSubscribeWithCoinsForm businessId={business.id} />
+        <BusinessSubscribeWithCoinsForm businessId={business.id} prices={PLAN_PRICES.business_subscription} />
       ) : (
         <p className="mutedText" style={{ fontSize: "0.9rem" }}>
           No active subscription. An owner or admin can pay it from this wallet.

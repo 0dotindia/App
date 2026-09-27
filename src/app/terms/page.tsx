@@ -53,9 +53,11 @@ const SECTIONS: LegalSection[] = [
     heading: "Payments, memberships and fees",
     body: (
       <p>
-        Paid features — memberships, digital products, courses, tips and the wallet — are processed by our payment
-        provider. Prices and any platform fee are shown before you pay. Refunds follow the policy the seller states at
-        checkout, and where the law gives you a right to a refund, that right stays.
+        Paid features — memberships, digital products, courses, tickets, tips and Premium — are paid in coins, 0dot&apos;s
+        platform credits. Coins can&apos;t be bought with money, have no cash value, and can&apos;t be exchanged for money;
+        free coins we grant may expire. Prices and any platform fee are shown before you pay, and subscriptions renew
+        from your coin balance until you cancel. Refunds, where given, are made in coins, and where the law gives you a
+        right to a refund, that right stays.
       </p>
     ),
   },

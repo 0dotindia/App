@@ -37,7 +37,7 @@ describe("business wallet — Store coin sale (Phase 4 acceptance)", () => {
       data: { businessId: business.id, kind: "product", name: "Mug", price: 10, currency: "usd", status: "active" },
     });
 
-    const result = await purchaseOffering(undefined, fd({ offeringId: offering.id, quantity: "2", payWith: "coins" }));
+    const result = await purchaseOffering(undefined, fd({ offeringId: offering.id, quantity: "2" }));
     expect(result?.success).toBe(true);
 
     // $20 − 10% fee → business nets 18 coins.
@@ -102,7 +102,7 @@ describe("business wallet — business-hosted ticket", () => {
     });
     const tt = await db.ticketType.create({ data: { eventId: event.id, name: "GA", price: 10, currency: "usd" } });
 
-    const result = await purchaseTicket(undefined, fd({ ticketTypeId: tt.id, payWith: "coins" }));
+    const result = await purchaseTicket(undefined, fd({ ticketTypeId: tt.id }));
     expect(result).toBeUndefined();
 
     expect(await db.ticket.findMany({ where: { ticketTypeId: tt.id } })).toHaveLength(1);

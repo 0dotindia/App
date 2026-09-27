@@ -38,7 +38,6 @@ export function settingsNavGroups(handle: string): SettingsNavGroup[] {
     {
       label: "Monetization",
       items: [
-        { href: `${base}/monetization/payouts`, label: "Payouts" },
         { href: `${base}/monetization/memberships`, label: "Memberships" },
         { href: `${base}/monetization/products`, label: "Digital products" },
         { href: `${base}/monetization/services`, label: "Freelance services" },

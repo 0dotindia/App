@@ -12,7 +12,7 @@ export async function checkTransferEligibility(
   toUserId: string,
 ): Promise<string | null> {
   const [sender, recipient, block] = await Promise.all([
-    db.user.findUnique({ where: { id: fromUserId }, select: { emailVerifiedAt: true, createdAt: true } }),
+    db.user.findUnique({ where: { id: fromUserId }, select: { createdAt: true } }),
     db.user.findUnique({
       where: { id: toUserId },
       select: { status: true, deletionScheduledFor: true },
@@ -28,7 +28,10 @@ export async function checkTransferEligibility(
     }),
   ]);
 
-  if (!sender?.emailVerifiedAt) return "Verify your email before sending coins.";
+  // Account age is the sybil gate here — there is no email verification to
+  // lean on (signup has no email/OTP step), so a freshly scripted account
+  // can't immediately start moving coins.
+  if (!sender) return "Your account couldn't be found.";
   const ageHours = (Date.now() - sender.createdAt.getTime()) / (60 * 60 * 1000);
   if (ageHours < WALLET_LIMITS.TRANSFER_MIN_ACCOUNT_AGE_HOURS) {
     return "New accounts can't send coins yet — try again once your account is a day old.";

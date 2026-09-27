@@ -1,39 +1,9 @@
 "use client";
 
 import { useActionState } from "react";
-import { subscribeBusinessAction, cancelBusinessSubscriptionAction } from "@/app/actions/platform-billing";
+import { cancelBusinessSubscriptionAction } from "@/app/actions/platform-billing";
 import { claimBusinessCustomDomainAction, removeBusinessCustomDomainAction, retryBusinessDomainVerificationAction } from "@/app/actions/custom-domains";
 import { ConfirmButton } from "@/components/ConfirmButton";
-
-export function BusinessSubscribeForm({
-  businessId,
-  prices,
-}: {
-  businessId: string;
-  prices: { monthly: number; yearly: number };
-}) {
-  const [state, formAction, pending] = useActionState(subscribeBusinessAction, undefined);
-
-  return (
-    <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-      <input type="hidden" name="businessId" value={businessId} />
-      <div style={{ display: "flex", gap: "1rem" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-          <input type="radio" name="billingInterval" value="monthly" defaultChecked style={{ width: "auto" }} />
-          ${prices.monthly}/month
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-          <input type="radio" name="billingInterval" value="yearly" style={{ width: "auto" }} />
-          ${prices.yearly}/year
-        </label>
-      </div>
-      <button type="submit" className="button" disabled={pending} style={{ alignSelf: "flex-start" }}>
-        {pending ? "Subscribing…" : "Subscribe"}
-      </button>
-      {state?.error && <p className="errorText">{state.error}</p>}
-    </form>
-  );
-}
 
 export function BusinessCancelSubscriptionButton({ subscriptionId }: { subscriptionId: string }) {
   return (

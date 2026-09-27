@@ -7,6 +7,7 @@ import { getBusinessMember, canManageCatalog } from "@/lib/businesses";
 import { getWalletBalance } from "@/lib/wallet/ledger";
 import { BusinessContactForm } from "../BusinessContactForm";
 import { OfferingBuyButton } from "@/components/OfferingBuyButton";
+import { formatCoins } from "@/lib/coins";
 
 function firstImage(imagesJson: string | null): string | null {
   if (!imagesJson) return null;
@@ -35,11 +36,7 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
   if (business.status === "pending" && !membership) notFound();
 
   const canManage = currentUser ? await canManageCatalog(business.id, currentUser.id) : false;
-  const [payoutAccount, viewerWallet] = await Promise.all([
-    db.creatorPayoutAccount.findUnique({ where: { businessId: business.id } }),
-    currentUser ? getWalletBalance(currentUser.id) : Promise.resolve(null),
-  ]);
-  const cardCheckoutAvailable = payoutAccount?.status === "active";
+  const viewerWallet = currentUser ? await getWalletBalance(currentUser.id) : null;
   const viewerCoins = viewerWallet?.total ?? 0;
 
   const offerings = await db.offering.findMany({
@@ -85,7 +82,7 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
                 </span>
               </div>
               <span className="mutedText" style={{ fontSize: "0.85rem" }}>
-                {isPurchasable ? `${offering.currency} ${offering.price!.toFixed(2)}` : "Contact for pricing"}
+                {isPurchasable ? formatCoins(offering.price!) : "Contact for pricing"}
               </span>
               {offering.description && (
                 <p className="mutedText" style={{ fontSize: "0.8rem", margin: 0 }}>
@@ -101,8 +98,6 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
                   <OfferingBuyButton
                     offeringId={offering.id}
                     price={offering.price!}
-                    currency={offering.currency!}
-                    cardAvailable={cardCheckoutAvailable}
                     viewerCoins={viewerCoins}
                   />
                 ) : (

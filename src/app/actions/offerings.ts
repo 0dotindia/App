@@ -7,13 +7,10 @@ import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveUploadedImage } from "@/lib/uploads";
 import { canManageOfferingOwner, isOfferingOwnerStaff, resolveOfferingOwner } from "@/lib/offerings";
-import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
 import { coinActionKey } from "@/lib/wallet/limits";
-import { getAppOrigin } from "@/lib/email";
 import { recordCrmActivity } from "@/lib/crm";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const MAX_IMAGES = 8;
@@ -73,17 +70,15 @@ function parseAndValidateFields(formData: FormData): { error: string } | Offerin
   const status = STATUS_VALUES.has(statusRaw) ? statusRaw : "draft";
 
   const priceRaw = String(formData.get("price") ?? "").trim();
-  const currencyRaw = String(formData.get("currency") ?? "").trim().toUpperCase();
   let price: number | null = null;
   let currency: string | null = null;
   if (priceRaw) {
     const parsedPrice = Number(priceRaw);
-    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) return { error: "Price must be a positive number." };
-    if (!currencyRaw) return { error: "Currency is required when a price is set." };
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0.01) return { error: "Price must be a positive number." };
     price = parsedPrice;
-    currency = currencyRaw;
-  } else if (currencyRaw) {
-    return { error: "Remove the currency, or add a price — they're both required or both empty." };
+    // Prices are coin prices (addendum-wallet-only-payments.md §4.1); the
+    // currency column is kept set-iff-priced until it's retired.
+    currency = "usd";
   }
 
   // Store step 5: only meaningful when price is set, but not enforced —
@@ -232,9 +227,9 @@ export async function archiveOffering(formData: FormData): Promise<void> {
 
 // phase-9 spec §3.1: resolves the Phase 4/5-flagged Store checkout
 // deferral — native in-app checkout for a priced Offering, reusing the
-// Phase 5 payment ledger exactly (recordPaymentTransaction), same shape
-// purchaseTicket (events.ts) already established for a business/individual
-// payee split. paymentLinkUrl (external checkout) stays available and
+// Phase 5 payment ledger exactly, paid in coins (addendum-wallet-only-
+// payments.md §3.1), with the same business/individual payee split as
+// purchaseTicket (events.ts). paymentLinkUrl (external checkout) stays available and
 // untouched — this is an additional path, not a replacement.
 export async function purchaseOffering(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
@@ -254,90 +249,44 @@ export async function purchaseOffering(_prevState: ActionState, formData: FormDa
   // addendum-coin-wallet-v2.md §6.3/§6.5: synchronous coin settlement.
   // Revenue lands in the seller's user wallet, or — for a business-owned
   // offering — the business wallet (§6.5). No payout account required (§6.4).
-  if (String(formData.get("payWith") ?? "card") === "coins") {
-    if (!offering.businessId && !offering.sellerUserId) {
-      return { error: "This offering can't be bought with coins." };
-    }
-    const coinAmount = Math.round(offering.price * quantity * 100) / 100;
-    const result = await settleCoinPurchase({
-      kind: offering.businessId ? "business_purchase" : "freelance_purchase",
-      payerId: user.id,
-      payeeUserId: offering.businessId ? null : offering.sellerUserId,
-      payeeBusinessId: offering.businessId ?? null,
-      amountUsd: coinAmount,
-      currency: offering.currency ?? "usd",
-      relatedObjectType: "offering",
-      relatedObjectId: offering.id,
-      idempotencyKey: coinActionKey("offering:coin", formData.get("idempotencyKey"), user.id, offering.id, quantity),
-      metadata: { offeringId: offering.id, quantity: String(quantity) },
-      createRows: createOfferingPurchaseRow,
-    });
-    if ("error" in result) return { error: result.error };
-    if (!result.alreadySettled) {
-      if (offering.businessId) {
-        const purchase = await db.offeringPurchase.findFirst({ where: { paymentTransactionId: result.paymentTransactionId } });
-        if (purchase) {
-          await recordCrmActivity({
-            businessId: offering.businessId,
-            activityType: "purchase",
-            sourceId: purchase.id,
-            identity: { userId: user.id },
-          });
-        }
-      }
-      revalidatePath(await offeringManagePath(offering));
-    }
-    return { success: true };
+  if (!offering.businessId && !offering.sellerUserId) {
+    return { error: "This offering isn't available for purchase." };
   }
-
-  let payeeId: string | null = null;
-  let payeeBusinessId: string | null = null;
-  let payoutAccount;
-  if (offering.businessId) {
-    payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { businessId: offering.businessId } });
-    if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) return { error: "This seller hasn't enabled payouts yet." };
-    payeeBusinessId = offering.businessId;
-  } else {
-    payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { userId: offering.sellerUserId! } });
-    if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) return { error: "This seller hasn't enabled payouts yet." };
-    payeeId = offering.sellerUserId;
-  }
-
-  const amount = Math.round(offering.price * quantity * 100) / 100;
-  const currency = offering.currency ?? "usd";
-
-  const feeRate = await resolveFeeRate(db, payeeId);
-  const base = `${getAppOrigin()}${await offeringManagePath(offering)}`;
-  const { checkoutUrl } = await getPaymentProcessor().createPurchaseCheckoutSession({
-    amount,
-    currency,
+  if (offering.sellerUserId === user.id) return { error: "You can't buy your own offering." };
+  const coinAmount = Math.round(offering.price * quantity * 100) / 100;
+  const result = await settleCoinPurchase({
+    kind: offering.businessId ? "business_purchase" : "freelance_purchase",
     payerId: user.id,
-    payerEmail: user.email,
-    payeeProcessorAccountId: payoutAccount.processorAccountId,
-    applicationFeeAmount: Math.round(amount * feeRate * 100) / 100,
-    description: `${offering.name} x${quantity}`,
-    successUrl: `${base}?checkout=success`,
-    cancelUrl: `${base}?checkout=cancelled`,
-    metadata: {
-      kind: "offering_purchase",
-      payerId: user.id,
-      payeeId: payeeId ?? "",
-      payeeBusinessId: payeeBusinessId ?? "",
-      offeringId: offering.id,
-      quantity: String(quantity),
-      amount: String(amount),
-      currency,
-    },
+    payeeUserId: offering.businessId ? null : offering.sellerUserId,
+    payeeBusinessId: offering.businessId ?? null,
+    amountUsd: coinAmount,
+    currency: offering.currency ?? "usd",
+    relatedObjectType: "offering",
+    relatedObjectId: offering.id,
+    idempotencyKey: coinActionKey("offering:coin", formData.get("idempotencyKey"), user.id, offering.id, quantity),
+    metadata: { offeringId: offering.id, quantity: String(quantity) },
+    createRows: createOfferingPurchaseRow,
   });
-
-  redirect(checkoutUrl);
+  if ("error" in result) return { error: result.error };
+  if (!result.alreadySettled) {
+    if (offering.businessId) {
+      const purchase = await db.offeringPurchase.findFirst({ where: { paymentTransactionId: result.paymentTransactionId } });
+      if (purchase) {
+        await recordCrmActivity({
+          businessId: offering.businessId,
+          activityType: "purchase",
+          sourceId: purchase.id,
+          identity: { userId: user.id },
+        });
+      }
+    }
+    revalidatePath(await offeringManagePath(offering));
+  }
+  return { success: true };
 }
 
-// Called from the Stripe webhook once checkout.session.completed confirms
-// payment — mirrors purchaseOffering's former synchronous shape.
-// Idempotent on processorReference.
-// The OfferingPurchase row — one place, both rails
-// (addendum-coin-wallet-v2.md §6.2).
+// The OfferingPurchase row, created with the coin charge by
+// settleCoinPurchase (addendum-coin-wallet-v2.md §6.2).
 export async function createOfferingPurchaseRow(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
   await tx.offeringPurchase.create({
     data: {
@@ -347,60 +296,6 @@ export async function createOfferingPurchaseRow(tx: Prisma.TransactionClient, s:
       quantity: Number(s.metadata.quantity),
     },
   });
-}
-
-export async function activateOfferingPurchase(metadata: Record<string, string>, processorReference: string): Promise<void> {
-  const already = await db.paymentTransaction.findFirst({ where: { processorReference, kind: { in: ["business_purchase", "freelance_purchase"] } } });
-  if (already) return;
-
-  const { payerId, payeeId, payeeBusinessId, offeringId, amount: amountStr, currency } = metadata;
-  const amount = Number(amountStr);
-
-  const offering = await db.offering.findUniqueOrThrow({ where: { id: offeringId } });
-
-  let purchase;
-  try {
-    purchase = await db.$transaction(async (tx) => {
-      const transaction = await recordPaymentTransaction(tx, {
-        kind: payeeBusinessId ? "business_purchase" : "freelance_purchase",
-        payerId,
-        payeeId: payeeId || null,
-        payeeBusinessId: payeeBusinessId || null,
-        amount,
-        currency,
-        processorReference,
-        status: "succeeded",
-        relatedObjectType: "offering",
-        relatedObjectId: offeringId,
-      });
-      await createOfferingPurchaseRow(tx, {
-        paymentTransactionId: transaction.id,
-        payerId,
-        payeeId: payeeId || null,
-        amount,
-        currency,
-        metadata,
-      });
-      return tx.offeringPurchase.findFirstOrThrow({ where: { paymentTransactionId: transaction.id } });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateOfferingPurchase: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
-      return;
-    }
-    throw err;
-  }
-
-  if (payeeBusinessId) {
-    await recordCrmActivity({
-      businessId: payeeBusinessId,
-      activityType: "purchase",
-      sourceId: purchase.id,
-      identity: { userId: payerId },
-    });
-  }
-
-  revalidatePath(await offeringManagePath(offering));
 }
 
 // Seller-only, per spec §3.1's "a status enum the seller updates

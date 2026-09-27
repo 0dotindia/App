@@ -12,7 +12,10 @@ datasource db {
 
 model User {
   id              String    @id @default(uuid())
-  email           String    @unique
+  // Optional since signup stopped collecting it (name + username + password
+  // only, no email/OTP verification step). Accounts created before that
+  // change still have one; SSO/JIT-provisioned accounts always do.
+  email           String?   @unique
   emailVerifiedAt DateTime?
   // E.164 ("+<dialcode><digits>", see country-codes.ts toE164). Required at
   // signup going forward (auth.ts) but stays nullable in the DB — every
@@ -65,12 +68,6 @@ model User {
   // imagesJson, etc.), since Profile.themePreset is about public profile
   // appearance, not personal reading prefs.
   accessibilityPrefsJson String?
-  // platform-billing addendum §2.2, wired to real Stripe: cached so a payer
-  // reuses one Stripe Customer across every checkout (premium profile,
-  // business subscription) instead of Stripe minting a new one per session
-  // — created lazily on first checkout (getOrCreateStripeCustomerId,
-  // stripe.ts), never written any other way.
-  stripeCustomerId       String?   @unique
   // addendum-coin-wallet-v2.md §7.5 — the inviter, resolved from the `ref`
   // cookie at signup and written once, immutably. Nullable FK, SetNull on
   // inviter delete (the referral just loses its attribution).
@@ -86,6 +83,7 @@ model User {
   emailVerificationTokens    EmailVerificationToken[]
   passwordResetTokens        PasswordResetToken[]
   twoFactorRecoveryCodes     TwoFactorRecoveryCode[]
+  passwordRecoveryCodes      PasswordRecoveryCode[]
   pendingTwoFactorChallenges PendingTwoFactorChallenge[]
   coinTransfersSent          CoinTransfer[] @relation("CoinTransferSent")
   coinTransfersReceived      CoinTransfer[] @relation("CoinTransferReceived")
@@ -143,8 +141,6 @@ model User {
   appointmentsAsCustomer    Appointment[]      @relation("AppointmentCustomer")
   appointmentsAsStaff       Appointment[]      @relation("AppointmentStaff")
   uploadedBusinessDocuments BusinessDocument[]
-
-  payoutAccount              CreatorPayoutAccount?
   paymentTransactionsAsPayer PaymentTransaction[]  @relation("PaymentTransactionPayer")
   paymentTransactionsAsPayee PaymentTransaction[]  @relation("PaymentTransactionPayee")
   tipsSent                   Tip[]                 @relation("TipFrom")
@@ -259,6 +255,24 @@ model Session {
 // addendum §2/§3: hashed with createHash("sha256"), never the raw code —
 // same "account-takeover-capable secret" reasoning as PasswordResetToken.
 model TwoFactorRecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// Self-service password recovery now that signup collects no email: 10
+// one-time codes issued at signup (and regenerable from Security settings),
+// any one of which resets the password on /forgot-password. Deliberately a
+// separate table from TwoFactorRecoveryCode — enrolling or disabling 2FA
+// regenerates/deletes those, and that must never silently wipe the codes a
+// user saved for getting back into an account they forgot the password to.
+// Hashed with sha256 for the same reason as TwoFactorRecoveryCode.
+model PasswordRecoveryCode {
   id        String    @id @default(uuid())
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1317,7 +1331,6 @@ model Business {
   documents         BusinessDocument[]
   links             Link[]
   hostedEvents      Event[]               @relation("EventHostedByBusiness")
-  payoutAccount     CreatorPayoutAccount?
   paymentsReceived  PaymentTransaction[]  @relation("PaymentTransactionPayeeBusiness")
 
   marketplaceListingsSold MarketplaceListing[]
@@ -1645,40 +1658,6 @@ model BusinessDocument {
   @@index([businessId, visibility])
 }
 
-// phase-5 build plan §0 / spec §3: one payout account per user. `processor`
-// is named explicitly even though `StubPaymentProcessor` is the only
-// implementation this session — the abstraction (src/lib/payments.ts's
-// `PaymentProcessor` interface) is real, not aspirational, same reasoning
-// the spec itself gives for naming the enum with one value. `status` is
-// driven by processor.createPayoutAccount()/webhook confirmation, never a
-// raw client-settable flag — see startCreatorOnboarding in
-// src/app/actions/payments.ts.
-// phase-8 spec §5.2: userId made nullable, businessId added — exactly one
-// of userId/businessId set, the same two-way owner XOR idiom Link (Phase 4
-// §3.2) already uses, not the three-way pattern Event hosting uses, since
-// payout accounts only need two owner kinds so far. Communities
-// deliberately do not get one here (spec §5.2: no monetization concept
-// exists for communities anywhere in this system yet — community-hosted
-// events stay RSVP-only, not a reason to invent a "community treasury").
-model CreatorPayoutAccount {
-  id                 String    @id @default(uuid())
-  userId             String?   @unique
-  user               User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  businessId         String?   @unique
-  business           Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  processor          String    @default("stub") // stub | stripe_connect
-  processorAccountId String?
-  // ISO 3166-1 alpha-2 the Stripe v2 Account's identity.country was created
-  // with. Immutable after creation (Stripe doesn't allow changing
-  // identity.country post-creation) — this records what was chosen, not a
-  // live-editable preference. Nullable to cover rows created before this
-  // field existed (all "IN", from the PAYOUT_ACCOUNT_COUNTRY hardcode this
-  // replaces — backfilled by this field's migration).
-  country            String?
-  status             String    @default("onboarding") // onboarding | active | restricted
-  createdAt          DateTime  @default(now())
-}
-
 // phase-5 build plan §0 / spec §3.1: the one shared ledger every
 // money-moving feature writes to (just Tip this session) via
 // recordPaymentTransaction() in src/lib/payments.ts — no feature gets its
@@ -1716,17 +1695,15 @@ model PaymentTransaction {
   amount             Float
   currency           String          @default("usd")
   platformFee        Float
-  // phase-15 spec §6.2: CreatorPayoutAccount.processor's single-value enum
-  // (phase-5 §3.1) finally gets a second value — a mobile app's native
-  // purchase flow records against the store's own processor instead of
-  // Stripe Connect where store policy requires it (spec §6.1). storeFee is
-  // the store's own cut (historically 15-30%), deducted separately from
-  // platformFee above, never conflated into one figure (§6.4).
-  // "wallet" (addendum-coin-wallet-v2.md §6.1): a coin-funded purchase,
-  // recorded here exactly like a Stripe sale so analytics/admin views see
-  // it — processorReference points at the backing LedgerTransaction and
-  // storeFee is null.
-  processor          String          @default("stripe_connect") // stripe_connect | apple_iap | google_play_billing | wallet
+  // "wallet" (addendum-coin-wallet-v2.md §6.1) for every coin charge —
+  // processorReference points at the backing LedgerTransaction and storeFee
+  // is null. phase-15 spec §6.2: apple_iap/google_play_billing for a mobile
+  // app's native store purchase, where storeFee is the store's own cut,
+  // kept separate from platformFee (§6.4). stripe_connect only on rows from
+  // before the wallet became the only rail (addendum-wallet-only-payments.md);
+  // the column default is that historical value — recordPaymentTransaction
+  // always passes processor explicitly.
+  processor          String          @default("stripe_connect") // wallet | apple_iap | google_play_billing | stripe_connect (historical)
   storeFee           Float?
   iapPayoutBatchId   String?
   iapPayoutBatch     IapPayoutBatch? @relation(fields: [iapPayoutBatchId], references: [id], onDelete: SetNull)
@@ -1778,6 +1755,11 @@ model PlatformSubscription {
   // Same monthly|yearly shape MembershipTier.billingInterval already uses.
   billingInterval          String        @default("monthly") // monthly | yearly
   processorSubscriptionId  String // external recurring-billing object is the source of truth for renewal state — same principle as MembershipSubscription (phase-5 §4.1)
+  // addendum-wallet-only-payments.md §3.3: a coin-funded row (processorSubscriptionId
+  // "coin:…") with autoRenew set is re-charged from the payer's wallet each
+  // period by the platform-billing sweep. Default false so rows bought before
+  // auto-renew existed keep lapsing at period end, as they were sold.
+  autoRenew                Boolean       @default(false)
   currentPeriodEnd         DateTime
   createdAt                DateTime      @default(now())
 
@@ -1890,6 +1872,8 @@ model MembershipSubscription {
   status                  String         @default("active") // active | past_due | cancelled
   currentPeriodEnd        DateTime
   processorSubscriptionId String
+  // Same meaning as PlatformSubscription.autoRenew (addendum-wallet-only-payments.md §3.3).
+  autoRenew               Boolean        @default(false)
   createdAt               DateTime       @default(now())
 
   @@index([fanId, status])
@@ -3043,11 +3027,11 @@ model DeveloperApp {
   // acceptance criterion); pay_as_you_go/committed apps aren't hard-capped,
   // they're billed instead (api-usage-billing.ts).
   billingPlan       String    @default("free") // free | pay_as_you_go | committed
-  lastBilledAt      DateTime? // watermark for api-usage-billing.ts's periodic settlement sweep
-  // Set once billingPlan moves off "free" via a real Stripe subscription
-  // Checkout (api-usage-billing.ts) — null on "free" apps, and briefly null
-  // on a paid app mid-checkout before the webhook confirms it.
-  apiSubscriptionId String?
+  lastBilledAt      DateTime? // start of the current billing period (api-usage-billing.ts's settlement sweep)
+  // addendum-wallet-only-payments.md §3.4: pay_as_you_go overage requests
+  // already charged in coins this period — overage is charged in blocks as
+  // it accrues, not once at period end. Reset when a new period starts.
+  billedOverageRequests Int       @default(0)
   createdAt         DateTime  @default(now())
 
   scopes               DeveloperAppScope[]
@@ -4073,7 +4057,7 @@ model LedgerAccount {
 model LedgerTransaction {
   id                   String  @id @default(uuid())
   // signup_grant | promo_grant | admin_adjustment | referral_reward
-  // | transfer | purchase | refund | hold | hold_capture | hold_release
+  // | monthly_allowance | transfer | purchase | refund | hold | hold_capture | hold_release
   // | promo_expiry | migration_opening | payout (payout reserved, unused in v2)
   kind                 String
   // dedupes double-click / webhook redelivery / retry. postTransaction

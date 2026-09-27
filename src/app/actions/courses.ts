@@ -1,21 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
 import { randomUUID } from "crypto";
-import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
-import { getAppOrigin } from "@/lib/email";
+import { getAffiliateAttribution } from "@/lib/affiliate";
+import { notifyAffiliateConversion } from "@/lib/notifications";
 import { hasCourseAccess } from "@/lib/course-access";
 import { checkCourseCompletion } from "@/lib/learning-completion";
-import { getAttributedAffiliateLink, creditAffiliateConversion } from "@/lib/affiliate";
-import { notifyAffiliateConversion } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
@@ -50,7 +46,7 @@ async function parseAndValidateCourseFields(formData: FormData, creatorId: strin
   let currency: string | null = null;
   if (priceRaw) {
     price = Number(priceRaw);
-    if (!Number.isFinite(price) || price <= 0) return { error: "Price must be a positive number." };
+    if (!Number.isFinite(price) || price < 0.01) return { error: "Price must be a positive number." };
     currency = String(formData.get("currency") ?? "usd").trim().toLowerCase() || "usd";
   }
 
@@ -224,69 +220,34 @@ export async function purchaseCourse(_prevState: ActionState, formData: FormData
   }
 
   // addendum-coin-wallet-v2.md §6.3/§6.4: coins settle now, no creator
-  // payout account required. Affiliate attribution is card-rail only.
-  if (String(formData.get("payWith") ?? "card") === "coins") {
-    const result = await settleCoinPurchase({
-      kind: "course_purchase",
-      payerId: user.id,
-      payeeUserId: course.creatorId,
-      amountUsd: course.price,
-      currency: course.currency,
-      relatedObjectType: "course",
-      relatedObjectId: course.id,
-      idempotencyKey: `course:coin:${randomUUID()}`,
-      metadata: { courseId: course.id },
-      createRows: createCoursePurchaseRow,
-    });
-    if ("error" in result) return { error: result.error };
-    if (!result.alreadySettled) {
-      const h = await db.username.findUnique({ where: { userId: course.creatorId }, select: { handle: true } });
-      if (h) revalidatePath(`/${h.handle}/courses/${course.id}`);
-    }
-    return { success: true };
-  }
-
-  const payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { userId: course.creatorId } });
-  if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) {
-    return { error: "This creator hasn't enabled payouts yet." };
-  }
-
-  const affiliateLink = await getAttributedAffiliateLink("course", course.id, user.id);
-
-  const feeRate = await resolveFeeRate(db, course.creatorId);
-  const creatorHandle = (await db.username.findUnique({ where: { userId: course.creatorId }, select: { handle: true } }))?.handle ?? "";
-  const base = `${getAppOrigin()}/${creatorHandle}/courses/${course.id}`;
-  const { checkoutUrl } = await getPaymentProcessor().createPurchaseCheckoutSession({
-    amount: course.price,
-    currency: course.currency,
+  // payout account required. An attributed affiliate earns a coin
+  // commission out of the creator's share (addendum-wallet-only-payments.md
+  // §8 #3).
+  const affiliate = await getAffiliateAttribution("course", course.id, user.id);
+  const result = await settleCoinPurchase({
+    kind: "course_purchase",
     payerId: user.id,
-    payerEmail: user.email,
-    payeeProcessorAccountId: payoutAccount.processorAccountId,
-    applicationFeeAmount: Math.round(course.price * feeRate * 100) / 100,
-    description: course.title,
-    successUrl: `${base}?checkout=success`,
-    cancelUrl: `${base}?checkout=cancelled`,
-    metadata: {
-      kind: "course_purchase",
-      payerId: user.id,
-      payeeId: course.creatorId,
-      courseId: course.id,
-      amount: String(course.price),
-      currency: course.currency,
-      affiliateLinkId: affiliateLink?.id ?? "",
-      affiliateId: affiliateLink?.affiliateId ?? "",
-      affiliateCommissionPercent: affiliateLink ? String(affiliateLink.program.commissionPercent) : "",
-    },
+    payeeUserId: course.creatorId,
+    amountUsd: course.price,
+    currency: course.currency,
+    relatedObjectType: "course",
+    relatedObjectId: course.id,
+    idempotencyKey: `course:coin:${randomUUID()}`,
+    metadata: { courseId: course.id },
+    createRows: createCoursePurchaseRow,
+    affiliate,
   });
-
-  redirect(checkoutUrl);
+  if ("error" in result) return { error: result.error };
+  if (result.creditedAffiliateId) await notifyAffiliateConversion({ recipientId: result.creditedAffiliateId, actorId: user.id });
+  if (!result.alreadySettled) {
+    const h = await db.username.findUnique({ where: { userId: course.creatorId }, select: { handle: true } });
+    if (h) revalidatePath(`/${h.handle}/courses/${course.id}`);
+  }
+  return { success: true };
 }
 
-// Called from the Stripe webhook once checkout.session.completed confirms
-// payment — mirrors activateDigitalPurchase's shape (digital-products.ts).
-// Idempotent on processorReference.
-// The access grant — one place, both rails (addendum-coin-wallet-v2.md
-// §6.2). Affiliate crediting stays in activateCoursePurchase (card only).
+// The access grant, created with the coin charge by settleCoinPurchase
+// (addendum-coin-wallet-v2.md §6.2).
 export async function createCoursePurchaseRow(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
   await tx.courseAccessGrant.create({
     data: {
@@ -296,61 +257,6 @@ export async function createCoursePurchaseRow(tx: Prisma.TransactionClient, s: F
       paymentTransactionId: s.paymentTransactionId,
     },
   });
-}
-
-export async function activateCoursePurchase(metadata: Record<string, string>, processorReference: string): Promise<void> {
-  const already = await db.paymentTransaction.findFirst({ where: { processorReference, kind: "course_purchase" } });
-  if (already) return;
-
-  const { payerId, payeeId, courseId, amount: amountStr, currency, affiliateLinkId, affiliateId, affiliateCommissionPercent } = metadata;
-  const amount = Number(amountStr);
-  const affiliateLink =
-    affiliateLinkId && affiliateId && affiliateCommissionPercent
-      ? { id: affiliateLinkId, affiliateId, program: { commissionPercent: Number(affiliateCommissionPercent) } }
-      : null;
-
-  let creditedAffiliate;
-  try {
-    creditedAffiliate = await db.$transaction(async (tx) => {
-      const transaction = await recordPaymentTransaction(tx, {
-        kind: "course_purchase",
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        processorReference,
-        status: "succeeded",
-        relatedObjectType: "course",
-        relatedObjectId: courseId,
-      });
-      await createCoursePurchaseRow(tx, {
-        paymentTransactionId: transaction.id,
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        metadata,
-      });
-
-      if (!affiliateLink) return null;
-      return creditAffiliateConversion(tx, {
-        affiliateLink,
-        saleAmount: amount,
-        currency,
-        saleProcessorReference: processorReference,
-      });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateCoursePurchase: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
-      return;
-    }
-    throw err;
-  }
-  if (creditedAffiliate) await notifyAffiliateConversion({ recipientId: creditedAffiliate.affiliateId, actorId: payerId });
-
-  const creatorUsername = await db.username.findUnique({ where: { userId: payeeId }, select: { handle: true } });
-  if (creatorUsername) revalidatePath(`/${creatorUsername.handle}/courses/${courseId}`);
 }
 
 // spec §11.2's third criterion: only recorded for a user who currently has

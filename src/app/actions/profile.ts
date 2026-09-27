@@ -37,7 +37,6 @@ export async function claimUsername(
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.profile) redirect(`/${user.username!.handle}`);
-  if (!user.emailVerifiedAt) redirect("/verify/sent");
 
   const displayName = String(formData.get("displayName") ?? "").trim();
   const handle = String(formData.get("username") ?? "").trim().toLowerCase();

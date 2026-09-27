@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Briefcase, CalendarClock, Clock, Pencil, Plus } from "lucide-react";
 import { db } from "@/lib/db";
@@ -10,6 +9,7 @@ import { createAvailabilityRule, deleteAvailabilityRule, confirmAppointment, can
 import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { formatCoins } from "@/lib/coins";
 
 export const metadata: Metadata = { title: "Freelance services" };
 
@@ -46,8 +46,6 @@ export default async function FreelanceServicesSettingsPage() {
   const currentUser = await getCurrentUser();
   if (!currentUser) redirect("/login");
 
-  const username = await db.username.findUnique({ where: { userId: currentUser.id }, select: { handle: true } });
-
   const [offerings, rules, appointments] = await Promise.all([
     db.offering.findMany({ where: { sellerUserId: currentUser.id }, orderBy: { createdAt: "desc" } }),
     db.availabilityRule.findMany({
@@ -65,8 +63,8 @@ export default async function FreelanceServicesSettingsPage() {
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Freelance services</h2>
       <p className="mutedText" style={{ marginBottom: "1rem" }}>
-        List a bookable service or a sellable product as an individual — no business required. Needs an active{" "}
-        <Link href={`/s/${username?.handle}/monetization/payouts`}>payout account</Link> to accept paid bookings.
+        List a bookable service or a sellable product as an individual — no business required. Buyers pay in
+        coins, which land in your wallet.
       </p>
 
       <p className="settingsGroupLabel">Your offerings</p>
@@ -82,7 +80,7 @@ export default async function FreelanceServicesSettingsPage() {
               ) : undefined
             }
             label={offering.name}
-            description={`${offering.kind === "product" ? "Product" : "Service"} · ${STATUS_LABEL[offering.status] ?? offering.status}${offering.price !== null ? ` · ${offering.currency} ${offering.price.toFixed(2)}` : " · contact for pricing"}`}
+            description={`${offering.kind === "product" ? "Product" : "Service"} · ${STATUS_LABEL[offering.status] ?? offering.status}${offering.price !== null ? ` · ${formatCoins(offering.price)}` : " · contact for pricing"}`}
             trailing={
               offering.status !== "archived" ? (
                 <form action={archiveOffering}>

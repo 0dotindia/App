@@ -85,8 +85,7 @@ function isValidProtectedKey(key: string): boolean {
 // Resolved lazily on first sign/verify, never at module load: `next build`
 // collects page data by evaluating every route module (including the two
 // /api routes that import this), and a build must not depend on a
-// production secret being present — same reasoning as stripe.ts's lazy
-// client. The production throw still fires, now on first real use.
+// production secret being present. The production throw still fires, now on first real use.
 let tokenSecret: string | undefined;
 
 function getTokenSecret(): string {

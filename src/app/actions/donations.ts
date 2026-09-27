@@ -5,12 +5,9 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
-import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
 import { coinActionKey } from "@/lib/wallet/limits";
-import { getAppOrigin } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import { saveUploadedImage } from "@/lib/uploads";
 import type { ActionState } from "@/app/actions/auth";
 
@@ -79,8 +76,8 @@ export async function cancelFundraisingCampaign(formData: FormData): Promise<voi
 }
 
 // spec §11: at least the fourth reuse of the PaymentTransaction ledger —
-// same "charge, then record ledger + feature row in one transaction, only
-// after processor.charge() succeeds" shape as sendTip (tips.ts).
+// same coin charge + ledger + feature row in one transaction as sendTip
+// (tips.ts).
 export async function donate(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
   const campaignId = String(formData.get("campaignId") ?? "");
@@ -94,7 +91,7 @@ export async function donate(_prevState: ActionState, formData: FormData): Promi
   const rawAmount = Number(formData.get("amount"));
   const amount = Math.round(rawAmount * 100) / 100;
   if (!Number.isFinite(amount) || amount < MIN_DONATION_AMOUNT || amount > MAX_DONATION_AMOUNT) {
-    return { error: `Donation amount must be between $${MIN_DONATION_AMOUNT} and $${MAX_DONATION_AMOUNT}.` };
+    return { error: `Donation amount must be between ${MIN_DONATION_AMOUNT} and ${MAX_DONATION_AMOUNT} coins.` };
   }
 
   if (!checkRateLimit(`donate:${user.id}`, { max: 10, windowMs: 15 * 60 * 1000 })) {
@@ -104,64 +101,29 @@ export async function donate(_prevState: ActionState, formData: FormData): Promi
   if (campaign.organizerType !== "user" || !campaign.organizerUserId) {
     return { error: "This campaign's payout route isn't supported yet." };
   }
+  if (campaign.organizerUserId === user.id) return { error: "You can't donate to your own campaign." };
 
   // addendum-coin-wallet-v2.md §6.3: coins settle now, no payout account
   // needed on the organizer.
-  if (String(formData.get("payWith") ?? "card") === "coins") {
-    const result = await settleCoinPurchase({
-      kind: "donation",
-      payerId: user.id,
-      payeeUserId: campaign.organizerUserId,
-      amountUsd: amount,
-      currency: campaign.currency,
-      relatedObjectType: "fundraising_campaign",
-      relatedObjectId: campaign.id,
-      idempotencyKey: coinActionKey("donation:coin", formData.get("idempotencyKey"), user.id, campaign.id, amount),
-      metadata: { campaignId: campaign.id, message, isAnonymous: String(isAnonymous) },
-      createRows: createDonationRows,
-    });
-    if ("error" in result) return { error: result.error };
-    if (!result.alreadySettled) revalidatePath(`/fund/${campaign.id}`);
-    return { success: true };
-  }
-
-  const payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { userId: campaign.organizerUserId } });
-  if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) {
-    return { error: "This fundraiser hasn't enabled payouts yet." };
-  }
-
-  const feeRate = await resolveFeeRate(db, campaign.organizerUserId);
-  const base = `${getAppOrigin()}/fund/${campaign.id}`;
-  const { checkoutUrl } = await getPaymentProcessor().createPurchaseCheckoutSession({
-    amount,
-    currency: campaign.currency,
+  const result = await settleCoinPurchase({
+    kind: "donation",
     payerId: user.id,
-    payerEmail: user.email,
-    payeeProcessorAccountId: payoutAccount.processorAccountId,
-    applicationFeeAmount: Math.round(amount * feeRate * 100) / 100,
-    description: `Donation to ${campaign.title}`,
-    successUrl: `${base}?checkout=success`,
-    cancelUrl: `${base}?checkout=cancelled`,
-    metadata: {
-      kind: "donation",
-      payerId: user.id,
-      payeeId: campaign.organizerUserId,
-      campaignId: campaign.id,
-      amount: String(amount),
-      currency: campaign.currency,
-      message,
-      isAnonymous: String(isAnonymous),
-    },
+    payeeUserId: campaign.organizerUserId,
+    amountUsd: amount,
+    currency: campaign.currency,
+    relatedObjectType: "fundraising_campaign",
+    relatedObjectId: campaign.id,
+    idempotencyKey: coinActionKey("donation:coin", formData.get("idempotencyKey"), user.id, campaign.id, amount),
+    metadata: { campaignId: campaign.id, message, isAnonymous: String(isAnonymous) },
+    createRows: createDonationRows,
   });
-
-  redirect(checkoutUrl);
+  if ("error" in result) return { error: result.error };
+  if (!result.alreadySettled) revalidatePath(`/fund/${campaign.id}`);
+  return { success: true };
 }
 
-// Called from the Stripe webhook on checkout.session.completed once
-// payment for a donation is confirmed — real "charge succeeded" signal now
-// that donate() only starts a redirect. Idempotent on processorReference.
-// The Donation row + running-total bump — one place, both rails
-// (addendum-coin-wallet-v2.md §6.2).
+// The Donation row + running-total bump, created with the coin charge by
+// settleCoinPurchase (addendum-coin-wallet-v2.md §6.2).
 export async function createDonationRows(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
   const campaignId = s.metadata.campaignId;
   const message = s.metadata.message ?? "";
@@ -182,42 +144,3 @@ export async function createDonationRows(tx: Prisma.TransactionClient, s: Featur
   });
 }
 
-export async function activateDonation(metadata: Record<string, string>, processorReference: string): Promise<void> {
-  const already = await db.paymentTransaction.findFirst({ where: { processorReference, kind: "donation" } });
-  if (already) return;
-
-  const { payerId, payeeId, campaignId, amount: amountStr, currency } = metadata;
-  const amount = Number(amountStr);
-
-  try {
-    await db.$transaction(async (tx) => {
-      const transaction = await recordPaymentTransaction(tx, {
-        kind: "donation",
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        processorReference,
-        status: "succeeded",
-        relatedObjectType: "fundraising_campaign",
-        relatedObjectId: campaignId,
-      });
-      await createDonationRows(tx, {
-        paymentTransactionId: transaction.id,
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        metadata,
-      });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateDonation: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
-      return;
-    }
-    throw err;
-  }
-
-  revalidatePath(`/fund/${campaignId}`);
-}

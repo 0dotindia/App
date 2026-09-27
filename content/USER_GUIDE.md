@@ -33,8 +33,10 @@ is always the bare `0dot.in/yourname`.
 
 ## Getting started (about 10 minutes)
 
-1. **Claim your username.** Sign up at `0dot.in/signup`, verify your email,
-   and pick your handle. Choose carefully — it's your permanent address.
+1. **Claim your username.** Sign up at `0dot.in/signup` with just your name,
+   a handle, and a password — no email or verification code. Choose the
+   handle carefully — it's your permanent address. Save the recovery codes
+   you're shown next: they're how you get back in if you forget your password.
 2. **Set up your profile.** Add an avatar and cover image, write a short bio,
    pick a theme from the curated presets, and link your other social
    accounts.
@@ -209,9 +211,9 @@ Hosted by a business *or* a community (never both). Browse at `/e`, create at
 
 ## Making money (creators)
 
-0dot has a full payments backbone (live Stripe Connect under the hood, behind
-a swappable interface). Once you connect a payout account
-(`/s/yourname/monetization/payouts`), you can offer:
+Everything on 0dot is paid in **coins** (see *Coins & Wallet* below) — there's
+nothing to connect, and what your fans pay lands straight in your wallet. You
+can offer:
 
 - **Tips** on your profile and posts
 - **Membership tiers** with gated content
@@ -228,21 +230,26 @@ Every transaction goes through an auditable ledger. Premium subscribers pay a
 
 ## Coins & Wallet — `/wallet`
 
-0dot has a closed-loop internal currency:
+0dot runs on coins — platform credits used to pay for everything on 0dot:
 
-- **1 coin = 1 USD**, fixed. Not a rate that moves, not crypto, not a
-  speculation asset.
+- **Credits, not money.** Coins can't be bought with money and can't be
+  cashed out. They're not crypto or a speculation asset.
+- **Monthly allowance** — every active account gets **10 coins each
+  month**, marked *restricted* (spendable, not transferable) and expiring
+  after 90 days.
 - **Signup grant** — new accounts get a small starter grant (currently 1
   coin), marked *restricted*: non-transferable and it expires after 90 days.
 - **Referral rewards** — invite someone with your referral link (from the
-  Wallet page); once they verify their email and take a real action, **you
+  Wallet page); once their account is a day old and they take a real action, **you
   and they each get 3 coins** (promo bucket, 90-day expiry, with an
   anti-farming cap).
-- **Earning**, not buying — coins come from the signup grant, referrals,
-  creator earnings, refunds, and promos. There's no bank top-up yet.
-- **Spending** — today, coins buy a **Premium Profile** subscription.
+- **Earning**, not buying — coins come from the monthly allowance, the
+  signup grant, referrals, creator earnings, refunds, and promos.
+- **Spending** — coins pay for tips, memberships, products, courses,
+  tickets, marketplace items, Premium, business plans and API plans.
+  Subscriptions renew from your balance automatically; cancel any time.
 - **Transfers** — you can send transferable coins to another user, subject to
-  account-age and verification checks that keep the system from being farmed.
+  account-age checks that keep the system from being farmed.
 
 Every wallet movement is a double-entry ledger transaction you can see in
 your activity list.
@@ -260,8 +267,8 @@ A personal paid subscription for your `Profile`. Perks:
   verification)
 - **A reduced creator platform fee** if you earn through monetization
 
-You can pay for Premium with **coins** or a card, from `/wallet` or
-`/s/yourname/billing/premium`. Cancelling keeps your perks until the end of
+You pay for Premium with **coins**, from `/wallet`, and it renews from your
+balance each period; manage it at `/s/yourname/billing/premium`. Cancelling keeps your perks until the end of
 the period you already paid for — no instant clawback.
 
 ---
@@ -351,7 +358,7 @@ Your whole account dashboard lives under one route tree:
 | Billing — domains | `/s/yourname/billing/domains` |
 | Developer apps | `/s/yourname/developer` |
 | Content (articles, books, wiki, courses, podcast, newsletter…) | `/s/yourname/content/*` |
-| Monetization (memberships, products, services, payouts, affiliate) | `/s/yourname/monetization/*` |
+| Monetization (memberships, products, services, affiliate) | `/s/yourname/monetization/*` |
 | Portfolio (projects, skills, resume, repositories, credentials, layout) | `/s/yourname/portfolio/*` |
 | Calendar, forms, cross-post | `/s/yourname/calendar`, `/s/yourname/forms`, `/s/yourname/cross-post` |
 

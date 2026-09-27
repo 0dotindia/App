@@ -1,21 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveUploadedImage } from "@/lib/uploads";
 import { randomUUID } from "crypto";
-import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
 import { chargeWallet } from "@/lib/wallet/charge";
+import { COIN_FUNDED_MARKER, effectivelyActiveWhere } from "@/lib/subscription-access";
 import { WalletError } from "@/lib/wallet/ledger";
 import { coinIdempotencyKey } from "@/lib/wallet/limits";
-import { getAppOrigin } from "@/lib/email";
 import { notifyNewSubscriber, notifyAffiliateConversion } from "@/lib/notifications";
-import { getAttributedAffiliateLink, creditAffiliateConversion } from "@/lib/affiliate";
+import { getAffiliateAttribution } from "@/lib/affiliate";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const BILLING_INTERVAL_VALUES = new Set(["monthly", "yearly"]);
@@ -47,7 +43,7 @@ function parseAndValidateTierFields(formData: FormData): { error: string } | Tie
   if (!Number.isInteger(level) || level < 1) return { error: "Level must be a positive whole number." };
 
   const price = Number(formData.get("price"));
-  if (!Number.isFinite(price) || price <= 0) return { error: "Price must be a positive number." };
+  if (!Number.isFinite(price) || price < 0.01) return { error: "Price must be a positive number." };
 
   const currency = String(formData.get("currency") ?? "usd").trim().toLowerCase() || "usd";
 
@@ -128,15 +124,10 @@ export async function archiveTier(formData: FormData): Promise<void> {
   if (user.username) revalidatePath(`/s/${user.username.handle}`);
 }
 
-// spec §4.1/§4.3: starts a real Stripe Connect subscription checkout
-// (kind: membership_charge on the ledger once confirmed) instead of
-// charging synchronously — a hosted Checkout redirect can't confirm
-// payment within this same request. The MembershipSubscription row is
-// created by activateMembershipSubscription below, once Stripe's webhook
-// confirms checkout.session.completed; currentPeriodEnd afterward is
-// Stripe's own subscription object, kept in sync by syncMembershipFromStripe
-// on every customer.subscription.updated (real recurring billing now, not
-// the one-period-then-frozen simulation the old stub processor required).
+// spec §4.1/§4.3: subscribes with coins — the first period is charged
+// now (kind: membership_charge) and the platform-billing sweep renews it
+// from the fan's wallet after that (addendum-wallet-only-payments.md
+// §3.3).
 export async function subscribeToTier(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
   const tierId = String(formData.get("tierId") ?? "");
@@ -146,11 +137,7 @@ export async function subscribeToTier(_prevState: ActionState, formData: FormDat
   if (tier.creatorId === user.id) return { error: "You can't subscribe to your own tier." };
 
   const existing = await db.membershipSubscription.findFirst({
-    where: {
-      fanId: user.id,
-      tierId: tier.id,
-      OR: [{ status: "active" }, { status: "cancelled", currentPeriodEnd: { gt: new Date() } }],
-    },
+    where: { fanId: user.id, tierId: tier.id, ...effectivelyActiveWhere() },
   });
   if (existing) return { error: "You're already subscribed to this tier." };
 
@@ -158,194 +145,69 @@ export async function subscribeToTier(_prevState: ActionState, formData: FormDat
     return { error: "You're subscribing too fast. Please slow down." };
   }
 
-  // addendum-coin-wallet-v2.md §6.3: coins pay the FIRST PERIOD ONLY — no
-  // mandate, no auto-renew. currentPeriodEnd is one interval out; the
-  // coin-membership lapse sweep (platform-billing.ts) flips it to past_due
-  // when it elapses, and the fan re-subscribes with coins. Mirrors the
-  // coin-Premium model. No payout account required on the creator (§6.4).
-  if (String(formData.get("payWith") ?? "card") === "coins") {
-    const currentPeriodEnd = new Date();
-    if (tier.billingInterval === "yearly") currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
-    else currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+  // addendum-wallet-only-payments.md §3.3: coins pay the first period now
+  // and the platform-billing sweep auto-renews from the fan's wallet each
+  // period after (autoRenew), until the fan cancels or runs out of coins
+  // past the grace period. No payout account required on the creator
+  // (coin-wallet v2 §6.4). An attributed affiliate earns a coin commission
+  // on the first period only, as the card rail did (§8 #3).
+  const affiliate = await getAffiliateAttribution("membership_tier", tier.id, user.id);
+  const currentPeriodEnd = new Date();
+  if (tier.billingInterval === "yearly") currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
+  else currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
 
-    let subscribed = false;
-    try {
-      subscribed = await db.$transaction(async (tx) => {
-        const charge = await chargeWallet(tx, {
-          payerId: user.id,
-          payeeUserId: tier.creatorId,
-          amountUsd: tier.price,
-          currency: tier.currency,
-          kind: "membership_charge",
-          relatedObjectType: "membership_tier",
-          relatedObjectId: tier.id,
-          idempotencyKey: coinIdempotencyKey("membership:coin", user.id, tier.id),
-        });
-        if (charge.alreadySettled) return false; // double-click — first click already subscribed
-        await tx.membershipSubscription.create({
-          data: {
-            tierId: tier.id,
-            fanId: user.id,
-            status: "active",
-            currentPeriodEnd,
-            processorSubscriptionId: `coin:${randomUUID()}`,
-          },
-        });
-        return true;
-      });
-    } catch (err) {
-      if (err instanceof WalletError && err.code === "INSUFFICIENT_FUNDS") {
-        return { error: "You don't have enough coins for this membership." };
-      }
-      throw err;
-    }
-
-    if (subscribed) {
-      await notifyNewSubscriber({ recipientId: tier.creatorId, actorId: user.id });
-      const creatorHandle = (await db.username.findUnique({ where: { userId: tier.creatorId }, select: { handle: true } }))?.handle;
-      if (creatorHandle) revalidatePath(`/${creatorHandle}`);
-    }
-    return { success: true };
-  }
-
-  // spec §3.5's literal gate, same check tips.ts's sendTip already
-  // enforces for a different money-moving feature: a creator cannot
-  // receive a payout-requiring transaction until their payout account is
-  // active.
-  const payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { userId: tier.creatorId } });
-  if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) {
-    return { error: "This creator hasn't enabled payouts yet." };
-  }
-
-  const affiliateLink = await getAttributedAffiliateLink("membership_tier", tier.id, user.id);
-
-  const feeRate = await resolveFeeRate(db, tier.creatorId);
-  const creatorHandle = (await db.username.findUnique({ where: { userId: tier.creatorId }, select: { handle: true } }))?.handle ?? "";
-  const base = `${getAppOrigin()}/${creatorHandle}`;
-  const { checkoutUrl } = await getPaymentProcessor().createSubscriptionCheckoutSession({
-    amount: tier.price,
-    currency: tier.currency,
-    billingInterval: tier.billingInterval,
-    payerId: user.id,
-    payerEmail: user.email,
-    payeeProcessorAccountId: payoutAccount.processorAccountId,
-    applicationFeePercent: feeRate,
-    description: `${tier.name} membership`,
-    successUrl: `${base}?checkout=success`,
-    cancelUrl: `${base}?checkout=cancelled`,
-    metadata: {
-      kind: "membership",
-      payerId: user.id,
-      payeeId: tier.creatorId,
-      tierId: tier.id,
-      amount: String(tier.price),
-      currency: tier.currency,
-      billingInterval: tier.billingInterval,
-      affiliateLinkId: affiliateLink?.id ?? "",
-      affiliateId: affiliateLink?.affiliateId ?? "",
-      affiliateCommissionPercent: affiliateLink ? String(affiliateLink.program.commissionPercent) : "",
-    },
-  });
-
-  redirect(checkoutUrl);
-}
-
-// Called from the Stripe webhook on checkout.session.completed once a
-// membership subscription's first payment is confirmed. Idempotent on
-// processorSubscriptionId since Stripe can redeliver the same event.
-export async function activateMembershipSubscription(params: {
-  metadata: Record<string, string>;
-  processorSubscriptionId: string;
-  currentPeriodEnd: Date;
-}): Promise<void> {
-  const already = await db.membershipSubscription.findFirst({ where: { processorSubscriptionId: params.processorSubscriptionId } });
-  if (already) return;
-
-  const { payerId, payeeId, tierId, amount: amountStr, currency, affiliateLinkId, affiliateId, affiliateCommissionPercent } = params.metadata;
-  const amount = Number(amountStr);
-  const affiliateLink =
-    affiliateLinkId && affiliateId && affiliateCommissionPercent
-      ? { id: affiliateLinkId, affiliateId, program: { commissionPercent: Number(affiliateCommissionPercent) } }
-      : null;
-
-  let creditedAffiliate;
+  let subscribed = false;
+  let creditedAffiliateId: string | null = null;
   try {
-    creditedAffiliate = await db.$transaction(async (tx) => {
-      await recordPaymentTransaction(tx, {
+    subscribed = await db.$transaction(async (tx) => {
+      const charge = await chargeWallet(tx, {
+        payerId: user.id,
+        payeeUserId: tier.creatorId,
+        amountUsd: tier.price,
+        currency: tier.currency,
         kind: "membership_charge",
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        processorReference: params.processorSubscriptionId,
-        status: "succeeded",
         relatedObjectType: "membership_tier",
-        relatedObjectId: tierId,
+        relatedObjectId: tier.id,
+        idempotencyKey: coinIdempotencyKey("membership:coin", user.id, tier.id),
+        affiliate,
       });
+      if (charge.alreadySettled) return false; // double-click — first click already subscribed
+      creditedAffiliateId = charge.creditedAffiliateId;
       await tx.membershipSubscription.create({
         data: {
-          tierId,
-          fanId: payerId,
+          tierId: tier.id,
+          fanId: user.id,
           status: "active",
-          currentPeriodEnd: params.currentPeriodEnd,
-          processorSubscriptionId: params.processorSubscriptionId,
+          currentPeriodEnd,
+          processorSubscriptionId: `${COIN_FUNDED_MARKER}${randomUUID()}`,
+          autoRenew: true,
         },
       });
-
-      if (!affiliateLink) return null;
-      return creditAffiliateConversion(tx, {
-        affiliateLink,
-        saleAmount: amount,
-        currency,
-        saleProcessorReference: params.processorSubscriptionId,
-      });
+      return true;
     });
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateMembershipSubscription: duplicate webhook delivery — already recorded, no-op", undefined, { processorSubscriptionId: params.processorSubscriptionId });
-      return;
+    if (err instanceof WalletError && err.code === "INSUFFICIENT_FUNDS") {
+      return { error: "You don't have enough coins for this membership." };
     }
     throw err;
   }
-  if (creditedAffiliate) await notifyAffiliateConversion({ recipientId: creditedAffiliate.affiliateId, actorId: payerId });
 
-  await notifyNewSubscriber({ recipientId: payeeId, actorId: payerId });
-
-  const creatorUsername = await db.username.findUnique({ where: { userId: payeeId }, select: { handle: true } });
-  if (creatorUsername) revalidatePath(`/${creatorUsername.handle}`);
-}
-
-// Stripe's own subscription.status is the source of truth for renewal/
-// dunning/final-cancellation, mirroring platform-billing.ts's
-// syncSubscriptionFromStripe for the same reason — called from the webhook
-// on customer.subscription.updated/deleted, which fire for every renewal,
-// so this is also how currentPeriodEnd advances each period.
-const STRIPE_STATUS_MAP: Record<string, string> = {
-  active: "active",
-  trialing: "active",
-  past_due: "past_due",
-  unpaid: "past_due",
-  paused: "past_due",
-  canceled: "cancelled",
-  incomplete_expired: "cancelled",
-};
-
-export async function syncMembershipFromStripe(processorSubscriptionId: string, stripeStatus: string, currentPeriodEnd: Date): Promise<void> {
-  const subscription = await db.membershipSubscription.findFirst({ where: { processorSubscriptionId } });
-  if (!subscription) return; // not one of ours, or checkout.session.completed hasn't landed yet
-
-  const status = STRIPE_STATUS_MAP[stripeStatus] ?? subscription.status;
-  await db.membershipSubscription.update({ where: { id: subscription.id }, data: { status, currentPeriodEnd } });
+  if (subscribed) {
+    await notifyNewSubscriber({ recipientId: tier.creatorId, actorId: user.id });
+    if (creditedAffiliateId) await notifyAffiliateConversion({ recipientId: creditedAffiliateId, actorId: user.id });
+    const creatorHandle = (await db.username.findUnique({ where: { userId: tier.creatorId }, select: { handle: true } }))?.handle;
+    if (creatorHandle) revalidatePath(`/${creatorHandle}`);
+  }
+  return { success: true };
 }
 
 // spec §4.3's third literal criterion: cancelling retains access through
 // current_period_end, not immediately — this only flips status, it never
 // touches currentPeriodEnd, and hasTierAccess (src/lib/tier-access.ts)
 // treats a cancelled-but-not-yet-expired row as still granting access.
-// Cancels at Stripe first, local row second — with a real processor (no
-// longer a no-op stub) a failed Stripe call must not leave this row marked
-// cancelled while Stripe keeps billing it, same reasoning
-// platform-billing.ts's cancelPlatformSubscription now follows.
+// Cancelling stops the coin auto-renew (addendum-wallet-only-payments.md
+// §3.3); a past_due row (renewal failed, in grace) can be cancelled too,
+// which stops the sweep retrying it.
 export async function cancelSubscription(formData: FormData): Promise<void> {
   const user = await requireVerifiedUser();
   const subscriptionId = String(formData.get("subscriptionId") ?? "");
@@ -353,9 +215,8 @@ export async function cancelSubscription(formData: FormData): Promise<void> {
 
   const subscription = await db.membershipSubscription.findUnique({ where: { id: subscriptionId } });
   if (!subscription || subscription.fanId !== user.id) return;
-  if (subscription.status !== "active") return;
+  if (subscription.status !== "active" && subscription.status !== "past_due") return;
 
-  await getPaymentProcessor().cancelSubscription(subscription.processorSubscriptionId);
   await db.membershipSubscription.update({ where: { id: subscription.id }, data: { status: "cancelled" } });
 
   if (user.username) revalidatePath(`/s/${user.username.handle}`);

@@ -3,7 +3,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
-import { postTransaction, type PostingInput } from "@/lib/wallet/ledger";
+import { postTransaction, WalletError, type PostingInput } from "@/lib/wallet/ledger";
 import { ensureUserAccounts, ensureBusinessAccounts, SYSTEM_ACCOUNT_IDS } from "@/lib/wallet/accounts";
 import { coinsToUnits } from "@/lib/wallet/limits";
 import type { FeatureSettlement } from "@/lib/wallet/charge";
@@ -111,6 +111,8 @@ export async function captureHold(
     return { paymentTransactionId: linked?.paymentTransactionId ?? "", alreadySettled: true };
   }
   if (hold.state !== "pending") throw new Error(`hold ${holdId} is ${hold.state}, cannot capture`);
+  // Same rule as chargeWallet: no paying yourself (restricted → spendable).
+  if (params.payeeUserId === payerId) throw new WalletError("BAD_REQUEST", "you can't pay yourself");
 
   const hasExternalPayee = Boolean(params.payeeUserId || params.payeeBusinessId);
   const feeRate = await resolveFeeRate(tx, params.payeeUserId ?? null);

@@ -67,7 +67,7 @@ Every external service sits behind a swappable interface in `src/lib/` (`Payment
 |---|---|---|---|
 | **Stripe** (`src/lib/stripe.ts`, `payments.ts`) | Payouts (Connect Accounts v2), tips, memberships, digital products, courses, event tickets, affiliate payouts | `STRIPE_SECRET_KEY` + webhook secrets are set | N/A — payment flows require this in any environment that exercises them |
 | **Anthropic Claude** (`src/lib/ai-provider.ts`) | Content writer, moderation, translation, alt-text, search/recommendation re-ranking | `ANTHROPIC_API_KEY` is set | Deterministic local heuristic (keyword-based moderation, canned drafts, hash-based embeddings) — always active in tests/CI |
-| **Resend / SMTP** (`src/lib/email.ts`) | Verification, password reset, newsletters | `RESEND_API_KEY` (preferred) or `SMTP_HOST` (+ user/pass) is set | Console-log stub — link is also surfaced directly on-screen in dev |
+| **Resend / SMTP** (`src/lib/email.ts`) | Optional email-change confirmation, newsletters (signup has no email step) | `RESEND_API_KEY` (preferred) or `SMTP_HOST` (+ user/pass) is set | Console-log stub — link is also surfaced directly on-screen in dev |
 | **Vercel Blob** (`@vercel/blob`) | Avatar/post/document/attachment uploads | `BLOB_READ_WRITE_TOKEN` is set | No fallback — uploads fail with an auth error; everything else still works |
 | **LiveKit** (`src/lib/livestream-provider.ts`) | Livestream/voice-room video | `LIVEKIT_URL` + `LIVEKIT_API_KEY` + `LIVEKIT_API_SECRET` are all set | Scheduling/gating/chat plumbing only, no real video |
 | **SMS** (`src/lib/sms.ts`) | *(not yet used by any live feature)* | Never — no provider implemented yet | Console-log stub; setting `SMS_PROVIDER` to anything throws until one is added |
@@ -114,7 +114,7 @@ npx prisma migrate dev
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Signup sends a verification link — in local dev, with neither `RESEND_API_KEY` nor `SMTP_HOST` set, `src/lib/email.ts` falls back to a console-log stub and the link is also surfaced directly on the "check your email" page. Set `RESEND_API_KEY`, or `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS` (any SMTP relay — SES, Postmark, Mailgun, a self-hosted MTA), plus `EMAIL_FROM` and `APP_ORIGIN`, before launch so real email goes out instead.
+Open [http://localhost:3001](http://localhost:3001) (`npm run dev` serves on 3001). Signup needs only a name, username, and password — there is no email or OTP verification; the account is usable immediately and is shown one-time password recovery codes (`src/lib/password-recovery.ts`), which `/forgot-password` accepts in place of an emailed reset link. Email delivery (`RESEND_API_KEY` or `SMTP_*`, plus `EMAIL_FROM`/`APP_ORIGIN`) is only needed for optional email-change confirmation and newsletters.
 
 ### Other useful commands
 

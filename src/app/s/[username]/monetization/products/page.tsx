@@ -7,6 +7,7 @@ import { archiveProduct } from "@/app/actions/digital-products";
 import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { ProductForm } from "../../ProductForm";
+import { formatCoins } from "@/lib/coins";
 
 export const metadata: Metadata = { title: "Digital products" };
 
@@ -34,7 +35,7 @@ export default async function DigitalProductsSettingsPage() {
               ) : undefined
             }
             label={product.title}
-            description={`${product.price.toFixed(2)} ${product.currency.toUpperCase()} · ${product.status}`}
+            description={`${formatCoins(product.price)} · ${product.status}`}
             trailing={
               product.status !== "archived" ? (
                 <form action={archiveProduct}>

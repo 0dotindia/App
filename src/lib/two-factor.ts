@@ -16,8 +16,11 @@ export function generateSecret(): string {
   return otpGenerateSecret();
 }
 
-export async function buildEnrollmentUri(secret: string, email: string): Promise<{ otpauthUrl: string; qrDataUrl: string }> {
-  const otpauthUrl = generateURI({ issuer: "0dot.in", label: email, secret });
+// `label` is what the authenticator app shows next to the code — the account
+// email when there is one, otherwise the username (signup no longer collects
+// an email).
+export async function buildEnrollmentUri(secret: string, label: string): Promise<{ otpauthUrl: string; qrDataUrl: string }> {
+  const otpauthUrl = generateURI({ issuer: "0dot.in", label, secret });
   const qrDataUrl = await QRCode.toDataURL(otpauthUrl);
   return { otpauthUrl, qrDataUrl };
 }

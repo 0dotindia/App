@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const amount = Math.round(Number(Number(body?.amount).toFixed(2)) * 100) / 100;
     const message = typeof body?.message === "string" ? body.message.slice(0, 280) : "";
     if (!handle) return apiError("A recipient username is required.", 400);
-    if (!Number.isFinite(amount) || amount < 1 || amount > 500) return apiError("Tip must be between $1 and $500.", 400);
+    if (!Number.isFinite(amount) || amount < 1 || amount > 500) return apiError("Tip must be between 1 and 500 coins.", 400);
 
     const recipient = await db.username.findUnique({ where: { handle }, select: { userId: true } });
     if (!recipient) return apiError("Creator not found.", 404);

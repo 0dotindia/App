@@ -5,7 +5,7 @@ import {
   DAY, HOUR, MIN, SHOWCASE_HANDLE, chunk, dotSquareSvg, loadDots, loadShowcase, makeAfter, makeRng, openDb, ringsCoverSvg, type NotifRow,
 } from "./seed-showcase-common";
 import {
-  AWARDS, CALENDAR, CERTIFICATES, DM_LINES, EDUCATION, IRA_REPLY_BACKS, LINKS, PAPERS, PERSON, POLLS, POSTS, QUESTIONS, REPLIES_TO_IRA, REPOS, SCALES, SHORT_LINKS, SKILLS, SOCIALS, THREAD_INTRO, THREAD_POSTS, WORK,
+  AWARDS, CALENDAR, CERTIFICATES, DM_LINES, IRA_REPLY_BACKS, LINKS, PAPERS, PERSON, POLLS, POSTS, QUESTIONS, REPLIES_TO_IRA, REPOS, SCALES, SHORT_LINKS, SKILLS, SOCIALS, THREAD_INTRO, THREAD_POSTS, WORK,
 } from "./seed-showcase-data";
 
 // Turns the platform account (@dot, "ZERO DOT") into the flagship example profile, in the platform's own voice:
@@ -28,10 +28,9 @@ function encryptAtRest(plaintext: string): string {
 
 async function main() {
   const { url, prisma } = await openDb();
-  const { rand, int, between, pick, chance, shuffle } = makeRng(Number(process.env.SEED ?? 12));
+  const { rand, between, pick, chance, shuffle } = makeRng(Number(process.env.SEED ?? 12));
   const now = Date.now();
   const after = makeAfter(now, rand);
-  const years = (n: number) => new Date(now - n * 365.25 * DAY);
   console.log(`Seeding the platform showcase profile @${SHOWCASE_HANDLE} at: ${url}`);
 
   try {
