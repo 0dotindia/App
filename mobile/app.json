@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "0dot",
-    "slug": "0dot",
-    "owner": "kingofyadav",
+    "slug": "dot",
+    "owner": "dotindia",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -68,7 +68,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "50c9f08d-e5bf-45fa-883c-1995c81846f2"
+        "projectId": "fc1e601e-c0a7-4c4e-80b2-fd8daac5506d"
       }
     },
     "plugins": [
@@ -116,7 +116,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/50c9f08d-e5bf-45fa-883c-1995c81846f2"
+      "url": "https://u.expo.dev/fc1e601e-c0a7-4c4e-80b2-fd8daac5506d"
     }
   }
 }
