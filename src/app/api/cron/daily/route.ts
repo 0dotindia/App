@@ -18,6 +18,8 @@ export const maxDuration = 300;
 export async function GET(request: Request): Promise<Response> {
   const unauthorized = assertCronAuthorized(request);
   if (unauthorized) return unauthorized;
+  // Leave headroom under maxDuration for the jobs' own bookkeeping.
+  const deadline = Date.now() + (maxDuration - 20) * 1000;
 
   return runCronBucket("daily", {
     // Idempotent platform-catalog seed (first-party OAuth apps + scopes).
@@ -31,6 +33,6 @@ export async function GET(request: Request): Promise<Response> {
     "rate-limit-sweep": sweepExpiredRateLimitCounters,
     "wallet-anomaly": runWalletAnomalyScanOnce,
     "referral-rewards": runReferralRewardSweepOnce,
-    "monthly-allowance": () => runMonthlyAllowanceSweepOnce(),
+    "monthly-allowance": () => runMonthlyAllowanceSweepOnce(new Date(), { deadline }),
   });
 }

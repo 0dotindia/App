@@ -100,6 +100,18 @@ describe("monthly allowance", () => {
     expect(await restricted(user.id)).toBe(0);
   });
 
+  it("stops at its deadline without issuing, and a later run finishes the job", async () => {
+    const user = await account();
+
+    const partial = await runMonthlyAllowanceSweepOnce(new Date(), { deadline: Date.now() - 1 });
+    expect(partial.complete).toBe(false);
+    expect(await restricted(user.id)).toBe(0);
+
+    const full = await runMonthlyAllowanceSweepOnce();
+    expect(full.complete).toBe(true);
+    expect(await restricted(user.id)).toBe(ALLOWANCE);
+  });
+
   it("expires unspent allowance with the other grants", async () => {
     const user = await account({ ageDays: 200 });
     // Issued ~100 days ago, so its 90-day TTL has passed.

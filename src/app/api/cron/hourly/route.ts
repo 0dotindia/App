@@ -6,6 +6,7 @@ import { runCustomDomainSweepOnce } from "@/lib/custom-domains";
 import { runWalletReconciliationOnce } from "@/lib/wallet/reconcile";
 import { runPromoExpirySweepOnce } from "@/lib/wallet/expiry";
 import { runHoldExpirySweepOnce } from "@/lib/wallet/holds";
+import { runMonthlyAllowanceSweepOnce } from "@/lib/wallet/grants";
 
 // Hourly-ish maintenance sweeps. Triggered at :17 past the hour by
 // .github/workflows/cron.yml (Hobby plan can't do sub-daily Vercel crons —
@@ -19,6 +20,8 @@ export const maxDuration = 120;
 export async function GET(request: Request): Promise<Response> {
   const unauthorized = assertCronAuthorized(request);
   if (unauthorized) return unauthorized;
+  // Leave headroom under maxDuration for the jobs' own bookkeeping.
+  const deadline = Date.now() + (maxDuration - 15) * 1000;
 
   return runCronBucket("hourly", {
     "dmca-restoration": runDmcaRestorationOnce,
@@ -28,5 +31,9 @@ export async function GET(request: Request): Promise<Response> {
     "wallet-reconcile": runWalletReconciliationOnce,
     "promo-expiry": runPromoExpirySweepOnce,
     "hold-expiry": runHoldExpirySweepOnce,
+    // Also in the daily bucket; running hourly finishes a sweep that hit
+    // its time budget on the 1st within hours instead of days. A no-op
+    // once everyone eligible has this month's allowance.
+    "monthly-allowance": () => runMonthlyAllowanceSweepOnce(new Date(), { deadline }),
   });
 }

@@ -69,7 +69,13 @@ const ALLOWANCE_PAGE_SIZE = 500;
 // app token issued (tokens refresh while the mobile app is in use)
 // recently. Third-party apps don't count: their servers can refresh a
 // token with the user never opening 0dot.
-export async function runMonthlyAllowanceSweepOnce(now: Date = new Date()) {
+//
+// `deadline` (epoch ms) stops the sweep cleanly before the calling cron
+// function's time limit; it logs as incomplete and the next run (hourly
+// and daily cron both call this) picks up the rest, since issuing is
+// idempotent. Without it the platform could kill the run mid-page with
+// nothing logged.
+export async function runMonthlyAllowanceSweepOnce(now: Date = new Date(), { deadline }: { deadline?: number } = {}) {
   const month = now.toISOString().slice(0, 7); // yyyy-mm
   const activeSince = new Date(now.getTime() - WALLET_LIMITS.MONTHLY_ALLOWANCE_ACTIVE_WITHIN_DAYS * DAY_MS);
   const createdBefore = new Date(now.getTime() - WALLET_LIMITS.MONTHLY_ALLOWANCE_MIN_ACCOUNT_AGE_DAYS * DAY_MS);
@@ -77,9 +83,15 @@ export async function runMonthlyAllowanceSweepOnce(now: Date = new Date()) {
   const units = coinsToUnits(WALLET_LIMITS.MONTHLY_ALLOWANCE_COINS);
   const keyFor = (userId: string) => `monthly_allowance:${userId}:${month}`;
 
+  const outOfTime = () => deadline !== undefined && Date.now() >= deadline;
   let issued = 0;
+  let complete = true;
   let cursor: string | undefined;
-  for (;;) {
+  sweep: for (;;) {
+    if (outOfTime()) {
+      complete = false;
+      break;
+    }
     const users = await db.user.findMany({
       where: {
         status: "active",
@@ -119,6 +131,10 @@ export async function runMonthlyAllowanceSweepOnce(now: Date = new Date()) {
 
     for (const { id } of users) {
       if (alreadyIssued.has(keyFor(id))) continue;
+      if (outOfTime()) {
+        complete = false;
+        break sweep;
+      }
       try {
         const { created } = await db.$transaction(async (tx) => {
           const { promoId } = await ensureUserAccounts(tx, id);
@@ -141,8 +157,9 @@ export async function runMonthlyAllowanceSweepOnce(now: Date = new Date()) {
     if (users.length < ALLOWANCE_PAGE_SIZE) break;
   }
 
-  const result = { month, issued };
-  logger.info("monthly-allowance: swept", undefined, result);
+  const result = { month, issued, complete };
+  if (complete) logger.info("monthly-allowance: swept", undefined, result);
+  else logger.warn("monthly-allowance: stopped at the time budget; the next run continues", undefined, result);
   return result;
 }
 
