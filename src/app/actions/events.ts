@@ -7,13 +7,11 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import { saveUploadedImage } from "@/lib/uploads";
 import { validateEventSlugFormat } from "@/lib/reserved-event-slugs";
 import { isBusinessStaff } from "@/lib/businesses";
 import { isCommunityStaff } from "@/lib/communities";
 import { isEventHost, getGoingAttendeeCount } from "@/lib/events";
-import { recordPaymentTransaction } from "@/lib/payments";
 import { placeHold, captureHold } from "@/lib/wallet/holds";
 import { WalletError } from "@/lib/wallet/ledger";
 import { coinActionKey } from "@/lib/wallet/limits";
@@ -466,15 +464,10 @@ export async function purchaseTicket(_prevState: ActionState, formData: FormData
   return undefined;
 }
 
-// Called from the Stripe webhook once checkout.session.completed confirms
-// payment — mirrors purchaseTicket's former synchronous shape. Idempotent
-// on processorReference. Capacity/sold-out is re-checked at
+// The Ticket row + sold-count bump, created by the coin rail's captureHold
+// (addendum-coin-wallet-v2.md §6.2). Capacity/sold-out is checked at
 // purchaseTicket time only (same check-then-act window every other
-// inventory check in this codebase accepts) — a real double-sale race
-// here is no worse than what already existed synchronously.
-// The Ticket row + sold-count bump — one place, reached by the Stripe
-// webhook (activateTicketPurchase) and the coin rail's captureHold
-// (addendum-coin-wallet-v2.md §6.2).
+// inventory check in this codebase accepts).
 export async function createTicketRow(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
   await tx.ticket.create({
     data: {
@@ -486,47 +479,6 @@ export async function createTicketRow(tx: Prisma.TransactionClient, s: FeatureSe
     },
   });
   await tx.ticketType.update({ where: { id: s.metadata.ticketTypeId }, data: { quantitySold: { increment: 1 } } });
-}
-
-export async function activateTicketPurchase(metadata: Record<string, string>, processorReference: string): Promise<void> {
-  const already = await db.paymentTransaction.findFirst({ where: { processorReference, kind: "ticket_purchase" } });
-  if (already) return;
-
-  const { payerId, payeeId, payeeBusinessId, eventSlug, amount: amountStr, currency } = metadata;
-  const amount = Number(amountStr);
-
-  try {
-    await db.$transaction(async (tx) => {
-      const transaction = await recordPaymentTransaction(tx, {
-        kind: "ticket_purchase",
-        payerId,
-        payeeId: payeeId || null,
-        payeeBusinessId: payeeBusinessId || null,
-        amount,
-        currency,
-        processorReference,
-        status: "succeeded",
-        relatedObjectType: "ticket",
-      });
-      await createTicketRow(tx, {
-        paymentTransactionId: transaction.id,
-        payerId,
-        payeeId: payeeId || null,
-        amount,
-        currency,
-        metadata,
-      });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateTicketPurchase: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
-      return;
-    }
-    throw err;
-  }
-
-  await notifyTicketPurchased({ recipientId: payerId, eventSlug });
-  revalidatePath(`/e/${eventSlug}`);
 }
 
 // spec §5.3: check-in is ticketed-events-only for now. Host-only, matches a

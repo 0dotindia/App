@@ -9,8 +9,8 @@ import { BOOKING_NOTES, CAMPAIGNS, DONATION_MESSAGES, PLATFORM, PRODUCTS, SERVIC
 
 // Monetization for the seeded dots (seed-dots.ts) and the platform account (@dot), recorded the way
 // the app records real card payments (PaymentTransaction rows, processor stripe_connect, 10% fee, 7% for
-// Premium payees) with stub payout accounts:
-//   payout accounts, membership tiers + subscriptions + recurring charges + members-only posts,
+// Premium payees):
+//   membership tiers + subscriptions + recurring charges + members-only posts,
 //   digital products + purchases, affiliate programs/links/clicks/conversions (+ commissions),
 //   bookable services + availability + appointments + purchases, business sales (INR),
 //   fundraising campaigns + donations, card tips, Premium subscriptions (people and businesses).
@@ -88,7 +88,6 @@ async function main() {
       await prisma.offering.deleteMany({ where: { seller: seedUser } });
       await prisma.digitalProduct.deleteMany({ where: { creator: seedUser } });
       await prisma.membershipTier.deleteMany({ where: { creator: seedUser } });
-      await prisma.creatorPayoutAccount.deleteMany({ where: { OR: [{ user: seedUser }, { business: { creator: seedUser } }] } });
       await prisma.notification.deleteMany({ where: { type: { in: ["new_subscriber", "affiliate_conversion", "appointment_request", "appointment_confirmed", "appointment_cancelled"] }, OR: [{ recipient: seedUser }, { actor: seedUser }] } });
       // @dot's own catalogue from this script (recognised by its fixed titles) goes too.
       const ownTiers = PLATFORM.tiers.map((t) => t[0]);
@@ -468,19 +467,12 @@ async function main() {
     }
     tally("tips", tipRows.length);
 
-    // ================= Payout accounts =================
-    const havePayout = new Set((await prisma.creatorPayoutAccount.findMany({ select: { userId: true, businessId: true } })).flatMap((r) => [r.userId, r.businessId]).filter(Boolean) as string[]);
-    const payoutRows: Record<string, unknown>[] = [];
-    for (const id of payees) if (!havePayout.has(id)) payoutRows.push({ userId: id, processor: "stub", processorAccountId: `acct_seed_${hex(6)}`, country: "IN", status: "active", createdAt: new Date(now - between(1, 60) * DAY) });
-    for (const b of seedBusinesses) if (!havePayout.has(b.id) && b.offerings.length > 0) payoutRows.push({ businessId: b.id, processor: "stub", processorAccountId: `acct_seed_${hex(6)}`, country: "IN", status: "active", createdAt: new Date(now - between(1, 60) * DAY) });
-
     // ================= Write everything (parents before dependents) =================
     await prisma.membershipTier.createMany({ data: tierRows as never });
     await prisma.membershipSubscription.createMany({ data: subRows as never });
     await prisma.digitalProduct.createMany({ data: productRows as never });
     await prisma.offering.createMany({ data: offeringRows as never });
     if (availRows.length) await prisma.availabilityRule.createMany({ data: availRows as never });
-    await prisma.creatorPayoutAccount.createMany({ data: payoutRows as never });
     await prisma.platformSubscription.createMany({ data: platformSubs as never });
     for (const part of chunk(pts, 400)) await prisma.paymentTransaction.createMany({ data: part });
     for (const part of chunk(purchaseRows, 400)) await prisma.digitalProductPurchase.createMany({ data: part.map((r) => ({ productId: r.productId, buyerId: r.buyerId, paymentTransactionId: r.ptId, purchasedAt: r.at })) });
@@ -509,7 +501,7 @@ async function main() {
     }
 
     const dotPts = pts.filter((p) => (p.payerId === P || p.payeeId === P) && p.currency === "usd");
-    console.log("Done: " + Object.entries(totals).map(([k, v]) => `${v} ${k}`).join(", ") + `; ${gated} members-only post sets, ${payoutRows.length} payout accounts.`);
+    console.log("Done: " + Object.entries(totals).map(([k, v]) => `${v} ${k}`).join(", ") + `; ${gated} members-only post sets.`);
     console.log(`Payments recorded: ${pts.length} (${dotPts.length} USD payments involve @${handle}: earned $${round2(dotPts.filter((p) => p.payeeId === P).reduce((s, p) => s + p.amount, 0))}, spent $${round2(dotPts.filter((p) => p.payerId === P).reduce((s, p) => s + p.amount, 0))}). Notifications: ${notifs.length}.`);
     console.log("Cleanup: RESET=1 npx tsx scripts/seed-dots-monetization.ts (or delete-seed-users.ts)");
   } finally {

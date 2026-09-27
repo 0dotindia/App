@@ -350,15 +350,7 @@ async function main() {
     }
     tally("events", eventRows.length);
 
-    // Payout accounts for hosts that sell tickets.
-    const havePayout = new Set((await prisma.creatorPayoutAccount.findMany({ select: { userId: true, businessId: true } })).flatMap((r) => [r.userId, r.businessId]).filter(Boolean) as string[]);
-    const payoutRows = [
-      ...[...payees].filter((id) => !havePayout.has(id)).map((userId) => ({ userId, processor: "stub", processorAccountId: `acct_seed_${randomBytes(6).toString("hex")}`, country: "IN", status: "active" })),
-      ...[...payeeBusinesses].filter((id) => !havePayout.has(id)).map((businessId) => ({ businessId, processor: "stub", processorAccountId: `acct_seed_${randomBytes(6).toString("hex")}`, country: "IN", status: "active" })),
-    ];
-
     // ---------- write ----------
-    if (payoutRows.length) await prisma.creatorPayoutAccount.createMany({ data: payoutRows as never });
     if (eventRows.length) await prisma.event.createMany({ data: eventRows as never });
     for (const m of eventMeta) for (const t of m.typeIds) { const row = ticketTypeRows.find((r) => r.id === t.id)!; row.quantitySold = t.sold; }
     if (ticketTypeRows.length) await prisma.ticketType.createMany({ data: ticketTypeRows as never });
@@ -382,7 +374,7 @@ async function main() {
     }
     tally("livestreamsLinked", attached);
 
-    console.log("Done: " + (Object.entries(totals).map(([k, v]) => `${v} ${k}`).join(", ") || "nothing new") + `; ${payoutRows.length} new payout accounts. Notifications: ${notifs.length}.`);
+    console.log("Done: " + (Object.entries(totals).map(([k, v]) => `${v} ${k}`).join(", ") || "nothing new") + `. Notifications: ${notifs.length}.`);
     console.log(`@${handle}: ${appRows.filter((a) => a.applicantId === P).length} job applications, ${rsvpRows.filter((r) => r.userId === P).length} RSVPs, ${ticketRows.filter((t) => t.ownerId === P).length} tickets. Cleanup: RESET=1 npx tsx scripts/seed-dots-jobs-events.ts (or delete-seed-users.ts)`);
   } finally {
     await prisma.$disconnect();

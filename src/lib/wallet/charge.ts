@@ -8,11 +8,11 @@ import { coinsToUnits } from "@/lib/wallet/limits";
 import { notifyCoinsReceived } from "@/lib/notifications";
 
 // addendum-coin-wallet-v2.md §6.1 — the bridge from the coin ledger to
-// PaymentTransaction. A coin sale writes the same money-movement row a
-// Stripe sale does (so analytics + admin views are rail-agnostic) with
+// PaymentTransaction. Every sale writes one PaymentTransaction (so
+// analytics + admin views have a single money-movement table) with
 // processor "wallet" and processorReference pointing at the backing
-// LedgerTransaction. 1 coin = $1, so a USD price maps straight to coin
-// units at ×100 (cents precision, §4.1). Must run inside the caller's
+// LedgerTransaction. A price maps straight to coin units at ×100 (cents
+// precision, §4.1). Must run inside the caller's
 // db.$transaction.
 export async function chargeWallet(
   tx: Prisma.TransactionClient,
@@ -122,12 +122,11 @@ export type FeatureSettlement = {
   metadata: Record<string, string>;
 };
 
-// The coin counterpart of a Stripe-webhook activateXxx: charge the payer's
-// wallet, record the PaymentTransaction, and run the feature's own row
-// creation — all in one transaction, so a coin tip lands its Tip row and
-// its LedgerTransaction together or not at all (§6.2's acceptance
-// criterion). Feature-specific notifications/revalidation stay with the
-// caller, mirroring the webhook path.
+// Charge the payer's wallet, record the PaymentTransaction, and run the
+// feature's own row creation — all in one transaction, so a coin tip lands
+// its Tip row and its LedgerTransaction together or not at all (§6.2's
+// acceptance criterion). Feature-specific notifications/revalidation stay
+// with the caller.
 export async function settleCoinPurchase(params: {
   kind: string;
   payerId: string;

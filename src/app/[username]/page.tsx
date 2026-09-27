@@ -189,9 +189,8 @@ export default async function ProfilePage({
       include: { fromUser: { include: { username: true, profile: true } } },
     }),
     isProfilePremium(profile.id),
-    // Viewer's coin balance — the coin rail works even when the creator has
-    // no Stripe payout account (addendum-coin-wallet-v2.md §6.4), so the
-    // payment forms render regardless and disable/hint on an empty wallet.
+    // Viewer's coin balance — the payment forms disable/hint on an empty
+    // wallet.
     currentUser && !isOwner ? getWalletBalance(currentUser.id) : Promise.resolve(null),
   ]);
 

@@ -19,7 +19,8 @@ const SECTIONS: LegalSection[] = [
           <strong>What you add:</strong> your profile, posts, links, messages, uploads, and content you sell or buy.
         </li>
         <li>
-          <strong>Payments:</strong> handled by Stripe. We keep order and payout records, not your card number.
+          <strong>Payments:</strong> everything on 0dot is paid in coins, our platform credits. We keep a record of every
+          coin transaction; we never ask for card or bank details.
         </li>
         <li>
           <strong>Technical data:</strong> IP address, device and browser type, and login history, used for security and
@@ -52,7 +53,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <p>
         Only service providers that run 0dot for us — hosting (Vercel), database (Turso), file storage (Vercel Blob),
-        email (Resend), payments (Stripe), live video and voice (LiveKit), error monitoring (Sentry) and, when you use AI
+        email (Resend), live video and voice (LiveKit), error monitoring (Sentry) and, when you use AI
         tools, an AI model provider. We also disclose data when the law requires it or to protect people from harm.
       </p>
     ),

@@ -1,20 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveUploadedImage } from "@/lib/uploads";
 import { randomUUID } from "crypto";
-import { getPaymentProcessor, recordPaymentTransaction } from "@/lib/payments";
 import { chargeWallet } from "@/lib/wallet/charge";
 import { COIN_FUNDED_MARKER, effectivelyActiveWhere } from "@/lib/subscription-access";
 import { WalletError } from "@/lib/wallet/ledger";
 import { coinIdempotencyKey } from "@/lib/wallet/limits";
-import { notifyNewSubscriber, notifyAffiliateConversion } from "@/lib/notifications";
-import { creditAffiliateConversion } from "@/lib/affiliate";
+import { notifyNewSubscriber } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const BILLING_INTERVAL_VALUES = new Set(["monthly", "yearly"]);
@@ -130,8 +126,7 @@ export async function archiveTier(formData: FormData): Promise<void> {
 // spec §4.1/§4.3: subscribes with coins — the first period is charged
 // now (kind: membership_charge) and the platform-billing sweep renews it
 // from the fan's wallet after that (addendum-wallet-only-payments.md
-// §3.3). activateMembershipSubscription/syncMembershipFromStripe below
-// only serve Stripe subscriptions created before the switch.
+// §3.3).
 export async function subscribeToTier(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
   const tierId = String(formData.get("tierId") ?? "");
@@ -199,102 +194,13 @@ export async function subscribeToTier(_prevState: ActionState, formData: FormDat
   return { success: true };
 }
 
-// Called from the Stripe webhook on checkout.session.completed once a
-// membership subscription's first payment is confirmed. Idempotent on
-// processorSubscriptionId since Stripe can redeliver the same event.
-export async function activateMembershipSubscription(params: {
-  metadata: Record<string, string>;
-  processorSubscriptionId: string;
-  currentPeriodEnd: Date;
-}): Promise<void> {
-  const already = await db.membershipSubscription.findFirst({ where: { processorSubscriptionId: params.processorSubscriptionId } });
-  if (already) return;
-
-  const { payerId, payeeId, tierId, amount: amountStr, currency, affiliateLinkId, affiliateId, affiliateCommissionPercent } = params.metadata;
-  const amount = Number(amountStr);
-  const affiliateLink =
-    affiliateLinkId && affiliateId && affiliateCommissionPercent
-      ? { id: affiliateLinkId, affiliateId, program: { commissionPercent: Number(affiliateCommissionPercent) } }
-      : null;
-
-  let creditedAffiliate;
-  try {
-    creditedAffiliate = await db.$transaction(async (tx) => {
-      await recordPaymentTransaction(tx, {
-        kind: "membership_charge",
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        processorReference: params.processorSubscriptionId,
-        status: "succeeded",
-        relatedObjectType: "membership_tier",
-        relatedObjectId: tierId,
-      });
-      await tx.membershipSubscription.create({
-        data: {
-          tierId,
-          fanId: payerId,
-          status: "active",
-          currentPeriodEnd: params.currentPeriodEnd,
-          processorSubscriptionId: params.processorSubscriptionId,
-        },
-      });
-
-      if (!affiliateLink) return null;
-      return creditAffiliateConversion(tx, {
-        affiliateLink,
-        saleAmount: amount,
-        currency,
-        saleProcessorReference: params.processorSubscriptionId,
-      });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateMembershipSubscription: duplicate webhook delivery — already recorded, no-op", undefined, { processorSubscriptionId: params.processorSubscriptionId });
-      return;
-    }
-    throw err;
-  }
-  if (creditedAffiliate) await notifyAffiliateConversion({ recipientId: creditedAffiliate.affiliateId, actorId: payerId });
-
-  await notifyNewSubscriber({ recipientId: payeeId, actorId: payerId });
-
-  const creatorUsername = await db.username.findUnique({ where: { userId: payeeId }, select: { handle: true } });
-  if (creatorUsername) revalidatePath(`/${creatorUsername.handle}`);
-}
-
-// Stripe's own subscription.status is the source of truth for renewal/
-// dunning/final-cancellation, mirroring platform-billing.ts's
-// syncSubscriptionFromStripe for the same reason — called from the webhook
-// on customer.subscription.updated/deleted, which fire for every renewal,
-// so this is also how currentPeriodEnd advances each period.
-const STRIPE_STATUS_MAP: Record<string, string> = {
-  active: "active",
-  trialing: "active",
-  past_due: "past_due",
-  unpaid: "past_due",
-  paused: "past_due",
-  canceled: "cancelled",
-  incomplete_expired: "cancelled",
-};
-
-export async function syncMembershipFromStripe(processorSubscriptionId: string, stripeStatus: string, currentPeriodEnd: Date): Promise<void> {
-  const subscription = await db.membershipSubscription.findFirst({ where: { processorSubscriptionId } });
-  if (!subscription) return; // not one of ours, or checkout.session.completed hasn't landed yet
-
-  const status = STRIPE_STATUS_MAP[stripeStatus] ?? subscription.status;
-  await db.membershipSubscription.update({ where: { id: subscription.id }, data: { status, currentPeriodEnd } });
-}
-
 // spec §4.3's third literal criterion: cancelling retains access through
 // current_period_end, not immediately — this only flips status, it never
 // touches currentPeriodEnd, and hasTierAccess (src/lib/tier-access.ts)
 // treats a cancelled-but-not-yet-expired row as still granting access.
-// Cancels at Stripe first, local row second — with a real processor (no
-// longer a no-op stub) a failed Stripe call must not leave this row marked
-// cancelled while Stripe keeps billing it, same reasoning
-// platform-billing.ts's cancelPlatformSubscription now follows.
+// Cancelling stops the coin auto-renew (addendum-wallet-only-payments.md
+// §3.3); a past_due row (renewal failed, in grace) can be cancelled too,
+// which stops the sweep retrying it.
 export async function cancelSubscription(formData: FormData): Promise<void> {
   const user = await requireVerifiedUser();
   const subscriptionId = String(formData.get("subscriptionId") ?? "");
@@ -302,14 +208,8 @@ export async function cancelSubscription(formData: FormData): Promise<void> {
 
   const subscription = await db.membershipSubscription.findUnique({ where: { id: subscriptionId } });
   if (!subscription || subscription.fanId !== user.id) return;
-  const coinFunded = subscription.processorSubscriptionId.startsWith(COIN_FUNDED_MARKER);
-  // A past_due coin row (renewal failed, in grace) can be cancelled too,
-  // which stops the renewal sweep retrying it.
-  if (!(subscription.status === "active" || (coinFunded && subscription.status === "past_due"))) return;
+  if (subscription.status !== "active" && subscription.status !== "past_due") return;
 
-  // A coin row has no Stripe subscription behind it — calling Stripe with
-  // its "coin:…" id would throw.
-  if (!coinFunded) await getPaymentProcessor().cancelSubscription(subscription.processorSubscriptionId);
   await db.membershipSubscription.update({ where: { id: subscription.id }, data: { status: "cancelled" } });
 
   if (user.username) revalidatePath(`/s/${user.username.handle}`);

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { configDefaults, defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
-import { TEST_DATABASE_URL, TEST_MESSAGE_ENCRYPTION_KEY, TEST_STRIPE_SECRET_KEY } from "./vitest.env";
+import { TEST_DATABASE_URL, TEST_MESSAGE_ENCRYPTION_KEY } from "./vitest.env";
 
 export default defineConfig({
   plugins: [tsconfigPaths()],
@@ -30,7 +30,6 @@ export default defineConfig({
     env: {
       DATABASE_URL: TEST_DATABASE_URL,
       MESSAGE_ENCRYPTION_KEY: TEST_MESSAGE_ENCRYPTION_KEY,
-      STRIPE_SECRET_KEY: TEST_STRIPE_SECRET_KEY,
       NODE_ENV: "test",
       // Vite loads .env / .env.local into the test process, which carry real
       // Upstash + LiveKit creds — force them empty so the realtime bus uses

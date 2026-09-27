@@ -5,11 +5,9 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
-import { recordPaymentTransaction } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
 import { coinActionKey } from "@/lib/wallet/limits";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import { saveUploadedImage } from "@/lib/uploads";
 import type { ActionState } from "@/app/actions/auth";
 
@@ -123,11 +121,8 @@ export async function donate(_prevState: ActionState, formData: FormData): Promi
   return { success: true };
 }
 
-// Called from the Stripe webhook on checkout.session.completed once
-// payment for a donation is confirmed — real "charge succeeded" signal now
-// that donate() only starts a redirect. Idempotent on processorReference.
-// The Donation row + running-total bump — one place, both rails
-// (addendum-coin-wallet-v2.md §6.2).
+// The Donation row + running-total bump, created with the coin charge by
+// settleCoinPurchase (addendum-coin-wallet-v2.md §6.2).
 export async function createDonationRows(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
   const campaignId = s.metadata.campaignId;
   const message = s.metadata.message ?? "";
@@ -148,42 +143,3 @@ export async function createDonationRows(tx: Prisma.TransactionClient, s: Featur
   });
 }
 
-export async function activateDonation(metadata: Record<string, string>, processorReference: string): Promise<void> {
-  const already = await db.paymentTransaction.findFirst({ where: { processorReference, kind: "donation" } });
-  if (already) return;
-
-  const { payerId, payeeId, campaignId, amount: amountStr, currency } = metadata;
-  const amount = Number(amountStr);
-
-  try {
-    await db.$transaction(async (tx) => {
-      const transaction = await recordPaymentTransaction(tx, {
-        kind: "donation",
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        processorReference,
-        status: "succeeded",
-        relatedObjectType: "fundraising_campaign",
-        relatedObjectId: campaignId,
-      });
-      await createDonationRows(tx, {
-        paymentTransactionId: transaction.id,
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        metadata,
-      });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateDonation: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
-      return;
-    }
-    throw err;
-  }
-
-  revalidatePath(`/fund/${campaignId}`);
-}

@@ -4,12 +4,10 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
-import { recordPaymentTransaction } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
 import { coinActionKey } from "@/lib/wallet/limits";
 import { notifyTipReceived } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const MIN_TIP_AMOUNT = 1;
@@ -55,7 +53,7 @@ export async function sendTip(_prevState: ActionState, formData: FormData): Prom
 
   // addendum-coin-wallet-v2.md §6.3/§6.4: coins settle synchronously and
   // need no payout account on the payee (the coins just land in their
-  // wallet). Same activateTip row-creation the Stripe webhook uses.
+  // wallet).
   const result = await settleCoinPurchase({
     kind: "tip",
     payerId: user.id,
@@ -75,13 +73,8 @@ export async function sendTip(_prevState: ActionState, formData: FormData): Prom
   return { success: true };
 }
 
-// Called from the Stripe webhook on checkout.session.completed once
-// payment for a tip is confirmed — the real "charge succeeded" signal now
-// that sendTip only starts a redirect. Idempotent on processorReference
-// since Stripe can redeliver the same event.
-// The Tip row itself — the one place it's created, reached by both the
-// Stripe webhook (activateTip) and the coin rail (settleCoinPurchase),
-// per addendum-coin-wallet-v2.md §6.2.
+// The Tip row itself — the one place it's created, with the coin charge by
+// settleCoinPurchase (addendum-coin-wallet-v2.md §6.2).
 export async function createTipRow(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
   const message = s.metadata.message ?? "";
   await tx.tip.create({
@@ -96,44 +89,3 @@ export async function createTipRow(tx: Prisma.TransactionClient, s: FeatureSettl
   });
 }
 
-export async function activateTip(metadata: Record<string, string>, processorReference: string): Promise<void> {
-  const already = await db.paymentTransaction.findFirst({ where: { processorReference, kind: "tip" } });
-  if (already) return;
-
-  const { payerId, payeeId, amount: amountStr, currency } = metadata;
-  const amount = Number(amountStr);
-
-  try {
-    await db.$transaction(async (tx) => {
-      const transaction = await recordPaymentTransaction(tx, {
-        kind: "tip",
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        processorReference,
-        status: "succeeded",
-        relatedObjectType: "tip",
-      });
-      await createTipRow(tx, {
-        paymentTransactionId: transaction.id,
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        metadata,
-      });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateTip: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
-      return;
-    }
-    throw err;
-  }
-
-  await notifyTipReceived({ recipientId: payeeId, actorId: payerId });
-
-  const creatorUsername = await db.username.findUnique({ where: { userId: payeeId }, select: { handle: true } });
-  if (creatorUsername) revalidatePath(`/${creatorUsername.handle}`);
-}

@@ -38,6 +38,5 @@ describe("purchases are coin-only", () => {
     expect((await getWalletBalance(buyer.id)).spendable).toBe(9);
     const processors = await db.paymentTransaction.findMany({ where: { payerId: buyer.id }, select: { processor: true } });
     expect(processors.map((p) => p.processor)).toEqual(["wallet", "wallet", "wallet"]);
-    expect(await db.creatorPayoutAccount.count({ where: { userId: creator.id } })).toBe(0);
   });
 });

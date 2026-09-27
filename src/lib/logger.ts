@@ -10,7 +10,7 @@ import "server-only";
 //
 // Usage:
 //   logger.error("cron.trending failed", err, { durationMs });
-//   logger.warn("stripe webhook: unknown event type", undefined, { type });
+//   logger.warn("cron.hourly: job skipped", undefined, { job });
 //   logger.info("cron.trending ok", undefined, { recomputed });
 
 type LogContext = Record<string, unknown>;

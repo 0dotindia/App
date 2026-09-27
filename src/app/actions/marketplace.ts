@@ -6,7 +6,6 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import {
   MARKETPLACE_CATEGORIES,
   type MarketplaceCategory,
@@ -16,7 +15,6 @@ import {
   resolveInstaller,
   hasVerifiedListingAccess,
 } from "@/lib/marketplace";
-import { recordPaymentTransaction } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
 import { canManageCatalog } from "@/lib/businesses";
 import { isCommunityStaff } from "@/lib/communities";
@@ -260,50 +258,6 @@ export async function createMarketplacePurchaseRows(tx: Prisma.TransactionClient
     data: { listingId, buyerId: s.payerId, paymentTransactionId: s.paymentTransactionId },
   });
   await tx.marketplaceListing.update({ where: { id: listingId }, data: { purchaseCount: { increment: 1 } } });
-}
-
-// Called from the Stripe webhook once checkout.session.completed confirms
-// payment — mirrors purchaseMarketplaceListing's former synchronous shape.
-// Idempotent on processorReference.
-export async function activateMarketplacePurchase(metadata: Record<string, string>, processorReference: string): Promise<void> {
-  const already = await db.paymentTransaction.findFirst({ where: { processorReference, kind: "marketplace_purchase" } });
-  if (already) return;
-
-  const { payerId, payeeId, payeeBusinessId, listingId, amount: amountStr, currency } = metadata;
-  const amount = Number(amountStr);
-
-  try {
-    await db.$transaction(async (tx) => {
-      const transaction = await recordPaymentTransaction(tx, {
-        kind: "marketplace_purchase",
-        payerId,
-        payeeId: payeeId || null,
-        payeeBusinessId: payeeBusinessId || null,
-        amount,
-        currency,
-        processorReference,
-        status: "succeeded",
-        relatedObjectType: "marketplace_listing",
-        relatedObjectId: listingId,
-      });
-      await createMarketplacePurchaseRows(tx, {
-        paymentTransactionId: transaction.id,
-        payerId,
-        payeeId: payeeId || null,
-        amount,
-        currency,
-        metadata,
-      });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateMarketplacePurchase: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
-      return;
-    }
-    throw err;
-  }
-
-  revalidatePath(`/m/${listingId}`);
 }
 
 // spec §4.3: config is accepted as opaque JSON here — the app's own

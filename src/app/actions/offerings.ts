@@ -7,12 +7,10 @@ import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveUploadedImage } from "@/lib/uploads";
 import { canManageOfferingOwner, isOfferingOwnerStaff, resolveOfferingOwner } from "@/lib/offerings";
-import { recordPaymentTransaction } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
 import { coinActionKey } from "@/lib/wallet/limits";
 import { recordCrmActivity } from "@/lib/crm";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const MAX_IMAGES = 8;
@@ -286,11 +284,8 @@ export async function purchaseOffering(_prevState: ActionState, formData: FormDa
   return { success: true };
 }
 
-// Called from the Stripe webhook once checkout.session.completed confirms
-// payment — mirrors purchaseOffering's former synchronous shape.
-// Idempotent on processorReference.
-// The OfferingPurchase row — one place, both rails
-// (addendum-coin-wallet-v2.md §6.2).
+// The OfferingPurchase row, created with the coin charge by
+// settleCoinPurchase (addendum-coin-wallet-v2.md §6.2).
 export async function createOfferingPurchaseRow(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
   await tx.offeringPurchase.create({
     data: {
@@ -300,60 +295,6 @@ export async function createOfferingPurchaseRow(tx: Prisma.TransactionClient, s:
       quantity: Number(s.metadata.quantity),
     },
   });
-}
-
-export async function activateOfferingPurchase(metadata: Record<string, string>, processorReference: string): Promise<void> {
-  const already = await db.paymentTransaction.findFirst({ where: { processorReference, kind: { in: ["business_purchase", "freelance_purchase"] } } });
-  if (already) return;
-
-  const { payerId, payeeId, payeeBusinessId, offeringId, amount: amountStr, currency } = metadata;
-  const amount = Number(amountStr);
-
-  const offering = await db.offering.findUniqueOrThrow({ where: { id: offeringId } });
-
-  let purchase;
-  try {
-    purchase = await db.$transaction(async (tx) => {
-      const transaction = await recordPaymentTransaction(tx, {
-        kind: payeeBusinessId ? "business_purchase" : "freelance_purchase",
-        payerId,
-        payeeId: payeeId || null,
-        payeeBusinessId: payeeBusinessId || null,
-        amount,
-        currency,
-        processorReference,
-        status: "succeeded",
-        relatedObjectType: "offering",
-        relatedObjectId: offeringId,
-      });
-      await createOfferingPurchaseRow(tx, {
-        paymentTransactionId: transaction.id,
-        payerId,
-        payeeId: payeeId || null,
-        amount,
-        currency,
-        metadata,
-      });
-      return tx.offeringPurchase.findFirstOrThrow({ where: { paymentTransactionId: transaction.id } });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateOfferingPurchase: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
-      return;
-    }
-    throw err;
-  }
-
-  if (payeeBusinessId) {
-    await recordCrmActivity({
-      businessId: payeeBusinessId,
-      activityType: "purchase",
-      sourceId: purchase.id,
-      identity: { userId: payerId },
-    });
-  }
-
-  revalidatePath(await offeringManagePath(offering));
 }
 
 // Seller-only, per spec §3.1's "a status enum the seller updates

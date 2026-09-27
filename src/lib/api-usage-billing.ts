@@ -2,8 +2,6 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import type { DeveloperApp } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { recordPaymentTransaction } from "@/lib/payments";
-import { stripe } from "@/lib/stripe";
 import { logger } from "@/lib/logger";
 import { notifyApiPlanDowngraded } from "@/lib/notifications";
 import { chargeWallet } from "@/lib/wallet/charge";
@@ -17,10 +15,7 @@ import { COIN_UNIT, coinIdempotencyKey } from "@/lib/wallet/limits";
 // PLATFORM_FEE_PERCENT/PLAN_PRICES elsewhere in this billing layer.
 //
 // addendum-wallet-only-payments.md §3.4: plans are paid in coins from the
-// app owner's wallet — a business-owned app's business wallet. An app with
-// apiSubscriptionId set is a legacy Stripe subscription from before that,
-// still billed by Stripe (meter events + invoice.paid, below) until it's
-// drained (§6).
+// app owner's wallet — a business-owned app's business wallet.
 const INCLUDED_FREE_REQUESTS_PER_PERIOD = 10_000; // pay_as_you_go's first N requests/period are free, matching the free plan's own rough hourly cap scaled to a month
 const PRICE_PER_1000_REQUESTS_OVER = 0.5; // coins
 const COMMITTED_PLAN_FLAT_PRICE = 49; // coins/period — a prepaid commitment, charged regardless of usage
@@ -32,7 +27,6 @@ export const API_PLAN_PRICING = {
   committed: COMMITTED_PLAN_FLAT_PRICE,
 };
 const OVERAGE_BLOCK = 1000; // mid-period overage is charged in whole blocks; the remainder at period close
-const METER_EVENT_NAME = "api_request_overage"; // legacy Stripe subscriptions only
 
 export async function resolveAppPayerUserId(app: { ownerUserId: string | null; ownerBusinessId: string | null }): Promise<string | null> {
   if (app.ownerUserId) return app.ownerUserId;
@@ -151,21 +145,15 @@ async function renewCoinCommittedPlan(app: DeveloperApp, now: Date): Promise<voi
   }
 }
 
-// The one way an app changes plan (the billing-plan action). A legacy
-// Stripe subscription is cancelled first — Stripe first, local row second,
-// so a failed Stripe call can't leave the app marked unsubscribed while
-// Stripe keeps billing it. Leaving pay_as_you_go settles the overage used
-// so far. committed charges its first period now and is refused (plan
+// The one way an app changes plan (the billing-plan action). Leaving
+// pay_as_you_go settles the overage used so far. committed charges its first period now and is refused (plan
 // unchanged) if the wallet can't cover it; pay_as_you_go charges nothing
 // up front.
 export async function switchApiPlan(appId: string, plan: ApiPlan): Promise<{ error?: string }> {
   let app = await db.developerApp.findUniqueOrThrow({ where: { id: appId } });
-  if (app.billingPlan === plan && !app.apiSubscriptionId) return {};
+  if (app.billingPlan === plan) return {};
 
-  if (app.apiSubscriptionId) {
-    await stripe.subscriptions.cancel(app.apiSubscriptionId);
-    app = await db.developerApp.update({ where: { id: app.id }, data: { billingPlan: "free", apiSubscriptionId: null, billedOverageRequests: 0 } });
-  } else if (app.billingPlan === "pay_as_you_go") {
+  if (app.billingPlan === "pay_as_you_go") {
     if (!(await settleCoinOverage(app, new Date(), true))) {
       return { error: "Not enough coins to pay for this app's usage so far — it has been moved to the free plan." };
     }
@@ -191,110 +179,19 @@ export async function switchApiPlan(appId: string, plan: ApiPlan): Promise<{ err
   return {};
 }
 
-// Called from the Stripe webhook on checkout.session.completed once a
-// pay_as_you_go/committed subscription is confirmed.
-export async function activateApiPlanSubscription(metadata: Record<string, string>, processorSubscriptionId: string): Promise<void> {
-  const { appId, plan } = metadata;
-  const app = await db.developerApp.findUnique({ where: { id: appId } });
-  if (!app || app.apiSubscriptionId === processorSubscriptionId) return; // already activated (Stripe redelivery) or app no longer exists
-
-  await db.developerApp.update({
-    where: { id: appId },
-    data: { billingPlan: plan, apiSubscriptionId: processorSubscriptionId, lastBilledAt: new Date() },
-  });
-}
-
-// Called from the Stripe webhook on invoice.paid — the real "charge
-// succeeded" signal for a subscription's committed flat fee or a period's
-// metered overage, replacing what used to be settleAppUsage's own direct
-// stub charge. Idempotent on processorReference (the invoice id).
-export async function recordApiUsageInvoicePaid(params: {
-  processorSubscriptionId: string;
-  amount: number;
-  currency: string;
-  processorReference: string;
-}): Promise<void> {
-  const already = await db.paymentTransaction.findFirst({ where: { processorReference: params.processorReference, kind: "api_usage_charge" } });
-  if (already) return;
-  if (params.amount <= 0) return; // a $0 metered invoice (no overage this period) still fires invoice.paid — nothing to record
-
-  const app = await db.developerApp.findFirst({ where: { apiSubscriptionId: params.processorSubscriptionId } });
-  if (!app) return; // not one of ours (or a plan/platform subscription's own invoice, handled elsewhere)
-
-  const payerId = await resolveAppPayerUserId(app);
-  if (!payerId) return;
-
-  try {
-    await db.$transaction(async (tx) => {
-      await recordPaymentTransaction(tx, {
-        kind: "api_usage_charge",
-        payerId,
-        payeeId: null,
-        amount: params.amount,
-        currency: params.currency,
-        processorReference: params.processorReference,
-        status: "succeeded",
-        relatedObjectType: "developer_app",
-        relatedObjectId: app.id,
-      });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("recordApiUsageInvoicePaid: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference: params.processorReference });
-      return;
-    }
-    throw err;
-  }
-}
-
-// Legacy Stripe pay_as_you_go: reports the period's overage as one Meter
-// Event — Stripe bills it at the subscription's own cycle (invoice.paid,
-// above, records the ledger). Coin apps: pay_as_you_go overage is charged
-// as it accrues, committed renews each period (both above).
+// pay_as_you_go overage is charged as it accrues; committed renews each
+// period (both above).
 export async function settleAppUsage(appId: string): Promise<void> {
   const app = await db.developerApp.findUniqueOrThrow({ where: { id: appId } });
   const now = new Date();
-
-  if (!app.apiSubscriptionId) {
-    if (app.billingPlan === "pay_as_you_go") await settleCoinOverage(app, now, false);
-    else if (app.billingPlan === "committed") await renewCoinCommittedPlan(app, now);
-    return;
-  }
-
-  if (app.billingPlan !== "pay_as_you_go") return;
-  const periodStart = app.lastBilledAt ?? app.createdAt;
-  const usage = await db.apiUsageCounter.aggregate({
-    where: { appId: app.id, windowStart: { gte: periodStart, lt: now } },
-    _sum: { requestCount: true },
-  });
-  const overage = Math.max(0, (usage._sum.requestCount ?? 0) - INCLUDED_FREE_REQUESTS_PER_PERIOD);
-
-  if (overage > 0) {
-    const customer = await stripe.subscriptions.retrieve(app.apiSubscriptionId, { expand: ["customer"] });
-    const customerId = typeof customer.customer === "string" ? customer.customer : customer.customer.id;
-    await stripe.billing.meterEvents.create({
-      event_name: METER_EVENT_NAME,
-      payload: { stripe_customer_id: customerId, value: String(overage) },
-    });
-  }
-
-  await db.developerApp.update({ where: { id: app.id }, data: { lastBilledAt: now } });
+  if (app.billingPlan === "pay_as_you_go") await settleCoinOverage(app, now, false);
+  else if (app.billingPlan === "committed") await renewCoinCommittedPlan(app, now);
 }
 
 async function sweepDueSettlements(): Promise<void> {
   const due = await db.developerApp.findMany({
-    where: {
-      OR: [
-        // Coin plans: checked every sweep (overage accrues continuously).
-        { apiSubscriptionId: null, billingPlan: { in: ["pay_as_you_go", "committed"] } },
-        // Legacy Stripe pay_as_you_go: once per period.
-        {
-          billingPlan: "pay_as_you_go",
-          apiSubscriptionId: { not: null },
-          OR: [{ lastBilledAt: null }, { lastBilledAt: { lt: new Date(Date.now() - BILLING_PERIOD_MS) } }],
-        },
-      ],
-    },
+    // Checked every sweep — pay_as_you_go overage accrues continuously.
+    where: { billingPlan: { in: ["pay_as_you_go", "committed"] } },
     select: { id: true },
   });
   for (const { id } of due) {

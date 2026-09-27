@@ -7,10 +7,7 @@ import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
 import { saveUploadedImage } from "@/lib/uploads";
 import { randomUUID } from "crypto";
-import { recordPaymentTransaction } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
-import { creditAffiliateConversion } from "@/lib/affiliate";
-import { notifyAffiliateConversion } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
@@ -163,8 +160,8 @@ export async function purchaseProduct(_prevState: ActionState, formData: FormDat
   }
 
   // addendum-coin-wallet-v2.md §6.3/§6.4: coin purchases settle synchronously
-  // and need no payout account on the creator. Affiliate attribution is
-  // card-rail only for now.
+  // and need no payout account on the creator. Affiliate commissions aren't
+  // credited on coin sales (addendum-wallet-only-payments.md §8 #3).
   const result = await settleCoinPurchase({
     kind: "digital_purchase",
     payerId: user.id,
@@ -185,78 +182,13 @@ export async function purchaseProduct(_prevState: ActionState, formData: FormDat
   return { success: true };
 }
 
-// Called from the Stripe webhook once checkout.session.completed confirms
-// payment — the real "charge succeeded" signal now that purchaseProduct
-// only starts a redirect. Idempotent on processorReference (Stripe
-// redelivery). The @@unique([productId, buyerId]) DB-level backstop this
-// used to surface as a friendly in-request error can't do that anymore —
-// by webhook time the buyer has already been charged for real, so a
-// genuinely concurrent double-checkout race here just logs and no-ops
-// rather than crashing the handler; a rare enough edge case (the
-// purchaseProduct-time `existing` check already blocks the common case)
-// that auto-refunding it is left as a known gap, not silently pretended
-// away.
-// The purchase row — one place, both rails (addendum-coin-wallet-v2.md
-// §6.2). Affiliate crediting stays in activateDigitalPurchase (card only).
+// The purchase row, created with the coin charge by settleCoinPurchase
+// (addendum-coin-wallet-v2.md §6.2). @@unique([productId, buyerId]) makes
+// a concurrent double purchase roll the whole charge back.
 export async function createDigitalPurchaseRow(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
   await tx.digitalProductPurchase.create({
     data: { productId: s.metadata.productId, buyerId: s.payerId, paymentTransactionId: s.paymentTransactionId },
   });
-}
-
-export async function activateDigitalPurchase(metadata: Record<string, string>, processorReference: string): Promise<void> {
-  const already = await db.paymentTransaction.findFirst({ where: { processorReference, kind: "digital_purchase" } });
-  if (already) return;
-
-  const { payerId, payeeId, productId, amount: amountStr, currency, affiliateLinkId, affiliateId, affiliateCommissionPercent } = metadata;
-  const amount = Number(amountStr);
-  const affiliateLink =
-    affiliateLinkId && affiliateId && affiliateCommissionPercent
-      ? { id: affiliateLinkId, affiliateId, program: { commissionPercent: Number(affiliateCommissionPercent) } }
-      : null;
-
-  let creditedAffiliate;
-  try {
-    creditedAffiliate = await db.$transaction(async (tx) => {
-      const transaction = await recordPaymentTransaction(tx, {
-        kind: "digital_purchase",
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        processorReference,
-        status: "succeeded",
-        relatedObjectType: "digital_product",
-        relatedObjectId: productId,
-      });
-      await createDigitalPurchaseRow(tx, {
-        paymentTransactionId: transaction.id,
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        metadata,
-      });
-
-      if (!affiliateLink) return null;
-      return creditAffiliateConversion(tx, {
-        affiliateLink,
-        saleAmount: amount,
-        currency,
-        saleProcessorReference: processorReference,
-      });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateDigitalPurchase: duplicate purchase race — buyer was charged, no purchase row created", undefined, { productId, payerId });
-      return;
-    }
-    throw err;
-  }
-  if (creditedAffiliate) await notifyAffiliateConversion({ recipientId: creditedAffiliate.affiliateId, actorId: payerId });
-
-  const creatorUsername = await db.username.findUnique({ where: { userId: payeeId }, select: { handle: true } });
-  if (creatorUsername) revalidatePath(`/${creatorUsername.handle}`);
 }
 
 // spec §5.3/§5.4: not a "use server" action wired to a <form>'s action prop

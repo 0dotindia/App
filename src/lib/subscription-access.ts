@@ -18,8 +18,8 @@ export const COIN_RENEWAL_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
 // end). A function, not a constant: the cut-off must be "now" at query
 // time — a module-level `new Date()` froze it at server start, so a
 // cancelled subscription kept granting access until the next restart.
-// The past_due grace clause is coin-only: a Stripe past_due row loses
-// access immediately, exactly as before.
+// The past_due grace clause is scoped to coin rows; any other past_due
+// row (historical, from before the wallet-only switch) grants nothing.
 export function effectivelyActiveWhere(now: Date = new Date()) {
   return {
     OR: [

@@ -6,14 +6,10 @@ import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
 import { randomUUID } from "crypto";
-import { recordPaymentTransaction } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
 import { hasCourseAccess } from "@/lib/course-access";
 import { checkCourseCompletion } from "@/lib/learning-completion";
-import { creditAffiliateConversion } from "@/lib/affiliate";
-import { notifyAffiliateConversion } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
@@ -222,7 +218,8 @@ export async function purchaseCourse(_prevState: ActionState, formData: FormData
   }
 
   // addendum-coin-wallet-v2.md §6.3/§6.4: coins settle now, no creator
-  // payout account required. Affiliate attribution is card-rail only.
+  // payout account required. Affiliate commissions aren't credited on coin
+  // sales (addendum-wallet-only-payments.md §8 #3).
   const result = await settleCoinPurchase({
     kind: "course_purchase",
     payerId: user.id,
@@ -243,11 +240,8 @@ export async function purchaseCourse(_prevState: ActionState, formData: FormData
   return { success: true };
 }
 
-// Called from the Stripe webhook once checkout.session.completed confirms
-// payment — mirrors activateDigitalPurchase's shape (digital-products.ts).
-// Idempotent on processorReference.
-// The access grant — one place, both rails (addendum-coin-wallet-v2.md
-// §6.2). Affiliate crediting stays in activateCoursePurchase (card only).
+// The access grant, created with the coin charge by settleCoinPurchase
+// (addendum-coin-wallet-v2.md §6.2).
 export async function createCoursePurchaseRow(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
   await tx.courseAccessGrant.create({
     data: {
@@ -257,61 +251,6 @@ export async function createCoursePurchaseRow(tx: Prisma.TransactionClient, s: F
       paymentTransactionId: s.paymentTransactionId,
     },
   });
-}
-
-export async function activateCoursePurchase(metadata: Record<string, string>, processorReference: string): Promise<void> {
-  const already = await db.paymentTransaction.findFirst({ where: { processorReference, kind: "course_purchase" } });
-  if (already) return;
-
-  const { payerId, payeeId, courseId, amount: amountStr, currency, affiliateLinkId, affiliateId, affiliateCommissionPercent } = metadata;
-  const amount = Number(amountStr);
-  const affiliateLink =
-    affiliateLinkId && affiliateId && affiliateCommissionPercent
-      ? { id: affiliateLinkId, affiliateId, program: { commissionPercent: Number(affiliateCommissionPercent) } }
-      : null;
-
-  let creditedAffiliate;
-  try {
-    creditedAffiliate = await db.$transaction(async (tx) => {
-      const transaction = await recordPaymentTransaction(tx, {
-        kind: "course_purchase",
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        processorReference,
-        status: "succeeded",
-        relatedObjectType: "course",
-        relatedObjectId: courseId,
-      });
-      await createCoursePurchaseRow(tx, {
-        paymentTransactionId: transaction.id,
-        payerId,
-        payeeId,
-        amount,
-        currency,
-        metadata,
-      });
-
-      if (!affiliateLink) return null;
-      return creditAffiliateConversion(tx, {
-        affiliateLink,
-        saleAmount: amount,
-        currency,
-        saleProcessorReference: processorReference,
-      });
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      logger.error("activateCoursePurchase: duplicate webhook delivery — already recorded, no-op", undefined, { processorReference });
-      return;
-    }
-    throw err;
-  }
-  if (creditedAffiliate) await notifyAffiliateConversion({ recipientId: creditedAffiliate.affiliateId, actorId: payerId });
-
-  const creatorUsername = await db.username.findUnique({ where: { userId: payeeId }, select: { handle: true } });
-  if (creatorUsername) revalidatePath(`/${creatorUsername.handle}/courses/${courseId}`);
 }
 
 // spec §11.2's third criterion: only recorded for a user who currently has

@@ -12,7 +12,7 @@ const TABLES = [
   "CommunityPostFlair","CommunityMember","CommunityRule","WikiPage","WikiRevision","ModAction",
   "Business","BusinessLocation","ContactInfo","ContactMessage","Offering","OfferingPurchase",
   "BusinessMember","Review","ReviewResponse","Job","JobApplication","AvailabilityRule",
-  "Appointment","BusinessDocument","CreatorPayoutAccount","PaymentTransaction",
+  "Appointment","BusinessDocument","PaymentTransaction",
   "PlatformSubscription","CustomDomain","Tip","MembershipTier","MembershipSubscription",
   "DigitalProduct","DigitalProductPurchase","Course","CourseModule","Lesson",
   "CourseAccessGrant","CourseProgress","Podcast","PodcastEpisode","PodcastFeedToken",
