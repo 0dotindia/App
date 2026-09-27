@@ -6,6 +6,7 @@ import { postTransaction, WalletError } from "@/lib/wallet/ledger";
 import { ensureUserAccounts, ensureBusinessAccounts, SYSTEM_ACCOUNT_IDS } from "@/lib/wallet/accounts";
 import { WALLET_LIMITS, coinsToUnits, launchPromoEndsAt } from "@/lib/wallet/limits";
 import { notifyCoinsReceived } from "@/lib/notifications";
+import { logger } from "@/lib/logger";
 
 // addendum-coin-wallet-v2.md §7.1 — the audited signup grant. Called from
 // auth.ts signup inside the user-creation transaction; the idempotencyKey
@@ -53,6 +54,83 @@ export async function issueLaunchPromoIfEligible(tx: Prisma.TransactionClient, u
       { accountId: promoId, amount: units },
     ],
   });
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const ALLOWANCE_PAGE_SIZE = 500;
+
+// addendum-wallet-only-payments.md §4 — the monthly allowance, from the
+// daily cron. Every eligible account without this month's allowance gets
+// it, so one that becomes active mid-month is picked up the next day. The
+// idempotency key allows one per account per calendar month (UTC), so a
+// rerun or an overlapping cron is a no-op. Eligible = active status, no
+// pending deletion, old enough, and a web session seen or an app token
+// issued (tokens refresh while the mobile app is in use) recently.
+export async function runMonthlyAllowanceSweepOnce(now: Date = new Date()) {
+  const month = now.toISOString().slice(0, 7); // yyyy-mm
+  const activeSince = new Date(now.getTime() - WALLET_LIMITS.MONTHLY_ALLOWANCE_ACTIVE_WITHIN_DAYS * DAY_MS);
+  const createdBefore = new Date(now.getTime() - WALLET_LIMITS.MONTHLY_ALLOWANCE_MIN_ACCOUNT_AGE_DAYS * DAY_MS);
+  const expiresAt = new Date(now.getTime() + WALLET_LIMITS.MONTHLY_ALLOWANCE_TTL_DAYS * DAY_MS);
+  const units = coinsToUnits(WALLET_LIMITS.MONTHLY_ALLOWANCE_COINS);
+  const keyFor = (userId: string) => `monthly_allowance:${userId}:${month}`;
+
+  let issued = 0;
+  let cursor: string | undefined;
+  for (;;) {
+    const users = await db.user.findMany({
+      where: {
+        status: "active",
+        deletionScheduledFor: null,
+        createdAt: { lte: createdBefore },
+        OR: [
+          { sessions: { some: { lastSeenAt: { gte: activeSince } } } },
+          { oauthAuthorizations: { some: { status: "active", tokens: { some: { createdAt: { gte: activeSince } } } } } },
+        ],
+      },
+      select: { id: true },
+      orderBy: { id: "asc" },
+      take: ALLOWANCE_PAGE_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    if (users.length === 0) break;
+    cursor = users[users.length - 1].id;
+
+    const alreadyIssued = new Set(
+      (
+        await db.ledgerTransaction.findMany({
+          where: { idempotencyKey: { in: users.map((u) => keyFor(u.id)) } },
+          select: { idempotencyKey: true },
+        })
+      ).map((t) => t.idempotencyKey),
+    );
+
+    for (const { id } of users) {
+      if (alreadyIssued.has(keyFor(id))) continue;
+      try {
+        const { created } = await db.$transaction(async (tx) => {
+          const { promoId } = await ensureUserAccounts(tx, id);
+          return postTransaction(tx, {
+            kind: "monthly_allowance",
+            idempotencyKey: keyFor(id),
+            memo: `Monthly allowance ${month}`,
+            expiresAt,
+            postings: [
+              { accountId: SYSTEM_ACCOUNT_IDS.system_promo_issuance, amount: -units },
+              { accountId: promoId, amount: units },
+            ],
+          });
+        });
+        if (created) issued += 1;
+      } catch (err) {
+        logger.error("monthly-allowance: failed to issue", err, { userId: id, month });
+      }
+    }
+    if (users.length < ALLOWANCE_PAGE_SIZE) break;
+  }
+
+  const result = { month, issued };
+  logger.info("monthly-allowance: swept", undefined, result);
+  return result;
 }
 
 export type GrantResult = { ok: true } | { error: string };

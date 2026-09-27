@@ -6,6 +6,7 @@ import { runApiUsageBillingSweepOnce } from "@/lib/api-usage-billing";
 import { sweepExpiredRateLimitCounters } from "@/lib/rate-limit";
 import { runWalletAnomalyScanOnce } from "@/lib/wallet/anomaly";
 import { runReferralRewardSweepOnce } from "@/lib/wallet/referral";
+import { runMonthlyAllowanceSweepOnce } from "@/lib/wallet/grants";
 
 // Daily jobs. Scheduled at 03:23 UTC in vercel.json (web-pro-upgrade
 // addendum M1). Formerly setInterval loops of 24 h (portfolio/content sync)
@@ -30,5 +31,6 @@ export async function GET(request: Request): Promise<Response> {
     "rate-limit-sweep": sweepExpiredRateLimitCounters,
     "wallet-anomaly": runWalletAnomalyScanOnce,
     "referral-rewards": runReferralRewardSweepOnce,
+    "monthly-allowance": () => runMonthlyAllowanceSweepOnce(),
   });
 }

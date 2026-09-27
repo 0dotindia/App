@@ -4106,7 +4106,7 @@ model LedgerAccount {
 model LedgerTransaction {
   id                   String  @id @default(uuid())
   // signup_grant | promo_grant | admin_adjustment | referral_reward
-  // | transfer | purchase | refund | hold | hold_capture | hold_release
+  // | monthly_allowance | transfer | purchase | refund | hold | hold_capture | hold_release
   // | promo_expiry | migration_opening | payout (payout reserved, unused in v2)
   kind                 String
   // dedupes double-click / webhook redelivery / retry. postTransaction

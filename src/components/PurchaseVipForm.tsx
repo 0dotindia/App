@@ -69,7 +69,7 @@ export function PurchaseVipForm({
       <p className="mutedText" style={{ fontSize: "0.85rem", marginBottom: "0.6rem" }}>
         One purchase unlocks every Premium perk platform-wide — raised link cap, full analytics history, extra theme
         presets, a custom domain, and a reduced platform fee on your earnings. Paid straight out of your coin balance
-        (1 coin = $1) and renewed automatically from it each period — cancel anytime under Settings → Billing → Premium.
+        and renewed automatically from it each period — cancel anytime under Settings → Billing → Premium.
       </p>
       <IdempotencyField />
       <div style={{ display: "flex", gap: "1rem", marginBottom: "0.5rem" }}>

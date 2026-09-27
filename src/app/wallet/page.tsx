@@ -5,6 +5,7 @@ import { requireVerifiedUser } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { getActiveProfileSubscription, COIN_FUNDED_MARKER, premiumCoinPrice } from "@/lib/platform-billing";
 import { describeRenewal, RENEWAL_PREFIX } from "@/lib/subscription-access";
+import { WALLET_LIMITS } from "@/lib/wallet/limits";
 import { getWalletBalance, listTransactions } from "@/lib/wallet/ledger";
 import { walletActivityLabel } from "@/lib/wallet/activity-labels";
 import { getReferralStats } from "@/lib/wallet/referral";
@@ -46,7 +47,7 @@ export default async function WalletPage({
           {balance.total} <small>coins</small>
         </span>
         <span className="walletHeroSub">
-          1 coin = $1
+          {WALLET_LIMITS.MONTHLY_ALLOWANCE_COINS} free coins every month while you&apos;re active
           {balance.restricted > 0 && ` · ${balance.restricted} restricted (grant coins, not transferable)`}
         </span>
       </div>

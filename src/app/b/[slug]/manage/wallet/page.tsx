@@ -49,10 +49,7 @@ export default async function BusinessWalletPage({ params }: { params: Promise<{
         <span className="walletHeroBalance">
           {balance.total} <small>coins</small>
         </span>
-        <span className="walletHeroSub">
-          1 coin = $1
-          {balance.restricted > 0 && ` · ${balance.restricted} restricted (promo credit)`}
-        </span>
+        {balance.restricted > 0 && <span className="walletHeroSub">{balance.restricted} restricted (promo credit)</span>}
       </div>
 
       <p className="mutedText" style={{ fontSize: "0.85rem", marginBottom: "1rem" }}>

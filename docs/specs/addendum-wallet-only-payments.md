@@ -1,7 +1,7 @@
 # Addendum — Wallet-Only Payments (Remove Stripe)
 
-Status: **Phases 1–2 built** (2026-09-27) — §3.2, §3.3, §3.4, §3.6.
-Phases 3–5 not started.
+Status: **Phases 1–3 built** (2026-09-27) — §1.3 copy, §3.2, §3.3,
+§3.4, §3.6, §4 (monthly allowance). Phases 4–5 not started.
 Owner: TBD
 Related: [addendum-coin-wallet-v2.md](addendum-coin-wallet-v2.md),
 [addendum-platform-billing.md](addendum-platform-billing.md),
@@ -214,15 +214,33 @@ are the platform fee, promo expiry, and purchases paid to 0dot (Premium,
 business plans, API plans — the whole amount is platform revenue).
 
 Premium costs 6 coins/month and a business plan 20 coins/month
-(`PLAN_PRICES`). Most users would run dry within a month or two, so
-before cutover product needs to decide how coins keep flowing (§8 #1).
-Candidates, all issued from `system_promo_issuance` through the existing
-`issuePromoGrant` path with per-user caps and anomaly checks:
+(`PLAN_PRICES`).
 
-- a recurring allowance (e.g. N coins per month for active accounts);
-- activity rewards (first post, profile completed, event hosted, …);
-- a larger signup / launch grant;
-- lowering coin prices across the board.
+**Decided and built (2026-09-27): a monthly allowance of 10 coins.**
+`runMonthlyAllowanceSweepOnce` (`src/lib/wallet/grants.ts`, daily cron)
+issues `MONTHLY_ALLOWANCE_COINS` from `system_promo_issuance` as a new
+ledger kind, `monthly_allowance`:
+
+- once per account per calendar month (UTC), keyed
+  `monthly_allowance:<userId>:<yyyy-mm>`; an account that becomes active
+  mid-month is picked up the next day;
+- into the restricted bucket with a 90-day TTL — spendable, not
+  transferable, and swept by the promo-expiry job like other grants, so an
+  idle account stacks at most ~3 months;
+- only to accounts that are `active`, not scheduled for deletion, at
+  least 7 days old, and used in the last 30 days (a web session's
+  `lastSeenAt`, or an OAuth token issued — the mobile app refreshes tokens
+  while in use).
+
+It is deliberately *not* counted by the anomaly scan's issuance-spike
+check or the admin issuance audit (it's automatic and predictable).
+Activity rewards, a bigger signup grant, and lower prices were considered
+and not chosen.
+
+Known exposure: restricted coins can still be spent on creators, whose
+earnings arrive spendable, so many farmed accounts could funnel allowance
+to one creator. The account-age and activity gates limit this; the
+anomaly scan's sybil check covers transfers but not tips/purchases.
 
 ### 4.1 Units and pricing
 

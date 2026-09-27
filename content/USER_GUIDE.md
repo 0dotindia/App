@@ -230,19 +230,24 @@ Every transaction goes through an auditable ledger. Premium subscribers pay a
 
 ## Coins & Wallet — `/wallet`
 
-0dot has a closed-loop internal currency:
+0dot runs on coins — platform credits used to pay for everything on 0dot:
 
-- **1 coin = 1 USD**, fixed. Not a rate that moves, not crypto, not a
-  speculation asset.
+- **Credits, not money.** Coins can't be bought with money and can't be
+  cashed out. They're not crypto or a speculation asset.
+- **Monthly allowance** — every active account gets **10 coins each
+  month**, marked *restricted* (spendable, not transferable) and expiring
+  after 90 days.
 - **Signup grant** — new accounts get a small starter grant (currently 1
   coin), marked *restricted*: non-transferable and it expires after 90 days.
 - **Referral rewards** — invite someone with your referral link (from the
   Wallet page); once their account is a day old and they take a real action, **you
   and they each get 3 coins** (promo bucket, 90-day expiry, with an
   anti-farming cap).
-- **Earning**, not buying — coins come from the signup grant, referrals,
-  creator earnings, refunds, and promos. There's no bank top-up yet.
-- **Spending** — today, coins buy a **Premium Profile** subscription.
+- **Earning**, not buying — coins come from the monthly allowance, the
+  signup grant, referrals, creator earnings, refunds, and promos.
+- **Spending** — coins pay for tips, memberships, products, courses,
+  tickets, marketplace items, Premium, business plans and API plans.
+  Subscriptions renew from your balance automatically; cancel any time.
 - **Transfers** — you can send transferable coins to another user, subject to
   account-age checks that keep the system from being farmed.
 
