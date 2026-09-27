@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
@@ -6,13 +7,13 @@ import { getActiveBusinessSubscription, PLAN_PRICES } from "@/lib/platform-billi
 import { describeRenewal, RENEWAL_PREFIX } from "@/lib/subscription-access";
 import { getDnsInstructions } from "@/lib/custom-domains";
 import {
-  BusinessSubscribeForm,
   BusinessCancelSubscriptionButton,
   BusinessClaimDomainForm,
   BusinessRemoveDomainButton,
   RetryDomainVerificationButton,
 } from "./BusinessBillingForms";
 import { BusinessManageNav } from "../BusinessManageNav";
+import { BusinessSubscribeWithCoinsForm } from "../wallet/BusinessWalletForms";
 
 const ROUTING_LABEL: Record<string, string> = {
   pending_dns: "Waiting for DNS",
@@ -26,13 +27,7 @@ const STATUS_LABEL: Record<string, string> = {
   removed: "Removed",
 };
 
-export default async function BusinessBillingPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ slug: string }>;
-  searchParams: Promise<{ checkout?: string }>;
-}) {
+export default async function BusinessBillingPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug: rawSlug } = await params;
   const slug = decodeURIComponent(rawSlug).toLowerCase();
 
@@ -43,7 +38,6 @@ export default async function BusinessBillingPage({
   if (!business) notFound();
   if (!(await isBusinessStaff(business.id, currentUser.id))) redirect(`/b/${business.slug}`);
 
-  const { checkout } = await searchParams;
   const [subscription, domains, newContactMessageCount] = await Promise.all([
     getActiveBusinessSubscription(business.id),
     db.customDomain.findMany({
@@ -81,16 +75,11 @@ export default async function BusinessBillingPage({
         </div>
       ) : (
         <div className="profileLinkItem" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.5rem" }}>
-          {checkout === "success" ? (
-            <p className="mutedText" style={{ fontSize: "0.85rem" }}>
-              Payment received — activating your subscription. Refresh in a moment if it doesn&apos;t show above yet.
-            </p>
-          ) : (
-            <p className="mutedText" style={{ fontSize: "0.85rem" }}>
-              Unlocks one included custom domain for this business&apos;s page.
-            </p>
-          )}
-          <BusinessSubscribeForm businessId={business.id} prices={PLAN_PRICES.business_subscription} />
+          <p className="mutedText" style={{ fontSize: "0.85rem" }}>
+            Unlocks one included custom domain for this business&apos;s page. Paid from the{" "}
+            <Link href={`/b/${business.slug}/manage/wallet`}>business wallet</Link> and renewed from it automatically.
+          </p>
+          <BusinessSubscribeWithCoinsForm businessId={business.id} prices={PLAN_PRICES.business_subscription} />
         </div>
       )}
 

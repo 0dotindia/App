@@ -259,15 +259,6 @@ export async function resolveFeeRate(
   return premiumPayee ? PREMIUM_CREATOR_PLATFORM_FEE_PERCENT : PLATFORM_FEE_PERCENT;
 }
 
-export function getMyPayoutAccount(userId: string) {
-  return db.creatorPayoutAccount.findUnique({ where: { userId } });
-}
-
-// phase-8 spec §5.2: business-hosted paid events need a payout account too
-// — same shape as getMyPayoutAccount, keyed on businessId instead of userId.
-export function getBusinessPayoutAccount(businessId: string) {
-  return db.creatorPayoutAccount.findUnique({ where: { businessId } });
-}
 
 // spec §3.5's "every kind produces exactly one PaymentTransaction row with
 // a non-null platform_fee and processor_reference" criterion is enforced by

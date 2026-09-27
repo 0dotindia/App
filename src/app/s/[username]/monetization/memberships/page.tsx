@@ -9,6 +9,7 @@ import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { TierForm } from "../../TierForm";
 import { COIN_FUNDED_MARKER, describeRenewal, RENEWAL_PREFIX } from "@/lib/subscription-access";
+import { formatCoins } from "@/lib/coins";
 
 export const metadata: Metadata = { title: "Memberships" };
 
@@ -61,7 +62,7 @@ export default async function MembershipsSettingsPage() {
               ) : undefined
             }
             label={tier.name}
-            description={`Level ${tier.level} · ${tier.price.toFixed(2)} ${tier.currency.toUpperCase()}/${tier.billingInterval === "yearly" ? "yr" : "mo"} · ${tier.status}`}
+            description={`Level ${tier.level} · ${formatCoins(tier.price)}/${tier.billingInterval === "yearly" ? "yr" : "mo"} · ${tier.status}`}
             trailing={
               tier.status === "active" ? (
                 <form action={archiveTier}>

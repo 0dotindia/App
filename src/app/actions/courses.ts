@@ -1,18 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
 import { randomUUID } from "crypto";
-import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
+import { recordPaymentTransaction } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
-import { getAppOrigin } from "@/lib/email";
 import { hasCourseAccess } from "@/lib/course-access";
 import { checkCourseCompletion } from "@/lib/learning-completion";
-import { getAttributedAffiliateLink, creditAffiliateConversion } from "@/lib/affiliate";
+import { creditAffiliateConversion } from "@/lib/affiliate";
 import { notifyAffiliateConversion } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
@@ -225,61 +223,24 @@ export async function purchaseCourse(_prevState: ActionState, formData: FormData
 
   // addendum-coin-wallet-v2.md §6.3/§6.4: coins settle now, no creator
   // payout account required. Affiliate attribution is card-rail only.
-  if (String(formData.get("payWith") ?? "card") === "coins") {
-    const result = await settleCoinPurchase({
-      kind: "course_purchase",
-      payerId: user.id,
-      payeeUserId: course.creatorId,
-      amountUsd: course.price,
-      currency: course.currency,
-      relatedObjectType: "course",
-      relatedObjectId: course.id,
-      idempotencyKey: `course:coin:${randomUUID()}`,
-      metadata: { courseId: course.id },
-      createRows: createCoursePurchaseRow,
-    });
-    if ("error" in result) return { error: result.error };
-    if (!result.alreadySettled) {
-      const h = await db.username.findUnique({ where: { userId: course.creatorId }, select: { handle: true } });
-      if (h) revalidatePath(`/${h.handle}/courses/${course.id}`);
-    }
-    return { success: true };
-  }
-
-  const payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { userId: course.creatorId } });
-  if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) {
-    return { error: "This creator hasn't enabled payouts yet." };
-  }
-
-  const affiliateLink = await getAttributedAffiliateLink("course", course.id, user.id);
-
-  const feeRate = await resolveFeeRate(db, course.creatorId);
-  const creatorHandle = (await db.username.findUnique({ where: { userId: course.creatorId }, select: { handle: true } }))?.handle ?? "";
-  const base = `${getAppOrigin()}/${creatorHandle}/courses/${course.id}`;
-  const { checkoutUrl } = await getPaymentProcessor().createPurchaseCheckoutSession({
-    amount: course.price,
-    currency: course.currency,
+  const result = await settleCoinPurchase({
+    kind: "course_purchase",
     payerId: user.id,
-    payerEmail: user.email,
-    payeeProcessorAccountId: payoutAccount.processorAccountId,
-    applicationFeeAmount: Math.round(course.price * feeRate * 100) / 100,
-    description: course.title,
-    successUrl: `${base}?checkout=success`,
-    cancelUrl: `${base}?checkout=cancelled`,
-    metadata: {
-      kind: "course_purchase",
-      payerId: user.id,
-      payeeId: course.creatorId,
-      courseId: course.id,
-      amount: String(course.price),
-      currency: course.currency,
-      affiliateLinkId: affiliateLink?.id ?? "",
-      affiliateId: affiliateLink?.affiliateId ?? "",
-      affiliateCommissionPercent: affiliateLink ? String(affiliateLink.program.commissionPercent) : "",
-    },
+    payeeUserId: course.creatorId,
+    amountUsd: course.price,
+    currency: course.currency,
+    relatedObjectType: "course",
+    relatedObjectId: course.id,
+    idempotencyKey: `course:coin:${randomUUID()}`,
+    metadata: { courseId: course.id },
+    createRows: createCoursePurchaseRow,
   });
-
-  redirect(checkoutUrl);
+  if ("error" in result) return { error: result.error };
+  if (!result.alreadySettled) {
+    const h = await db.username.findUnique({ where: { userId: course.creatorId }, select: { handle: true } });
+    if (h) revalidatePath(`/${h.handle}/courses/${course.id}`);
+  }
+  return { success: true };
 }
 
 // Called from the Stripe webhook once checkout.session.completed confirms

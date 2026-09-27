@@ -8,17 +8,11 @@ import { parseCursor } from "@/lib/pagination";
 import { getFeedPosts, getVotedPollOptionIds } from "@/lib/feed-query";
 import { getFolloweeIds } from "@/lib/follow-graph";
 import { getPostableBusinesses } from "@/lib/businesses";
-import { getMyPayoutAccount } from "@/lib/payments";
+import { getWalletBalance } from "@/lib/wallet/ledger";
 import { DismissibleNotice } from "@/components/DismissibleNotice";
 import { FeedList } from "./FeedList";
 
 export const metadata: Metadata = { title: "Feed" };
-
-const PAYOUT_STATUS_LABEL: Record<string, string> = {
-  onboarding: "Onboarding",
-  active: "Active",
-  restricted: "Restricted",
-};
 
 // Home: posts from accounts the viewer follows, plus their own posts —
 // resolves phase-1's open question (§5.4/§7.5) now that Follow exists.
@@ -98,9 +92,9 @@ export default async function FeedPage({
 // with a claimed username — same gate ComposeBox already applies, since
 // none of this is reachable without a profile anyway.
 async function CreatorStudio({ userId, handle }: { userId: string; handle: string }) {
-  const [payoutAccount, tierCount, productCount, courseCount, hasPodcast, newsletterSubscriberCount, programCount, livestreamCount] =
+  const [wallet, tierCount, productCount, courseCount, hasPodcast, newsletterSubscriberCount, programCount, livestreamCount] =
     await Promise.all([
-      getMyPayoutAccount(userId),
+      getWalletBalance(userId),
       db.membershipTier.count({ where: { creatorId: userId } }),
       db.digitalProduct.count({ where: { creatorId: userId } }),
       db.course.count({ where: { creatorId: userId } }),
@@ -117,8 +111,8 @@ async function CreatorStudio({ userId, handle }: { userId: string; handle: strin
       </summary>
       <div className="profileCard" style={{ marginTop: "0.75rem" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-          <Link href={`/s/${handle}#monetization`} className="button buttonSecondary buttonSmall">
-            Payouts: {payoutAccount ? PAYOUT_STATUS_LABEL[payoutAccount.status] ?? payoutAccount.status : "Not set up"}
+          <Link href="/wallet" className="button buttonSecondary buttonSmall">
+            Wallet: {wallet.total} coins
           </Link>
           <Link href={`/s/${handle}#memberships`} className="button buttonSecondary buttonSmall">
             Memberships ({tierCount})

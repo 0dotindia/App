@@ -49,7 +49,7 @@ function TicketPurchaseRow({ ticketType, viewerCoins }: { ticketType: TicketType
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontWeight: 600 }}>{ticketType.name}</span>
         <span className="mutedText" style={{ fontSize: "0.85rem" }}>
-          {ticketType.price === null ? "Free" : `${(ticketType.currency ?? "usd").toUpperCase()} ${ticketType.price.toFixed(2)}`}
+          {ticketType.price === null ? "Free" : `${ticketType.price} coins`}
         </span>
       </div>
       {ticketType.quantityTotal !== null && (
@@ -60,21 +60,14 @@ function TicketPurchaseRow({ ticketType, viewerCoins }: { ticketType: TicketType
       <form action={formAction} style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
         <input type="hidden" name="ticketTypeId" value={ticketType.id} />
         <IdempotencyField />
-        <button type="submit" name="payWith" value="card" className="button buttonSecondary" disabled={pending || soldOut} style={{ fontSize: "0.85rem" }}>
-          {soldOut ? "Sold out" : pending ? "Purchasing…" : ticketType.price === null ? "Get free ticket" : "Buy ticket"}
+        <button
+          type="submit"
+          className="button buttonSecondary"
+          disabled={pending || soldOut || (ticketType.price !== null && !canAffordCoins)}
+          style={{ fontSize: "0.85rem" }}
+        >
+          {soldOut ? "Sold out" : pending ? "Purchasing…" : ticketType.price === null ? "Get free ticket" : `Buy ticket — ${ticketType.price} coins`}
         </button>
-        {ticketType.price !== null && !soldOut && (
-          <button
-            type="submit"
-            name="payWith"
-            value="coins"
-            className="button buttonSecondary"
-            disabled={pending || !canAffordCoins}
-            style={{ fontSize: "0.85rem" }}
-          >
-            {ticketType.price} coins
-          </button>
-        )}
       </form>
       {state?.error && <p className="errorText">{state.error}</p>}
       {ticketType.price !== null && !soldOut && !canAffordCoins && (

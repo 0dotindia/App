@@ -117,16 +117,7 @@ export default async function MarketplaceListingPage({ params }: { params: Promi
   // Only needed when the buy button can render (a priced, active listing
   // the viewer doesn't already own).
   const showBuy = Boolean(currentUser) && !owns && listing.status === "active" && listing.price !== null;
-  const [viewerWallet, sellerPayout] = showBuy
-    ? await Promise.all([
-        getWalletBalance(currentUser!.id),
-        db.creatorPayoutAccount.findUnique({
-          where: listing.sellerBusinessId ? { businessId: listing.sellerBusinessId } : { userId: listing.sellerUserId! },
-          select: { status: true },
-        }),
-      ])
-    : [null, null];
-  const cardAvailable = sellerPayout?.status === "active";
+  const viewerWallet = showBuy ? await getWalletBalance(currentUser!.id) : null;
   const viewerCoins = viewerWallet?.total ?? 0;
 
   const [businesses, communities] = currentUser
@@ -202,8 +193,6 @@ export default async function MarketplaceListingPage({ params }: { params: Promi
           <MarketplacePurchaseButton
             listingId={listing.id}
             price={listing.price}
-            currency={listing.currency}
-            cardAvailable={cardAvailable}
             viewerCoins={viewerCoins}
           />
         ) : null}

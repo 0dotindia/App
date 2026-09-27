@@ -1,7 +1,7 @@
 # Addendum — Wallet-Only Payments (Remove Stripe)
 
-Status: **Phases 1–3 built** (2026-09-27) — §1.3 copy, §3.2, §3.3,
-§3.4, §3.6, §4 (monthly allowance). Phases 4–5 not started.
+Status: **Phases 1–4 built** (2026-09-27) — §1.3 copy, §3.1–§3.6, §4
+(monthly allowance). Phase 5 (drain & delete Stripe) not started.
 Owner: TBD
 Related: [addendum-coin-wallet-v2.md](addendum-coin-wallet-v2.md),
 [addendum-platform-billing.md](addendum-platform-billing.md),
@@ -87,8 +87,13 @@ For tips, donations, digital products, courses, offerings and tickets:
   `metadata`). The coin branch (`settleCoinPurchase` / `placeHold`)
   becomes the only path; the `payWith` form field goes away.
 - Forms (`TipForm`, `DonateForm`, `DigitalProductCard`, `CourseBuyButton`,
-  `OfferingBuyButton`, `EventActions`, `SubscribeForm`) show a single
-  "Pay N coins" button plus the buyer's balance. On
+  `OfferingBuyButton`, `EventActions`, `SubscribeForm`,
+  `MarketplacePurchaseButton`) show a single coin button plus the buyer's
+  balance. **Built:** also the business plan (card subscribe action and
+  form removed; the billing page uses the business-wallet coin form),
+  every price display (`formatCoins`, web and mobile), and the creator
+  price forms, which no longer ask for a currency — the server stores
+  `"usd"` iff a price is set until the column is retired (§4.1). On
   `INSUFFICIENT_FUNDS`, show the shortfall and a link to `/wallet`
   (how to earn coins) — there is no "top up".
 - `activateXxx` functions stay: the coin path calls them via
@@ -182,6 +187,14 @@ With no cash-out, `CreatorPayoutAccount` has no purpose:
   `PayoutOnboardingForm`, `stripe-connect-countries.ts`, and the
   `/s/[username]` and business-settings payout UI.
 - Drop the `CreatorPayoutAccount` model in the §5 migration.
+- **Built:** the onboarding actions, form, `/monetization/payouts` page
+  and nav link, `stripe-connect-countries.ts`, the event host panel's
+  business payout button, the fundraiser and services payout notices and
+  the feed's "Payouts" chip (now a wallet link) are gone. The model and
+  the `webhook-v2` status sync stay until §5.
+- Side effect: affiliate commissions were only credited by the Stripe
+  webhook activators, so with the card path gone no new commissions
+  accrue until §8 #3 is decided.
 - Creator and business earnings already accrue as coins in their wallet
   (`chargeWallet` credits the payee). Surface "Earnings" on the creator
   dashboard from `LedgerPosting` rows of kind `purchase`.

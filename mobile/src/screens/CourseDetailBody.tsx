@@ -10,6 +10,7 @@ import { haptics } from "../utils/haptics";
 import { useContentMaxWidth } from "../utils/responsive";
 import { useTheme, type Theme } from "../theme";
 import type { CourseDetail, CourseLesson, CourseQuiz } from "../api/types";
+import { formatCoins } from "../utils/formatCoins";
 
 // Bearer-token-backed counterpart to
 // src/app/[username]/courses/[courseId]/page.tsx. Every lesson's real
@@ -87,7 +88,7 @@ export function CourseDetailBody({ username, courseId }: { username: string; cou
       {course.description ? <Text style={styles.description}>{course.description}</Text> : null}
 
       <Text style={styles.priceLine}>
-        {course.price !== null && course.currency !== null ? `${course.price.toFixed(2)} ${course.currency.toUpperCase()}` : ""}
+        {course.price !== null ? formatCoins(course.price) : ""}
         {course.price !== null && course.requiredTier ? " or " : ""}
         {course.requiredTier ? `included with ${course.requiredTier.name} membership` : ""}
       </Text>

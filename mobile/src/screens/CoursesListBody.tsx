@@ -6,6 +6,7 @@ import { EmptyState } from "../components/EmptyState";
 import { useContentMaxWidth } from "../utils/responsive";
 import { useTheme, type Theme } from "../theme";
 import type { CourseSummary } from "../api/types";
+import { formatCoins } from "../utils/formatCoins";
 
 // Bearer-token-backed counterpart to src/app/[username]/courses/page.tsx —
 // Course has no `visibility` field; status "active" is the only public-
@@ -70,7 +71,7 @@ export function CoursesListBody({ username }: { username: string }) {
               {item.description}
             </Text>
           ) : null}
-          <Text style={styles.price}>{item.price ? `${item.price} ${(item.currency ?? "usd").toUpperCase()}` : "Free"}</Text>
+          <Text style={styles.price}>{item.price ? formatCoins(item.price) : "Free"}</Text>
         </Pressable>
       )}
     />

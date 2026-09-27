@@ -33,6 +33,7 @@ import { BecomeAffiliateForm } from "@/components/BecomeAffiliateForm";
 import { endorseSkill } from "@/app/actions/skills";
 import { parsePortfolioLayout } from "@/lib/portfolio-layout";
 import { renderWikiMarkdown } from "@/lib/wiki-markdown";
+import { formatCoins } from "@/lib/coins";
 
 // Fallback cover photo for any profile that hasn't set its own (replaces
 // the plain gradient .profileCoverPlaceholder). Served from /public/defaults,
@@ -169,7 +170,7 @@ export default async function ProfilePage({
   // Everything in this batch only depends on username/currentUser/isOwner
   // (already resolved above), not on each other — previously these ran as
   // five-plus sequential awaits, each paying its own round trip.
-  const [followRow, blockedByViewer, viewerBlockedByOwner, payoutAccount, recentTips, isPremium, viewerWallet] = await Promise.all([
+  const [followRow, blockedByViewer, viewerBlockedByOwner, recentTips, isPremium, viewerWallet] = await Promise.all([
     currentUser && !isOwner
       ? db.follow.findUnique({
           where: { followerId_followeeId: { followerId: currentUser.id, followeeId: username.userId } },
@@ -178,10 +179,6 @@ export default async function ProfilePage({
       : Promise.resolve(null),
     currentUser && !isOwner ? isBlocked(currentUser.id, username.userId) : Promise.resolve(false),
     currentUser && !isOwner ? isBlocked(username.userId, currentUser.id) : Promise.resolve(false),
-    // spec §6: tipping gated on the profile owner having an active payout
-    // account (spec §3.5's literal criterion, re-checked here rather than
-    // trusted from any client state).
-    db.creatorPayoutAccount.findUnique({ where: { userId: username.userId }, select: { status: true } }),
     // spec §13.2's one deliberate "financial data is public by default"
     // exception — recent public tip messages, shown under the identity
     // header regardless of who's viewing.
@@ -216,9 +213,7 @@ export default async function ProfilePage({
   // behind this, same posture as Instagram/Twitter private accounts.
   const canViewFullProfile = isOwner || !profile.isPrivate || isFollowing;
   // The payment forms render whenever a signed-in non-owner can see the
-  // profile — the coin rail needs no payout account. `cardAvailable` just
-  // controls whether the card button also shows.
-  const cardAvailable = payoutAccount?.status === "active";
+  // profile — coins need no payout account.
   const canTip = showViewerControls && canViewFullProfile;
   const canSubscribe = showViewerControls && canViewFullProfile;
   const canBuy = showViewerControls && canViewFullProfile;
@@ -399,7 +394,7 @@ export default async function ProfilePage({
               Send a tip
             </summary>
             <div style={{ marginTop: "0.6rem" }}>
-              <TipForm creatorHandle={username.handle} cardAvailable={cardAvailable} viewerCoins={viewerCoins} />
+              <TipForm creatorHandle={username.handle} viewerCoins={viewerCoins} />
             </div>
           </details>
         )}
@@ -419,7 +414,6 @@ export default async function ProfilePage({
             canViewFullProfile={canViewFullProfile}
             canSubscribe={canSubscribe}
             canBuy={canBuy}
-            cardAvailable={cardAvailable}
             viewerCoins={viewerCoins}
           />
         </Suspense>
@@ -472,8 +466,7 @@ export default async function ProfilePage({
               ) : (
                 "Someone"
               )}
-              {" tipped $"}
-              {tip.amount.toFixed(2)}
+              {` tipped ${formatCoins(tip.amount)}`}
               {tip.message ? `: "${tip.message}"` : ""}
             </p>
           ))}
@@ -582,7 +575,6 @@ async function ProfileMonetizationAndPortfolio({
   canViewFullProfile,
   canSubscribe,
   canBuy,
-  cardAvailable,
   viewerCoins,
 }: {
   profile: ProfileRecord;
@@ -593,7 +585,6 @@ async function ProfileMonetizationAndPortfolio({
   canViewFullProfile: boolean;
   canSubscribe: boolean;
   canBuy: boolean;
-  cardAvailable: boolean;
   viewerCoins: number;
 }) {
   const [
@@ -941,7 +932,7 @@ async function ProfileMonetizationAndPortfolio({
                   {tier.description && (
                     <div className="mutedText" style={{ fontSize: "0.8rem", margin: "0.15rem 0" }}>{renderWikiMarkdown(tier.description)}</div>
                   )}
-                  <SubscribeForm tier={tier} cardAvailable={cardAvailable} viewerCoins={viewerCoins} />
+                  <SubscribeForm tier={tier} viewerCoins={viewerCoins} />
                 </div>
               )
             )}
@@ -956,7 +947,7 @@ async function ProfileMonetizationAndPortfolio({
           </summary>
           <div className="disclosureBody">
             {activeProducts.map((product) => (
-              <DigitalProductCard key={product.id} product={product} owned={ownedProductIds.has(product.id)} cardAvailable={cardAvailable} viewerCoins={viewerCoins} />
+              <DigitalProductCard key={product.id} product={product} owned={ownedProductIds.has(product.id)} viewerCoins={viewerCoins} />
             ))}
           </div>
         </details>
@@ -980,7 +971,7 @@ async function ProfileMonetizationAndPortfolio({
               <Link key={course.id} href={`/${username.handle}/courses/${course.id}`} style={{ fontSize: "0.9rem" }}>
                 {course.title}
                 {course.price !== null && course.currency !== null && (
-                  <span className="mutedText"> — {course.price.toFixed(2)} {course.currency.toUpperCase()}</span>
+                  <span className="mutedText"> — {formatCoins(course.price)}</span>
                 )}
               </Link>
             ))}

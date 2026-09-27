@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { getBusinessMember, isBusinessStaff } from "@/lib/businesses";
-import { getActiveBusinessSubscription } from "@/lib/platform-billing";
+import { getActiveBusinessSubscription, PLAN_PRICES } from "@/lib/platform-billing";
+import { describeRenewal, RENEWAL_PREFIX } from "@/lib/subscription-access";
 import { getBusinessWalletBalance, listBusinessTransactions } from "@/lib/wallet/ledger";
 import { walletActivityLabel } from "@/lib/wallet/activity-labels";
 import { EmptyState } from "@/components/EmptyState";
@@ -60,11 +61,11 @@ export default async function BusinessWalletPage({ params }: { params: Promise<{
       <p className="sectionHeading">Subscription</p>
       {subscription ? (
         <p className="mutedText" style={{ fontSize: "0.9rem" }}>
-          Active until {subscription.currentPeriodEnd.toLocaleDateString()}
-          {subscription.processorSubscriptionId.startsWith("coin:") ? " (coin-funded)." : "."}
+          {RENEWAL_PREFIX[describeRenewal(subscription).kind]}
+          {describeRenewal(subscription).date.toLocaleDateString()}.
         </p>
       ) : canSpend ? (
-        <BusinessSubscribeWithCoinsForm businessId={business.id} />
+        <BusinessSubscribeWithCoinsForm businessId={business.id} prices={PLAN_PRICES.business_subscription} />
       ) : (
         <p className="mutedText" style={{ fontSize: "0.9rem" }}>
           No active subscription. An owner or admin can pay it from this wallet.

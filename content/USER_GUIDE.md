@@ -211,9 +211,9 @@ Hosted by a business *or* a community (never both). Browse at `/e`, create at
 
 ## Making money (creators)
 
-0dot has a full payments backbone (live Stripe Connect under the hood, behind
-a swappable interface). Once you connect a payout account
-(`/s/yourname/monetization/payouts`), you can offer:
+Everything on 0dot is paid in **coins** (see *Coins & Wallet* below) — there's
+nothing to connect, and what your fans pay lands straight in your wallet. You
+can offer:
 
 - **Tips** on your profile and posts
 - **Membership tiers** with gated content
@@ -267,8 +267,8 @@ A personal paid subscription for your `Profile`. Perks:
   verification)
 - **A reduced creator platform fee** if you earn through monetization
 
-You can pay for Premium with **coins** or a card, from `/wallet` or
-`/s/yourname/billing/premium`. Cancelling keeps your perks until the end of
+You pay for Premium with **coins**, from `/wallet`, and it renews from your
+balance each period; manage it at `/s/yourname/billing/premium`. Cancelling keeps your perks until the end of
 the period you already paid for — no instant clawback.
 
 ---
@@ -358,7 +358,7 @@ Your whole account dashboard lives under one route tree:
 | Billing — domains | `/s/yourname/billing/domains` |
 | Developer apps | `/s/yourname/developer` |
 | Content (articles, books, wiki, courses, podcast, newsletter…) | `/s/yourname/content/*` |
-| Monetization (memberships, products, services, payouts, affiliate) | `/s/yourname/monetization/*` |
+| Monetization (memberships, products, services, affiliate) | `/s/yourname/monetization/*` |
 | Portfolio (projects, skills, resume, repositories, credentials, layout) | `/s/yourname/portfolio/*` |
 | Calendar, forms, cross-post | `/s/yourname/calendar`, `/s/yourname/forms`, `/s/yourname/cross-post` |
 

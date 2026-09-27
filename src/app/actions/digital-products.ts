@@ -1,17 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
 import { saveUploadedImage } from "@/lib/uploads";
 import { randomUUID } from "crypto";
-import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
+import { recordPaymentTransaction } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
-import { getAppOrigin } from "@/lib/email";
-import { getAttributedAffiliateLink, creditAffiliateConversion } from "@/lib/affiliate";
+import { creditAffiliateConversion } from "@/lib/affiliate";
 import { notifyAffiliateConversion } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
@@ -167,63 +165,24 @@ export async function purchaseProduct(_prevState: ActionState, formData: FormDat
   // addendum-coin-wallet-v2.md §6.3/§6.4: coin purchases settle synchronously
   // and need no payout account on the creator. Affiliate attribution is
   // card-rail only for now.
-  if (String(formData.get("payWith") ?? "card") === "coins") {
-    const result = await settleCoinPurchase({
-      kind: "digital_purchase",
-      payerId: user.id,
-      payeeUserId: product.creatorId,
-      amountUsd: product.price,
-      currency: product.currency,
-      relatedObjectType: "digital_product",
-      relatedObjectId: product.id,
-      idempotencyKey: `digital:coin:${randomUUID()}`,
-      metadata: { productId: product.id },
-      createRows: createDigitalPurchaseRow,
-    });
-    if ("error" in result) return { error: result.error };
-    if (!result.alreadySettled) {
-      const h = await db.username.findUnique({ where: { userId: product.creatorId }, select: { handle: true } });
-      if (h) revalidatePath(`/${h.handle}`);
-    }
-    return { success: true };
-  }
-
-  const payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { userId: product.creatorId } });
-  if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) {
-    return { error: "This creator hasn't enabled payouts yet." };
-  }
-
-  // spec §7.3: attribution is resolved here (it's just a cookie + read
-  // query) rather than in the webhook, which has no request cookies to
-  // read — the resolved link's id travels through Stripe metadata instead.
-  const affiliateLink = await getAttributedAffiliateLink("digital_product", product.id, user.id);
-
-  const feeRate = await resolveFeeRate(db, product.creatorId);
-  const base = `${getAppOrigin()}/${(await db.username.findUnique({ where: { userId: product.creatorId }, select: { handle: true } }))?.handle ?? ""}`;
-  const { checkoutUrl } = await getPaymentProcessor().createPurchaseCheckoutSession({
-    amount: product.price,
-    currency: product.currency,
+  const result = await settleCoinPurchase({
+    kind: "digital_purchase",
     payerId: user.id,
-    payerEmail: user.email,
-    payeeProcessorAccountId: payoutAccount.processorAccountId,
-    applicationFeeAmount: Math.round(product.price * feeRate * 100) / 100,
-    description: product.title,
-    successUrl: `${base}?checkout=success`,
-    cancelUrl: `${base}?checkout=cancelled`,
-    metadata: {
-      kind: "digital_purchase",
-      payerId: user.id,
-      payeeId: product.creatorId,
-      productId: product.id,
-      amount: String(product.price),
-      currency: product.currency,
-      affiliateLinkId: affiliateLink?.id ?? "",
-      affiliateId: affiliateLink?.affiliateId ?? "",
-      affiliateCommissionPercent: affiliateLink ? String(affiliateLink.program.commissionPercent) : "",
-    },
+    payeeUserId: product.creatorId,
+    amountUsd: product.price,
+    currency: product.currency,
+    relatedObjectType: "digital_product",
+    relatedObjectId: product.id,
+    idempotencyKey: `digital:coin:${randomUUID()}`,
+    metadata: { productId: product.id },
+    createRows: createDigitalPurchaseRow,
   });
-
-  redirect(checkoutUrl);
+  if ("error" in result) return { error: result.error };
+  if (!result.alreadySettled) {
+    const h = await db.username.findUnique({ where: { userId: product.creatorId }, select: { handle: true } });
+    if (h) revalidatePath(`/${h.handle}`);
+  }
+  return { success: true };
 }
 
 // Called from the Stripe webhook once checkout.session.completed confirms

@@ -13,12 +13,10 @@ import { renderWikiMarkdown } from "@/lib/wiki-markdown";
 export function DigitalProductCard({
   product,
   owned,
-  cardAvailable,
   viewerCoins,
 }: {
   product: { id: string; title: string; description: string; price: number; currency: string; coverImageUrl: string | null };
   owned: boolean;
-  cardAvailable: boolean;
   viewerCoins: number;
 }) {
   const [state, formAction, pending] = useActionState(purchaseProduct, undefined);
@@ -61,16 +59,9 @@ export function DigitalProductCard({
           {state?.error && <p className="errorText" style={{ margin: "0.2rem 0" }}>{state.error}</p>}
           {state?.success && <p className="mutedText" style={{ margin: "0.2rem 0", fontSize: "0.8rem" }}>Purchased — refresh to download.</p>}
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-            {cardAvailable && (
-              <button type="submit" name="payWith" value="card" className="button buttonSmall" disabled={pending}>
-                {pending ? "Buying…" : `Buy — ${product.price.toFixed(2)} ${product.currency.toUpperCase()}`}
-              </button>
-            )}
             <button
               type="submit"
-              name="payWith"
-              value="coins"
-              className={cardAvailable ? "button buttonSmall buttonSecondary" : "button buttonSmall"}
+              className="button buttonSmall"
               disabled={pending || viewerCoins < product.price}
             >
               {pending ? "Buying…" : `${product.price} coins`}

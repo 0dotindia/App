@@ -8,6 +8,7 @@ import { getBusinessMember, canManageCatalog } from "@/lib/businesses";
 import { archiveOffering, updateOfferingPurchaseStatus } from "@/app/actions/offerings";
 import { OfferingForm } from "@/components/OfferingForm";
 import { JsonLd } from "@/components/JsonLd";
+import { formatCoins } from "@/lib/coins";
 
 const KIND_VALUES = new Set(["product", "service"]);
 const STATUS_LABEL: Record<string, string> = { draft: "Draft", active: "Active", archived: "Archived" };
@@ -192,7 +193,7 @@ export default async function CatalogPage({
                 </span>
               </div>
               <span className="mutedText" style={{ fontSize: "0.85rem" }}>
-                {offering.price !== null ? `${offering.currency} ${offering.price.toFixed(2)}` : "Contact for pricing"}
+                {offering.price !== null ? formatCoins(offering.price) : "Contact for pricing"}
               </span>
               {offering.description && (
                 <p className="mutedText" style={{ fontSize: "0.8rem", margin: 0 }}>

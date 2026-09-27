@@ -1,20 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveUploadedImage } from "@/lib/uploads";
 import { randomUUID } from "crypto";
-import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
+import { getPaymentProcessor, recordPaymentTransaction } from "@/lib/payments";
 import { chargeWallet } from "@/lib/wallet/charge";
 import { COIN_FUNDED_MARKER, effectivelyActiveWhere } from "@/lib/subscription-access";
 import { WalletError } from "@/lib/wallet/ledger";
 import { coinIdempotencyKey } from "@/lib/wallet/limits";
-import { getAppOrigin } from "@/lib/email";
 import { notifyNewSubscriber, notifyAffiliateConversion } from "@/lib/notifications";
-import { getAttributedAffiliateLink, creditAffiliateConversion } from "@/lib/affiliate";
+import { creditAffiliateConversion } from "@/lib/affiliate";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
@@ -129,15 +127,11 @@ export async function archiveTier(formData: FormData): Promise<void> {
   if (user.username) revalidatePath(`/s/${user.username.handle}`);
 }
 
-// spec §4.1/§4.3: starts a real Stripe Connect subscription checkout
-// (kind: membership_charge on the ledger once confirmed) instead of
-// charging synchronously — a hosted Checkout redirect can't confirm
-// payment within this same request. The MembershipSubscription row is
-// created by activateMembershipSubscription below, once Stripe's webhook
-// confirms checkout.session.completed; currentPeriodEnd afterward is
-// Stripe's own subscription object, kept in sync by syncMembershipFromStripe
-// on every customer.subscription.updated (real recurring billing now, not
-// the one-period-then-frozen simulation the old stub processor required).
+// spec §4.1/§4.3: subscribes with coins — the first period is charged
+// now (kind: membership_charge) and the platform-billing sweep renews it
+// from the fan's wallet after that (addendum-wallet-only-payments.md
+// §3.3). activateMembershipSubscription/syncMembershipFromStripe below
+// only serve Stripe subscriptions created before the switch.
 export async function subscribeToTier(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
   const tierId = String(formData.get("tierId") ?? "");
@@ -160,92 +154,49 @@ export async function subscribeToTier(_prevState: ActionState, formData: FormDat
   // period after (autoRenew), until the fan cancels or runs out of coins
   // past the grace period. No payout account required on the creator
   // (coin-wallet v2 §6.4).
-  if (String(formData.get("payWith") ?? "card") === "coins") {
-    const currentPeriodEnd = new Date();
-    if (tier.billingInterval === "yearly") currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
-    else currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+  const currentPeriodEnd = new Date();
+  if (tier.billingInterval === "yearly") currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
+  else currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
 
-    let subscribed = false;
-    try {
-      subscribed = await db.$transaction(async (tx) => {
-        const charge = await chargeWallet(tx, {
-          payerId: user.id,
-          payeeUserId: tier.creatorId,
-          amountUsd: tier.price,
-          currency: tier.currency,
-          kind: "membership_charge",
-          relatedObjectType: "membership_tier",
-          relatedObjectId: tier.id,
-          idempotencyKey: coinIdempotencyKey("membership:coin", user.id, tier.id),
-        });
-        if (charge.alreadySettled) return false; // double-click — first click already subscribed
-        await tx.membershipSubscription.create({
-          data: {
-            tierId: tier.id,
-            fanId: user.id,
-            status: "active",
-            currentPeriodEnd,
-            processorSubscriptionId: `${COIN_FUNDED_MARKER}${randomUUID()}`,
-            autoRenew: true,
-          },
-        });
-        return true;
+  let subscribed = false;
+  try {
+    subscribed = await db.$transaction(async (tx) => {
+      const charge = await chargeWallet(tx, {
+        payerId: user.id,
+        payeeUserId: tier.creatorId,
+        amountUsd: tier.price,
+        currency: tier.currency,
+        kind: "membership_charge",
+        relatedObjectType: "membership_tier",
+        relatedObjectId: tier.id,
+        idempotencyKey: coinIdempotencyKey("membership:coin", user.id, tier.id),
       });
-    } catch (err) {
-      if (err instanceof WalletError && err.code === "INSUFFICIENT_FUNDS") {
-        return { error: "You don't have enough coins for this membership." };
-      }
-      throw err;
+      if (charge.alreadySettled) return false; // double-click — first click already subscribed
+      await tx.membershipSubscription.create({
+        data: {
+          tierId: tier.id,
+          fanId: user.id,
+          status: "active",
+          currentPeriodEnd,
+          processorSubscriptionId: `${COIN_FUNDED_MARKER}${randomUUID()}`,
+          autoRenew: true,
+        },
+      });
+      return true;
+    });
+  } catch (err) {
+    if (err instanceof WalletError && err.code === "INSUFFICIENT_FUNDS") {
+      return { error: "You don't have enough coins for this membership." };
     }
-
-    if (subscribed) {
-      await notifyNewSubscriber({ recipientId: tier.creatorId, actorId: user.id });
-      const creatorHandle = (await db.username.findUnique({ where: { userId: tier.creatorId }, select: { handle: true } }))?.handle;
-      if (creatorHandle) revalidatePath(`/${creatorHandle}`);
-    }
-    return { success: true };
+    throw err;
   }
 
-  // spec §3.5's literal gate, same check tips.ts's sendTip already
-  // enforces for a different money-moving feature: a creator cannot
-  // receive a payout-requiring transaction until their payout account is
-  // active.
-  const payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { userId: tier.creatorId } });
-  if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) {
-    return { error: "This creator hasn't enabled payouts yet." };
+  if (subscribed) {
+    await notifyNewSubscriber({ recipientId: tier.creatorId, actorId: user.id });
+    const creatorHandle = (await db.username.findUnique({ where: { userId: tier.creatorId }, select: { handle: true } }))?.handle;
+    if (creatorHandle) revalidatePath(`/${creatorHandle}`);
   }
-
-  const affiliateLink = await getAttributedAffiliateLink("membership_tier", tier.id, user.id);
-
-  const feeRate = await resolveFeeRate(db, tier.creatorId);
-  const creatorHandle = (await db.username.findUnique({ where: { userId: tier.creatorId }, select: { handle: true } }))?.handle ?? "";
-  const base = `${getAppOrigin()}/${creatorHandle}`;
-  const { checkoutUrl } = await getPaymentProcessor().createSubscriptionCheckoutSession({
-    amount: tier.price,
-    currency: tier.currency,
-    billingInterval: tier.billingInterval,
-    payerId: user.id,
-    payerEmail: user.email,
-    payeeProcessorAccountId: payoutAccount.processorAccountId,
-    applicationFeePercent: feeRate,
-    description: `${tier.name} membership`,
-    successUrl: `${base}?checkout=success`,
-    cancelUrl: `${base}?checkout=cancelled`,
-    metadata: {
-      kind: "membership",
-      payerId: user.id,
-      payeeId: tier.creatorId,
-      tierId: tier.id,
-      amount: String(tier.price),
-      currency: tier.currency,
-      billingInterval: tier.billingInterval,
-      affiliateLinkId: affiliateLink?.id ?? "",
-      affiliateId: affiliateLink?.affiliateId ?? "",
-      affiliateCommissionPercent: affiliateLink ? String(affiliateLink.program.commissionPercent) : "",
-    },
-  });
-
-  redirect(checkoutUrl);
+  return { success: true };
 }
 
 // Called from the Stripe webhook on checkout.session.completed once a

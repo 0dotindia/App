@@ -13,12 +13,11 @@ import { validateEventSlugFormat } from "@/lib/reserved-event-slugs";
 import { isBusinessStaff } from "@/lib/businesses";
 import { isCommunityStaff } from "@/lib/communities";
 import { isEventHost, getGoingAttendeeCount } from "@/lib/events";
-import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
+import { recordPaymentTransaction } from "@/lib/payments";
 import { placeHold, captureHold } from "@/lib/wallet/holds";
 import { WalletError } from "@/lib/wallet/ledger";
 import { coinActionKey } from "@/lib/wallet/limits";
 import type { FeatureSettlement } from "@/lib/wallet/charge";
-import { getAppOrigin } from "@/lib/email";
 import { notifyEventCancelled, notifyTicketPurchased } from "@/lib/notifications";
 import type { ActionState } from "@/app/actions/auth";
 
@@ -381,11 +380,9 @@ export async function createTicketType(_prevState: ActionState, formData: FormDa
 // spec §5.1/§5.4: a free ticket (TicketType.price null) skips the payment
 // backbone entirely — no PaymentTransaction row, same "nullable price =
 // free tier" shape Offering/DigitalProduct already use. A paid ticket
-// reuses recordPaymentTransaction exactly (kind: "ticket_purchase"), never
-// a parallel ledger. Payee resolves to the event's business payout account
-// when business-hosted, otherwise the hosting/creating user's — mirroring
-// sendTip's "payout account must already be active" gate rather than
-// auto-provisioning one here.
+// is paid in coins through a hold (kind: "ticket_purchase"), never a
+// parallel ledger. Payee is the business wallet when business-hosted,
+// otherwise the hosting/creating user's wallet.
 export async function purchaseTicket(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
   const ticketTypeId = String(formData.get("ticketTypeId") ?? "");
@@ -429,87 +426,44 @@ export async function purchaseTicket(_prevState: ActionState, formData: FormData
   // hold — placeHold reserves the payer's coins, captureHold issues the
   // ticket and pays the host (a user wallet, or the business wallet for a
   // business-hosted event). No payout account required (§6.4).
-  if (String(formData.get("payWith") ?? "card") === "coins") {
-    const hostUserId = event.hostedByBusinessId ? null : (event.hostedByUserId ?? event.createdBy);
-    let alreadySettled: boolean;
-    try {
-      alreadySettled = await db.$transaction(async (tx) => {
-        const hold = await placeHold(tx, {
-          payerId: user.id,
-          amountUsd: ticketType.price!,
-          relatedObjectType: "ticket",
-          relatedObjectId: ticketType.id,
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-          idempotencyKey: coinActionKey("ticket:coin", formData.get("idempotencyKey"), user.id, ticketTypeId),
-        });
-        const capture = await captureHold(tx, hold.holdId, {
-          payeeUserId: hostUserId,
-          payeeBusinessId: event.hostedByBusinessId ?? null,
-          kind: "ticket_purchase",
-          currency: ticketType.currency ?? "usd",
-          relatedObjectType: "ticket",
-          metadata: { ticketTypeId, qrCodeToken },
-          createRows: createTicketRow,
-        });
-        return capture.alreadySettled;
+  const hostUserId = event.hostedByBusinessId ? null : (event.hostedByUserId ?? event.createdBy);
+  let alreadySettled: boolean;
+  try {
+    alreadySettled = await db.$transaction(async (tx) => {
+      const hold = await placeHold(tx, {
+        payerId: user.id,
+        amountUsd: ticketType.price!,
+        relatedObjectType: "ticket",
+        relatedObjectId: ticketType.id,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        idempotencyKey: coinActionKey("ticket:coin", formData.get("idempotencyKey"), user.id, ticketTypeId),
       });
-    } catch (err) {
-      if (err instanceof WalletError && err.code === "INSUFFICIENT_FUNDS") {
-        return { error: "You don't have enough coins for this ticket." };
-      }
-      throw err;
+      const capture = await captureHold(tx, hold.holdId, {
+        payeeUserId: hostUserId,
+        payeeBusinessId: event.hostedByBusinessId ?? null,
+        kind: "ticket_purchase",
+        currency: ticketType.currency ?? "usd",
+        relatedObjectType: "ticket",
+        metadata: { ticketTypeId, qrCodeToken },
+        createRows: createTicketRow,
+      });
+      return capture.alreadySettled;
+    });
+  } catch (err) {
+    if (err instanceof WalletError && err.code === "INSUFFICIENT_FUNDS") {
+      return { error: "You don't have enough coins for this ticket." };
     }
-    // A deduped resubmit (same idempotency key) reissued no ticket and
-    // bumped no sold count — don't fire a second "ticket purchased"
-    // notification for it (review finding #3). Mirrors the settleCoinPurchase
-    // callers' `if (!result.alreadySettled)` guard.
-    if (!alreadySettled) {
-      await notifyTicketPurchased({ recipientId: user.id, eventSlug: event.slug });
-      revalidatePath(`/e/${event.slug}`);
-    }
-    return undefined;
+    throw err;
   }
-
-  let payeeId: string | null = null;
-  let payeeBusinessId: string | null = null;
-  let payoutAccount;
-  if (event.hostedByBusinessId) {
-    payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { businessId: event.hostedByBusinessId } });
-    if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) return { error: "This host hasn't enabled payouts yet." };
-    payeeBusinessId = event.hostedByBusinessId;
-  } else {
-    const hostUserId = event.hostedByUserId ?? event.createdBy;
-    payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { userId: hostUserId } });
-    if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) return { error: "This host hasn't enabled payouts yet." };
-    payeeId = hostUserId;
+  // A deduped resubmit (same idempotency key) reissued no ticket and
+  // bumped no sold count — don't fire a second "ticket purchased"
+  // notification for it (review finding #3). Mirrors the settleCoinPurchase
+  // callers' `if (!result.alreadySettled)` guard.
+  if (!alreadySettled) {
+    await notifyTicketPurchased({ recipientId: user.id, eventSlug: event.slug });
+    revalidatePath(`/e/${event.slug}`);
   }
-
-  const feeRate = await resolveFeeRate(db, payeeId);
-  const base = `${getAppOrigin()}/e/${event.slug}`;
-  const { checkoutUrl } = await getPaymentProcessor().createPurchaseCheckoutSession({
-    amount: ticketType.price,
-    currency: ticketType.currency ?? "usd",
-    payerId: user.id,
-    payerEmail: user.email,
-    payeeProcessorAccountId: payoutAccount.processorAccountId,
-    applicationFeeAmount: Math.round(ticketType.price * feeRate * 100) / 100,
-    description: `${event.title} — ${ticketType.name}`,
-    successUrl: `${base}?checkout=success`,
-    cancelUrl: `${base}?checkout=cancelled`,
-    metadata: {
-      kind: "ticket_purchase",
-      payerId: user.id,
-      payeeId: payeeId ?? "",
-      payeeBusinessId: payeeBusinessId ?? "",
-      ticketTypeId,
-      eventSlug: event.slug,
-      qrCodeToken,
-      amount: String(ticketType.price),
-      currency: ticketType.currency ?? "usd",
-    },
-  });
-
-  redirect(checkoutUrl);
+  return undefined;
 }
 
 // Called from the Stripe webhook once checkout.session.completed confirms

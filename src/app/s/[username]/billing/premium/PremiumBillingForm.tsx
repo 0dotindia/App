@@ -41,7 +41,7 @@ export function PremiumBillingForm({
   return (
     <div className="settingsCard">
       <p className="mutedText" style={{ fontSize: "0.85rem" }}>
-        Card payments are off right now — unlock Premium free with your coin balance instead.
+        Premium is paid in coins from your wallet and renews from it automatically.
       </p>
       <Link href="/wallet" className="button buttonSmall" style={{ alignSelf: "flex-start" }}>
         Go to Wallet

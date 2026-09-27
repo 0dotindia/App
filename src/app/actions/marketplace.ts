@@ -16,9 +16,8 @@ import {
   resolveInstaller,
   hasVerifiedListingAccess,
 } from "@/lib/marketplace";
-import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
+import { recordPaymentTransaction } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
-import { getAppOrigin } from "@/lib/email";
 import { canManageCatalog } from "@/lib/businesses";
 import { isCommunityStaff } from "@/lib/communities";
 import { createTrustSafetyCase } from "@/lib/trust-safety";
@@ -74,17 +73,15 @@ export async function createMarketplaceListing(_prevState: ActionState, formData
   if (description.length > 5000) return { error: "Description must be 5000 characters or fewer." };
 
   const priceRaw = String(formData.get("price") ?? "").trim();
-  const currencyRaw = String(formData.get("currency") ?? "").trim().toUpperCase();
   let price: number | null = null;
   let currency: string | null = null;
   if (priceRaw) {
     const parsedPrice = Number(priceRaw);
     if (!Number.isFinite(parsedPrice) || parsedPrice < 0) return { error: "Price must be a positive number." };
-    if (!currencyRaw) return { error: "Currency is required when a price is set." };
     price = parsedPrice;
-    currency = currencyRaw;
-  } else if (currencyRaw) {
-    return { error: "Remove the currency, or add a price — they're both required or both empty." };
+    // Prices are coin prices (addendum-wallet-only-payments.md §4.1); the
+    // currency column is kept set-iff-priced until it's retired.
+    currency = "usd";
   }
 
   const payloadRaw = String(formData.get("payload") ?? "{}");
@@ -134,17 +131,15 @@ export async function updateMarketplaceListing(_prevState: ActionState, formData
   if (description.length > 5000) return { error: "Description must be 5000 characters or fewer." };
 
   const priceRaw = String(formData.get("price") ?? "").trim();
-  const currencyRaw = String(formData.get("currency") ?? "").trim().toUpperCase();
   let price: number | null = null;
   let currency: string | null = null;
   if (priceRaw) {
     const parsedPrice = Number(priceRaw);
     if (!Number.isFinite(parsedPrice) || parsedPrice < 0) return { error: "Price must be a positive number." };
-    if (!currencyRaw) return { error: "Currency is required when a price is set." };
     price = parsedPrice;
-    currency = currencyRaw;
-  } else if (currencyRaw) {
-    return { error: "Remove the currency, or add a price — they're both required or both empty." };
+    // Prices are coin prices (addendum-wallet-only-payments.md §4.1); the
+    // currency column is kept set-iff-priced until it's retired.
+    currency = "usd";
   }
 
   const payloadRaw = String(formData.get("payload") ?? "{}");
@@ -210,8 +205,8 @@ export async function linkDeveloperAppToListing(_prevState: ActionState, formDat
 
 // spec §4.3/§5.1: free (payload.price null) skips the payment backbone
 // entirely, same nullable-price-means-free shape Offering/DigitalProduct/
-// Ticket already use. A paid purchase reuses recordPaymentTransaction
-// exactly (kind: "marketplace_purchase"), never a parallel ledger.
+// Ticket already use. A paid purchase is a coin charge through
+// settleCoinPurchase (kind: "marketplace_purchase"), never a parallel ledger.
 export async function purchaseMarketplaceListing(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
   const listingId = String(formData.get("listingId") ?? "");
@@ -239,63 +234,23 @@ export async function purchaseMarketplaceListing(_prevState: ActionState, formDa
   // §6.5). No payout account required. The key is deterministic because a
   // listing is bought at most once per buyer; a failed charge rolls the
   // ledger back with it, so the key is only ever consumed by a success.
-  if (String(formData.get("payWith") ?? "card") === "coins") {
-    if (listing.sellerUserId === user.id) return { error: "You can't buy your own listing." };
-    const result = await settleCoinPurchase({
-      kind: "marketplace_purchase",
-      payerId: user.id,
-      payeeUserId: listing.sellerBusinessId ? null : listing.sellerUserId,
-      payeeBusinessId: listing.sellerBusinessId ?? null,
-      amountUsd: listing.price,
-      currency: listing.currency ?? "usd",
-      relatedObjectType: "marketplace_listing",
-      relatedObjectId: listing.id,
-      idempotencyKey: `marketplace:coin:${user.id}:${listing.id}`,
-      metadata: { listingId: listing.id },
-      createRows: createMarketplacePurchaseRows,
-    });
-    if ("error" in result) return { error: result.error };
-    revalidatePath(`/m/${listing.id}`);
-    return { success: true };
-  }
-
-  let payeeId: string | null = null;
-  let payeeBusinessId: string | null = null;
-  let payoutAccount;
-  if (listing.sellerBusinessId) {
-    payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { businessId: listing.sellerBusinessId } });
-    if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) return { error: "This seller hasn't enabled payouts yet." };
-    payeeBusinessId = listing.sellerBusinessId;
-  } else {
-    payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { userId: listing.sellerUserId! } });
-    if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) return { error: "This seller hasn't enabled payouts yet." };
-    payeeId = listing.sellerUserId;
-  }
-
-  const feeRate = await resolveFeeRate(db, payeeId);
-  const base = `${getAppOrigin()}/m/${listing.id}`;
-  const { checkoutUrl } = await getPaymentProcessor().createPurchaseCheckoutSession({
-    amount: listing.price,
-    currency: listing.currency ?? "usd",
+  if (listing.sellerUserId === user.id) return { error: "You can't buy your own listing." };
+  const result = await settleCoinPurchase({
+    kind: "marketplace_purchase",
     payerId: user.id,
-    payerEmail: user.email,
-    payeeProcessorAccountId: payoutAccount.processorAccountId,
-    applicationFeeAmount: Math.round(listing.price * feeRate * 100) / 100,
-    description: listing.title,
-    successUrl: `${base}?checkout=success`,
-    cancelUrl: `${base}?checkout=cancelled`,
-    metadata: {
-      kind: "marketplace_purchase",
-      payerId: user.id,
-      payeeId: payeeId ?? "",
-      payeeBusinessId: payeeBusinessId ?? "",
-      listingId: listing.id,
-      amount: String(listing.price),
-      currency: listing.currency ?? "usd",
-    },
+    payeeUserId: listing.sellerBusinessId ? null : listing.sellerUserId,
+    payeeBusinessId: listing.sellerBusinessId ?? null,
+    amountUsd: listing.price,
+    currency: listing.currency ?? "usd",
+    relatedObjectType: "marketplace_listing",
+    relatedObjectId: listing.id,
+    idempotencyKey: `marketplace:coin:${user.id}:${listing.id}`,
+    metadata: { listingId: listing.id },
+    createRows: createMarketplacePurchaseRows,
   });
-
-  redirect(checkoutUrl);
+  if ("error" in result) return { error: result.error };
+  revalidatePath(`/m/${listing.id}`);
+  return { success: true };
 }
 
 // The purchase rows — one place, both rails (coin-wallet v2 §6.2).

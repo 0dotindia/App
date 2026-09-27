@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { getEventBySlug, isEventHost, getMyRSVP, getRSVPCounts, listAttendees } from "@/lib/events";
-import { getBusinessPayoutAccount } from "@/lib/payments";
 import { getWalletBalance } from "@/lib/wallet/ledger";
 import { renderWikiMarkdown } from "@/lib/wiki-markdown";
 import { EngagementSection } from "@/components/EngagementSection";
@@ -118,7 +117,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   // spec §3.4: a draft event is visible only to its host/creator.
   if (event.status === "draft" && !isHost) notFound();
 
-  const [rsvpCounts, myRSVP, myTickets, comments, isLiked, likeCount, businessPayoutAccount, viewerWallet] = await Promise.all([
+  const [rsvpCounts, myRSVP, myTickets, comments, isLiked, likeCount, viewerWallet] = await Promise.all([
     getRSVPCounts(event.id),
     currentUser ? getMyRSVP(event.id, currentUser.id) : null,
     currentUser
@@ -137,7 +136,6 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
       ? db.reaction.findUnique({ where: { subjectType_subjectId_userId: { subjectType: "event", subjectId: event.id, userId: currentUser.id } } })
       : null,
     db.reaction.count({ where: { subjectType: "event", subjectId: event.id } }),
-    event.hostedByBusinessId ? getBusinessPayoutAccount(event.hostedByBusinessId) : null,
     currentUser && !isHost ? getWalletBalance(currentUser.id) : Promise.resolve(null),
   ]);
 
@@ -247,9 +245,6 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             endsAt: event.endsAt ? toDatetimeLocal(event.endsAt) : "",
             status: event.status,
           }}
-          hostedByBusinessId={event.hostedByBusinessId}
-          businessPayoutActive={businessPayoutAccount?.status === "active"}
-          businessPayoutAccountExists={businessPayoutAccount?.processorAccountId != null}
         />
       )}
     </div>

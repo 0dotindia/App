@@ -5,10 +5,9 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
-import { getPaymentProcessor, recordPaymentTransaction, resolveFeeRate } from "@/lib/payments";
+import { recordPaymentTransaction } from "@/lib/payments";
 import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
 import { coinActionKey } from "@/lib/wallet/limits";
-import { getAppOrigin } from "@/lib/email";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import { saveUploadedImage } from "@/lib/uploads";
@@ -79,8 +78,8 @@ export async function cancelFundraisingCampaign(formData: FormData): Promise<voi
 }
 
 // spec §11: at least the fourth reuse of the PaymentTransaction ledger —
-// same "charge, then record ledger + feature row in one transaction, only
-// after processor.charge() succeeds" shape as sendTip (tips.ts).
+// same coin charge + ledger + feature row in one transaction as sendTip
+// (tips.ts).
 export async function donate(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
   const campaignId = String(formData.get("campaignId") ?? "");
@@ -94,7 +93,7 @@ export async function donate(_prevState: ActionState, formData: FormData): Promi
   const rawAmount = Number(formData.get("amount"));
   const amount = Math.round(rawAmount * 100) / 100;
   if (!Number.isFinite(amount) || amount < MIN_DONATION_AMOUNT || amount > MAX_DONATION_AMOUNT) {
-    return { error: `Donation amount must be between $${MIN_DONATION_AMOUNT} and $${MAX_DONATION_AMOUNT}.` };
+    return { error: `Donation amount must be between ${MIN_DONATION_AMOUNT} and ${MAX_DONATION_AMOUNT} coins.` };
   }
 
   if (!checkRateLimit(`donate:${user.id}`, { max: 10, windowMs: 15 * 60 * 1000 })) {
@@ -107,54 +106,21 @@ export async function donate(_prevState: ActionState, formData: FormData): Promi
 
   // addendum-coin-wallet-v2.md §6.3: coins settle now, no payout account
   // needed on the organizer.
-  if (String(formData.get("payWith") ?? "card") === "coins") {
-    const result = await settleCoinPurchase({
-      kind: "donation",
-      payerId: user.id,
-      payeeUserId: campaign.organizerUserId,
-      amountUsd: amount,
-      currency: campaign.currency,
-      relatedObjectType: "fundraising_campaign",
-      relatedObjectId: campaign.id,
-      idempotencyKey: coinActionKey("donation:coin", formData.get("idempotencyKey"), user.id, campaign.id, amount),
-      metadata: { campaignId: campaign.id, message, isAnonymous: String(isAnonymous) },
-      createRows: createDonationRows,
-    });
-    if ("error" in result) return { error: result.error };
-    if (!result.alreadySettled) revalidatePath(`/fund/${campaign.id}`);
-    return { success: true };
-  }
-
-  const payoutAccount = await db.creatorPayoutAccount.findUnique({ where: { userId: campaign.organizerUserId } });
-  if (!payoutAccount || payoutAccount.status !== "active" || !payoutAccount.processorAccountId) {
-    return { error: "This fundraiser hasn't enabled payouts yet." };
-  }
-
-  const feeRate = await resolveFeeRate(db, campaign.organizerUserId);
-  const base = `${getAppOrigin()}/fund/${campaign.id}`;
-  const { checkoutUrl } = await getPaymentProcessor().createPurchaseCheckoutSession({
-    amount,
-    currency: campaign.currency,
+  const result = await settleCoinPurchase({
+    kind: "donation",
     payerId: user.id,
-    payerEmail: user.email,
-    payeeProcessorAccountId: payoutAccount.processorAccountId,
-    applicationFeeAmount: Math.round(amount * feeRate * 100) / 100,
-    description: `Donation to ${campaign.title}`,
-    successUrl: `${base}?checkout=success`,
-    cancelUrl: `${base}?checkout=cancelled`,
-    metadata: {
-      kind: "donation",
-      payerId: user.id,
-      payeeId: campaign.organizerUserId,
-      campaignId: campaign.id,
-      amount: String(amount),
-      currency: campaign.currency,
-      message,
-      isAnonymous: String(isAnonymous),
-    },
+    payeeUserId: campaign.organizerUserId,
+    amountUsd: amount,
+    currency: campaign.currency,
+    relatedObjectType: "fundraising_campaign",
+    relatedObjectId: campaign.id,
+    idempotencyKey: coinActionKey("donation:coin", formData.get("idempotencyKey"), user.id, campaign.id, amount),
+    metadata: { campaignId: campaign.id, message, isAnonymous: String(isAnonymous) },
+    createRows: createDonationRows,
   });
-
-  redirect(checkoutUrl);
+  if ("error" in result) return { error: result.error };
+  if (!result.alreadySettled) revalidatePath(`/fund/${campaign.id}`);
+  return { success: true };
 }
 
 // Called from the Stripe webhook on checkout.session.completed once

@@ -9,6 +9,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { DonateForm } from "./DonateForm";
 import { EmptyState } from "@/components/EmptyState";
 import { SITE_DESCRIPTION } from "@/lib/site-metadata";
+import { formatCoins } from "@/lib/coins";
 
 // No access gate here, matching the page component: any campaign
 // (active/completed/cancelled alike) is publicly viewable by design — no
@@ -45,19 +46,15 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
   const currentUser = await getCurrentUser();
   const isOrganizer = currentUser?.id === campaign.organizerUserId;
 
-  const [donations, organizerPayout, viewerWallet] = await Promise.all([
+  const [donations, viewerWallet] = await Promise.all([
     db.donation.findMany({
       where: { campaignId: campaign.id },
       orderBy: { createdAt: "desc" },
       include: { donor: { select: { id: true, profile: true } } },
       take: 50,
     }),
-    campaign.organizerUserId
-      ? db.creatorPayoutAccount.findUnique({ where: { userId: campaign.organizerUserId }, select: { status: true } })
-      : Promise.resolve(null),
     currentUser && !isOrganizer ? getWalletBalance(currentUser.id) : Promise.resolve(null),
   ]);
-  const cardAvailable = organizerPayout?.status === "active";
   const viewerCoins = viewerWallet?.total ?? 0;
 
   const progressPct = campaign.goalAmount ? Math.min(100, Math.round((campaign.raisedAmount / campaign.goalAmount) * 100)) : null;
@@ -81,8 +78,8 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
       {campaign.description && <p style={{ marginTop: "0.75rem", whiteSpace: "pre-wrap" }}>{campaign.description}</p>}
 
       <p style={{ marginTop: "0.75rem" }}>
-        <strong>{campaign.raisedAmount.toLocaleString()} {campaign.currency.toUpperCase()}</strong> raised
-        {campaign.goalAmount && ` of ${campaign.goalAmount.toLocaleString()} ${campaign.currency.toUpperCase()} goal`}
+        <strong>{formatCoins(campaign.raisedAmount)}</strong> raised
+        {campaign.goalAmount && ` of a ${formatCoins(campaign.goalAmount)} goal`}
       </p>
       {progressPct !== null && (
         <div style={{ height: "8px", borderRadius: "4px", background: "var(--border)", overflow: "hidden", marginTop: "0.4rem" }}>
@@ -95,7 +92,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
       ) : (
         <div style={{ marginTop: "1rem" }}>
           {currentUser ? (
-            <DonateForm campaignId={campaign.id} cardAvailable={cardAvailable} viewerCoins={viewerCoins} />
+            <DonateForm campaignId={campaign.id} viewerCoins={viewerCoins} />
           ) : (
             <Link href="/login" className="button buttonSmall">Log in to donate</Link>
           )}
@@ -131,7 +128,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                   {showDonorName ? donation.donor.profile?.displayName ?? "Someone" : "Anonymous"}
                   {donation.isAnonymous && isOrganizer && " (anonymous)"}
                 </strong>{" "}
-                donated {donation.amount.toLocaleString()} {donation.currency.toUpperCase()}
+                donated {formatCoins(donation.amount)}
                 {donation.message && <p className="mutedText" style={{ margin: "0.1rem 0 0" }}>&ldquo;{donation.message}&rdquo;</p>}
               </div>
             );
