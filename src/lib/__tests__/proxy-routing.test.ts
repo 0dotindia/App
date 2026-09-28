@@ -80,6 +80,14 @@ describe("buildCsp", () => {
     expect(csp).toContain("frame-src 'self' https://www.openstreetmap.org https://vercel.live");
   });
 
+  it("allows only the privacy-enhanced YouTube player and its thumbnails", () => {
+    const csp = buildCsp("n");
+    // The landing page's click-to-play videos (LiteYouTube.tsx).
+    expect(csp).toMatch(/frame-src [^;]*https:\/\/www\.youtube-nocookie\.com/);
+    expect(csp).toMatch(/img-src [^;]*https:\/\/i\.ytimg\.com/);
+    expect(csp).not.toMatch(/frame-src [^;]*https:\/\/www\.youtube\.com/);
+  });
+
   it("allows the Vercel Toolbar's iframe/websocket unconditionally", () => {
     // The toolbar's trigger is the viewer's own Vercel session (any
     // authenticated team member, on any environment including production),

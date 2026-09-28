@@ -1,0 +1,1280 @@
+/* Newspaper-style landing page ("/"). Scoped under .frontPage and prefixed
+   fp* so nothing here leaks into the rest of the app. Colors come only from
+   the global theme tokens (globals.css), so light/dark and the explicit
+   data-theme override work with no extra rules: --background is the
+   "newsprint", --foreground the ink, --border(-strong) the column rules. */
+
+.frontPage {
+  --fp-serif: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --fp-rule: 1px solid var(--border-strong);
+  --fp-rule-heavy: 3px solid var(--foreground);
+  /* width + min-width: the page sits in a flex column (the app shell), and
+     without them the ticker's max-content track would size .frontPage to
+     its full 1240px max on phones instead of the viewport. */
+  width: 100%;
+  min-width: 0;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 var(--space-6) var(--space-16);
+  color: var(--foreground);
+}
+
+.frontPage h1,
+.frontPage h2,
+.frontPage h3 {
+  font-family: var(--fp-serif);
+  text-wrap: balance;
+}
+
+.fpKicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+
+/* ── Masthead ─────────────────────────────────────────────────── */
+.fpMasthead {
+  text-align: center;
+  padding-top: var(--space-6);
+}
+
+.fpMastheadMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-top: var(--fp-rule);
+  border-bottom: var(--fp-rule);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  letter-spacing: 0.02em;
+}
+
+.fpMastheadEdition {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--foreground);
+}
+
+.fpNameplate {
+  margin: var(--space-6) 0 0;
+  font-size: clamp(2.6rem, 9vw, 6.5rem);
+  font-weight: 800;
+  font-variation-settings: "opsz" 72;
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+}
+
+.fpMotto {
+  margin: var(--space-3) 0 var(--space-5);
+  font-family: var(--fp-serif);
+  font-style: italic;
+  font-size: var(--text-lg);
+  color: var(--muted-foreground);
+}
+
+.fpSections {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  padding: var(--space-3) 0;
+  border-top: var(--fp-rule-heavy);
+  border-bottom: var(--fp-rule);
+}
+
+.fpSections a {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.fpSections a:hover,
+.fpSections a:focus-visible {
+  color: var(--accent-strong);
+}
+
+/* ── Ticker ───────────────────────────────────────────────────── */
+.fpTicker {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+  overflow: hidden;
+  border-bottom: var(--fp-rule);
+  font-size: var(--text-sm);
+}
+
+.fpTickerLabel {
+  /* Above the scrolling track, which slides underneath it. */
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: var(--space-2) var(--space-3);
+  background: #c5221f;
+  color: #fff;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.fpTickerTrack {
+  display: flex;
+  width: max-content;
+  animation: fpTicker 40s linear infinite;
+}
+
+.fpTicker:hover .fpTickerTrack,
+.fpTicker:focus-within .fpTickerTrack {
+  animation-play-state: paused;
+}
+
+.fpTickerTrack ul {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fpTickerTrack li {
+  padding: var(--space-2) var(--space-6);
+  white-space: nowrap;
+  border-right: var(--fp-rule);
+}
+
+@keyframes fpTicker {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fpTickerTrack {
+    animation: none;
+  }
+  .fpTicker {
+    overflow-x: auto;
+  }
+}
+
+/* ── Front page grid ──────────────────────────────────────────── */
+.fpFront {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-8);
+  padding: var(--space-8) 0;
+  border-bottom: var(--fp-rule-heavy);
+}
+
+.fpLeadHeadline {
+  margin: var(--space-2) 0 var(--space-3);
+  font-size: clamp(2rem, 4.6vw, 3.6rem);
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+}
+
+.fpDeck {
+  margin: 0;
+  font-family: var(--fp-serif);
+  font-size: var(--text-xl);
+  line-height: 1.35;
+  color: var(--muted-foreground);
+}
+
+.fpByline {
+  margin: var(--space-3) 0 var(--space-5);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted-foreground);
+}
+
+.fpLeadFigure {
+  margin: 0 0 var(--space-5);
+}
+
+.fpLeadFigure figcaption,
+.fpVideoCard figcaption {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+.fpLeadVisual {
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  border: var(--fp-rule);
+  background: var(--surface);
+}
+
+.fpLeadBody {
+  columns: 2 16rem;
+  column-gap: var(--space-8);
+  column-rule: var(--fp-rule);
+  font-family: var(--fp-serif);
+  font-size: var(--text-base-plus);
+  line-height: 1.6;
+}
+
+.fpLeadBody p {
+  margin: 0 0 var(--space-3);
+}
+
+.fpDropCap::first-letter {
+  float: left;
+  margin: 0.08em 0.1em 0 0;
+  font-size: 3.6em;
+  font-weight: 800;
+  line-height: 0.8;
+}
+
+.fpActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.fpActions .button,
+.fpDevCopy .button,
+.fpClosing .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.fpTextLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 600;
+  color: var(--link, var(--accent-strong));
+}
+
+/* ── Video ────────────────────────────────────────────────────── */
+.fpVideo {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #000;
+  border: 0;
+  padding: 0;
+}
+
+.fpVideo iframe,
+.fpVideo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+}
+
+.fpVideoPoster {
+  cursor: pointer;
+}
+
+.fpVideoPoster img {
+  transition: transform 0.4s ease, filter 0.4s ease;
+  filter: saturate(0.9);
+}
+
+.fpVideoPoster:hover img,
+.fpVideoPoster:focus-visible img {
+  transform: scale(1.03);
+  filter: saturate(1.05);
+}
+
+.fpVideoPlay {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  display: grid;
+  place-items: center;
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.18);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.fpVideoPoster:hover .fpVideoPlay,
+.fpVideoPoster:focus-visible .fpVideoPlay {
+  transform: scale(1.08);
+  background: var(--danger);
+}
+
+.fpVideoPoster:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* ── Dispatches column ────────────────────────────────────────── */
+.fpDispatches {
+  padding-left: var(--space-8);
+  border-left: var(--fp-rule);
+}
+
+.fpColumnHead,
+.fpSectionHead {
+  margin: 0 0 var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--fp-rule-heavy);
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.fpDesk {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--space-4);
+  color: inherit;
+  text-decoration: none;
+}
+
+.fpDeskName {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 600;
+}
+
+.fpDeskName svg {
+  color: var(--accent);
+}
+
+.fpDeskHandle {
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+
+.fpDispatchList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fpDispatch + .fpDispatch {
+  border-top: var(--fp-rule);
+}
+
+.fpDispatch a {
+  display: block;
+  padding: var(--space-3) 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.fpDispatch a:hover h3,
+.fpDispatch a:focus-visible h3 {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.fpDispatch time {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--danger);
+}
+
+.fpDispatch h3 {
+  margin: var(--space-1) 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.fpDispatchTop h3 {
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.fpDispatch p {
+  margin: 0 0 var(--space-2);
+  font-family: var(--fp-serif);
+  color: var(--muted-foreground);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fpDispatchImage {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  margin-bottom: var(--space-2);
+  border: var(--fp-rule);
+}
+
+.fpDispatchStats {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+
+.fpDispatchStats svg + svg,
+.fpDispatchStats svg:nth-of-type(2) {
+  margin-left: var(--space-2);
+}
+
+.fpEmpty {
+  margin: 0;
+  font-family: var(--fp-serif);
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+
+/* ── Generic sections ─────────────────────────────────────────── */
+.fpSection {
+  padding: var(--space-10) 0;
+  border-bottom: var(--fp-rule);
+}
+
+.fpSectionHead {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+}
+
+.fpVideoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-6);
+}
+
+.fpVideoCard {
+  margin: 0;
+}
+
+.fpVideoCard figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.fpVideoCard figcaption strong {
+  font-family: var(--fp-serif);
+  font-style: normal;
+  font-size: var(--text-base-plus);
+  color: var(--foreground);
+}
+
+.fpColumns {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.fpColumn {
+  padding: 0 var(--space-5);
+}
+
+.fpColumn:first-child {
+  padding-left: 0;
+}
+
+.fpColumn:last-child {
+  padding-right: 0;
+}
+
+.fpColumn + .fpColumn {
+  border-left: var(--fp-rule);
+}
+
+.fpColumn h3 {
+  margin: var(--space-2) 0;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.fpColumn p {
+  margin: 0;
+  font-family: var(--fp-serif);
+  font-size: var(--text-base-plus);
+  line-height: 1.55;
+  color: var(--muted-foreground);
+}
+
+/* ── Developers desk ──────────────────────────────────────────── */
+.fpDevGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.fpDevHeadline {
+  margin: var(--space-2) 0 var(--space-3);
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.fpDevCopy > p {
+  margin: 0 0 var(--space-4);
+  font-family: var(--fp-serif);
+  font-size: var(--text-base-plus);
+  line-height: 1.6;
+}
+
+.fpDevFacts {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.fpDevFacts li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fpDevFacts svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.fpScopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.fpScopes code,
+.fpDevFacts code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 0.15rem 0.45rem;
+  border: var(--fp-rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.fpCode {
+  margin: 0;
+  padding: var(--space-5);
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  background: #0f1115;
+  color: #e6e6e6;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs-plus);
+  line-height: 1.65;
+  box-shadow: 6px 6px 0 var(--foreground);
+}
+
+/* ── Follow ───────────────────────────────────────────────────── */
+.fpSocials {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--fp-rule);
+  border-left: var(--fp-rule);
+}
+
+.fpSocials li {
+  border-right: var(--fp-rule);
+  border-bottom: var(--fp-rule);
+}
+
+.fpSocials a {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: var(--space-4);
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.fpSocials a:hover,
+.fpSocials a:focus-visible {
+  background: var(--surface);
+}
+
+.fpSocials span {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.fpSocials strong {
+  font-family: var(--fp-serif);
+  font-size: var(--text-lg);
+}
+
+.fpSocials svg {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  color: var(--muted-foreground);
+}
+
+/* ── Closing ──────────────────────────────────────────────────── */
+.fpClosing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-16) 0 var(--space-6);
+  text-align: center;
+}
+
+.fpClosing h2 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1.05;
+}
+
+.fpClosing p {
+  margin: 0 0 var(--space-2);
+  color: var(--muted-foreground);
+}
+
+/* ── Responsive ───────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .fpColumns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--space-6);
+  }
+  .fpColumn:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .fpColumn:nth-child(even) {
+    padding-right: 0;
+  }
+  .fpDevGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .frontPage {
+    padding: 0 var(--space-4) var(--space-12);
+  }
+  .fpMastheadMeta {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+  }
+  .fpFront {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fpDispatches {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .fpColumns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .fpColumn,
+  .fpColumn:nth-child(odd),
+  .fpColumn:nth-child(even) {
+    padding: 0;
+    border-left: 0;
+  }
+  .fpColumn + .fpColumn {
+    padding-top: var(--space-5);
+    border-top: var(--fp-rule);
+  }
+  .fpCode {
+    box-shadow: none;
+  }
+}
+
+/* The "link unavailable" notice page.tsx renders above the masthead. */
+.landingNotice {
+  max-width: 1240px;
+  margin: var(--space-4) auto 0;
+  padding: 0 var(--space-6);
+}
+
+/* See ZeroSafe in FrontPage.tsx. */
+.fpZero {
+  font-family: var(--font-sans);
+  font-weight: inherit;
+  /* Geist's ss09 alternate zero — its default is an oval too. */
+  font-feature-settings: "ss09";
+}
+
+/* Official brand marks (BrandIcon.tsx) in their own brand color. Black
+   marks (X, Threads, GitHub) follow the ink color instead, so they don't
+   vanish on the dark theme. */
+.fpBrandIcon {
+  flex: none;
+  fill: var(--brand);
+}
+
+.fpBrandIcon.fpBrandMono {
+  fill: var(--foreground);
+}
+
+.fpSocials .fpBrandIcon {
+  position: static;
+  margin-bottom: var(--space-2);
+}
+
+/* ── Colophon (the footer's legal links, now under the masthead) ── */
+.fpColophon {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-2) 0;
+  border-bottom: var(--fp-rule);
+  font-size: var(--text-2xs);
+}
+
+.fpColophon a {
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+
+.fpColophon a:hover,
+.fpColophon a:focus-visible {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
+/* ── Sticky front-page nav ───────────────────────────────────── */
+.fpNav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid transparent;
+  background: color-mix(in srgb, var(--background) 86%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.2s ease;
+}
+
+.fpNavCondensed {
+  border-bottom-color: var(--border-strong);
+}
+
+.fpNavInner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: 1240px;
+  height: 60px;
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+}
+
+.fpNavBrand {
+  display: inline-flex;
+  flex: none;
+}
+
+/* Condensed-only pieces: present in the DOM from the start (no layout
+   jump) and faded/slid in, not display-toggled. */
+.fpNavNameplate,
+.fpNavSections,
+.fpNavSocials {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+}
+
+.fpNavCondensed .fpNavNameplate,
+.fpNavCondensed .fpNavSections,
+.fpNavCondensed .fpNavSocials {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+
+.fpNavNameplate {
+  flex: none;
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.fpNavSections {
+  display: flex;
+  gap: var(--space-4);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fpNavSections a {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.fpNavSections a:hover,
+.fpNavSections a:focus-visible {
+  color: var(--foreground);
+}
+
+.fpNavActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.fpNavSocials {
+  display: flex;
+  gap: 0.15rem;
+  margin: 0 var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fpNavSocials a,
+.fpNavMenuSocials a {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  transition: background 0.15s ease;
+}
+
+.fpNavSocials a:hover,
+.fpNavSocials a:focus-visible,
+.fpNavMenuSocials a:hover {
+  background: var(--surface);
+}
+
+.fpNavMenu {
+  display: none;
+  position: relative;
+}
+
+.fpNavMenu summary {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  list-style: none;
+}
+
+.fpNavMenu summary::-webkit-details-marker {
+  display: none;
+}
+
+.fpNavMenuPanel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(88vw, 20rem);
+  padding: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.fpNavMenuPanel > nav:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fpNavMenuPanel > nav:first-child a {
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.fpNavMenuSocials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3) 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.fpNavMenuLegal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+
+.fpNavMenuLegal a {
+  color: var(--muted-foreground);
+}
+
+@media (max-width: 1100px) {
+  .fpNavSections {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .fpNavInner {
+    padding: 0 var(--space-4);
+    gap: var(--space-3);
+  }
+  .fpNavSocials,
+  .fpNavLogin {
+    display: none;
+  }
+  .fpNavMenu {
+    display: block;
+  }
+  .fpNavNameplate {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 420px) {
+  /* The condensed nameplate takes the CTA's place on small phones; the
+     CTA stays one tap away in the menu. */
+  .fpNavCondensed .fpNavActions > .button {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fpNavNameplate,
+  .fpNavSections,
+  .fpNavSocials {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ── The Wire ────────────────────────────────────────────────── */
+.fpWireSection {
+  border-bottom: 0;
+}
+
+.fpWireDeck {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-6);
+  font-family: var(--fp-serif);
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+
+/* Column rules: every card draws its own right + bottom rule, and the
+   grid is 1px wider than .fpWire (which clips) so the last column's right
+   rule falls outside — correct rules at every column count auto-fill picks,
+   with no per-row selectors. */
+.fpWire {
+  overflow: hidden;
+}
+
+.fpWireGrid {
+  display: grid;
+  margin-right: -1px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  grid-auto-flow: dense;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--fp-rule);
+}
+
+.fpWireCard {
+  border-right: var(--fp-rule);
+  border-bottom: var(--fp-rule);
+}
+
+/* A photo story spans two columns where there's room — the front-page
+   rhythm of big and small stories, not a uniform card wall. */
+@media (min-width: 900px) {
+  .fpWireCardImage {
+    grid-column: span 2;
+  }
+}
+
+.fpWireCard a {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  height: 100%;
+  padding: var(--space-5);
+  color: inherit;
+  text-decoration: none;
+}
+
+.fpWireCard a:hover h3,
+.fpWireCard a:focus-visible h3 {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.fpWireCard img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: var(--fp-rule);
+}
+
+.fpWireKicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+
+.fpWireCard h3 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.fpWireCardImage h3 {
+  font-size: clamp(1.4rem, 2.4vw, 1.8rem);
+}
+
+.fpWireCard p {
+  margin: 0;
+  font-family: var(--fp-serif);
+  font-size: var(--text-base-plus);
+  line-height: 1.5;
+  color: var(--muted-foreground);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fpWireMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--muted-foreground);
+}
+
+.fpWireStats {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: none;
+}
+
+.fpWireStats svg + svg,
+.fpWireStats svg:nth-of-type(2) {
+  margin-left: var(--space-2);
+}
+
+/* Rotating full-width blocks between batches. */
+.fpWireFeature {
+  padding: var(--space-8) 0;
+  border-bottom: var(--fp-rule-heavy);
+}
+
+.fpWireFeature .fpClosing {
+  padding: var(--space-6) 0;
+}
+
+.fpWirePromo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border: var(--fp-rule);
+  background: var(--surface);
+}
+
+.fpWirePromo p {
+  margin: 0;
+  max-width: 44rem;
+  font-family: var(--fp-serif);
+  font-size: var(--text-xl);
+  line-height: 1.35;
+}
+
+.fpWirePromoSocials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fpWirePromoSocials a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: var(--fp-rule);
+  border-radius: var(--radius-full);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.fpWirePromoSocials a:hover,
+.fpWirePromoSocials a:focus-visible {
+  border-color: var(--foreground);
+  transform: translateY(-1px);
+}
+
+.fpWireVideo {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: center;
+}
+
+.fpWireVideo h3 {
+  margin: var(--space-2) 0;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  line-height: 1.1;
+}
+
+.fpWireVideo p {
+  margin: 0;
+  font-family: var(--fp-serif);
+  color: var(--muted-foreground);
+}
+
+.fpWireFooter {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-8) 0 var(--space-4);
+}
+
+.fpWireFooter .button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fpWireEnd {
+  margin: 0;
+  font-family: var(--fp-serif);
+  font-style: italic;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.fpSpin {
+  animation: fpSpin 0.9s linear infinite;
+}
+
+@keyframes fpSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .fpWireCard {
+    border-right: 0;
+  }
+  .fpWireCard a {
+    padding: var(--space-4) 0;
+  }
+  .fpWireVideo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fpSpin {
+    animation-duration: 2.5s;
+  }
+}
+
+/* ── Scroll reveal ───────────────────────────────────────────── */
+/* Pure CSS scroll-driven animation: section heads, feature columns and the
+   Wire's blocks rise in as they enter the viewport. No JS, no observers;
+   browsers without animation-timeline (and anyone who prefers reduced
+   motion) simply see everything in place. The Wire's cards are left out on
+   purpose — dozens animating at once in an endless list is noise. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .fpSectionHead,
+    .fpColumn,
+    .fpDevGrid,
+    .fpSocials li,
+    .fpVideoCard,
+    .fpWireFeature {
+      animation: fpReveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+  }
+}
+
+@keyframes fpReveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
