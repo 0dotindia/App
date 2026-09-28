@@ -57,22 +57,21 @@ export async function applyMigrationSql(client, sql) {
   }
 }
 
+// Only a production build (or a manual run with no VERCEL_ENV) migrates.
+// Preview builds used to migrate too, on the assumption that Preview had
+// its own isolated Turso database — but under the Vercel Turso integration
+// the build-time DATABASE_URL is production's (dot-0-database), so every
+// preview build of an unmerged PR applied its migrations to live data
+// (drop_stripe hit production 49 minutes before its PR merged). Previews
+// that add migrations now run against the pre-migration schema until
+// merge; that is the safe failure.
+export function shouldMigrate(vercelEnv) {
+  return vercelEnv === undefined || vercelEnv === "" || vercelEnv === "production";
+}
+
 async function main() {
-  // Vercel sets VERCEL_ENV to "production"/"preview"/"development" during
-  // every build. Production and Preview each now have their OWN isolated
-  // Turso database (0dot-app-us / 0dot-app-preview), so applying pending
-  // migrations on a preview build is safe — it can no longer touch prod
-  // data, which was the original reason this used to skip everything but
-  // production. Development-target deploys still skip (rare, and the dev DB
-  // is migrated by hand via `npm run migrate:deploy` when needed). Absent
-  // VERCEL_ENV entirely (a manual local run), proceed.
-  //
-  // Concurrent preview builds from different PRs race on the same preview
-  // DB — the _prisma_migrations check + transactional batch below make a
-  // collision fail one build (retry it) rather than corrupt anything; a
-  // per-DB advisory lock would be the fix if that ever becomes common.
-  if (process.env.VERCEL_ENV === "development") {
-    console.log("Skipping migrations: VERCEL_ENV=development.");
+  if (!shouldMigrate(process.env.VERCEL_ENV)) {
+    console.log(`Skipping migrations: VERCEL_ENV=${process.env.VERCEL_ENV} (only production builds migrate).`);
     return;
   }
 

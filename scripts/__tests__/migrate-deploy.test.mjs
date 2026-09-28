@@ -16,7 +16,7 @@ import { createClient } from "@libsql/client";
 import { mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
-import { applyMigrationSql, splitStatements } from "../migrate-deploy.mjs";
+import { applyMigrationSql, splitStatements, shouldMigrate } from "../migrate-deploy.mjs";
 
 // Mirrors Prisma's actual "RedefineTables" output shape for a rebuild of
 // `parent` (e.g. a column type change) with a child row referencing it via
@@ -82,5 +82,18 @@ describe("migrate-deploy.mjs applyMigrationSql", () => {
 
     const { rows } = await client.execute("SELECT id FROM child WHERE id = 'c1'");
     expect(rows).toHaveLength(0);
+  });
+});
+
+describe("migrate-deploy.mjs shouldMigrate", () => {
+  it("migrates production builds and manual runs only", () => {
+    expect(shouldMigrate("production")).toBe(true);
+    expect(shouldMigrate(undefined)).toBe(true);
+    expect(shouldMigrate("")).toBe(true);
+  });
+
+  it("never migrates from a preview or development build (their build-time DB is production's)", () => {
+    expect(shouldMigrate("preview")).toBe(false);
+    expect(shouldMigrate("development")).toBe(false);
   });
 });
