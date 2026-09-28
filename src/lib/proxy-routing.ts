@@ -90,13 +90,19 @@ export function buildCsp(nonce: string): string {
   // open the iframe), but it's correct in isolation and costs nothing to
   // keep, unconditional for the same "viewer's own session, any
   // environment" reason as everywhere else vercel.live appears here.
-  const frameSrc = ["'self'", "https://www.openstreetmap.org", "https://vercel.live"];
+  //
+  // https://www.youtube-nocookie.com — the landing page's click-to-play
+  // videos (src/components/frontpage/LiteYouTube.tsx). The privacy-enhanced
+  // host only, not youtube.com: no player loads until the visitor clicks,
+  // and the nocookie player sets no tracking cookies. Its poster frames
+  // come from i.ytimg.com (img-src below).
+  const frameSrc = ["'self'", "https://www.openstreetmap.org", "https://vercel.live", "https://www.youtube-nocookie.com"];
 
   return [
     "default-src 'self'",
     `script-src ${scriptSrc.join(" ")}`,
     "style-src 'self' 'unsafe-inline'", // Tailwind's runtime + component-library inline styles have no static hash/nonce to pin
-    "img-src 'self' data: https://*.public.blob.vercel-storage.com",
+    "img-src 'self' data: https://*.public.blob.vercel-storage.com https://i.ytimg.com",
     "media-src 'self' https://*.public.blob.vercel-storage.com",
     `connect-src ${connectSrc.join(" ")}`,
     `frame-src ${frameSrc.join(" ")}`,
