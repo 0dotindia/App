@@ -97,7 +97,7 @@ export default function CommunityVoiceScreen() {
             <Button label="Start" onPress={onCreate} loading={creating} disabled={!title.trim()} style={styles.startButton} />
           </View>
         }
-        ListEmptyComponent={<EmptyState icon="mic-outline" message={error ?? "No live rooms right now."} onRetry={error ? load : undefined} />}
+        ListEmptyComponent={<EmptyState icon="mic-outline" title={error ?? "No live rooms right now."} onRetry={error ? load : undefined} />}
         renderItem={({ item }) => (
           <ListRow
             accessibilityLabel={`Voice room ${item.title}`}

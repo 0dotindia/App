@@ -56,7 +56,7 @@ export default function PrivacySettingsScreen() {
   if (error && !settings) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="lock-closed-outline" message={error} onRetry={load} />
+        <EmptyState icon="lock-closed-outline" title={error} onRetry={load} />
       </View>
     );
   }

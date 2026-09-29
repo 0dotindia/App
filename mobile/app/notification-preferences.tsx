@@ -69,7 +69,7 @@ export default function NotificationPreferencesScreen() {
   if (error) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="cloud-offline-outline" message={error} />
+        <EmptyState icon="cloud-offline-outline" title={error} />
       </View>
     );
   }

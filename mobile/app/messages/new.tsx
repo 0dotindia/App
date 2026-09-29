@@ -110,7 +110,7 @@ export default function NewMessageScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="people-outline"
-              message={error ?? "Follow people on 0dot to start messaging them."}
+              title={error ?? "Follow people on 0dot to start messaging them."}
               onRetry={error ? load : undefined}
             />
           }

@@ -49,7 +49,7 @@ export function BookChapterBody({ username, slug, chapterSlug }: { username: str
   if (!chapter) {
     return (
       <View style={styles.center}>
-        <EmptyState icon="library-outline" message={error ?? "Chapter not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="library-outline" title={error ?? "Chapter not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }

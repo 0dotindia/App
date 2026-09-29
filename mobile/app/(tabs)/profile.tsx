@@ -28,7 +28,7 @@ export default function ProfileTabScreen() {
         {error ? (
           <EmptyState
             icon="person-outline"
-            message="Couldn't load your profile"
+            title="Couldn't load your profile"
             description={error}
             onRetry={refreshMe}
           />

@@ -70,7 +70,7 @@ export default function EventsScreen() {
       keyExtractor={(event) => event.slug}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
       ListEmptyComponent={
-        <EmptyState icon={error ? "cloud-offline-outline" : "calendar-outline"} message={error ?? "No upcoming events."} onRetry={error ? load : undefined} />
+        <EmptyState icon={error ? "cloud-offline-outline" : "calendar-outline"} title={error ?? "No upcoming events."} onRetry={error ? load : undefined} />
       }
       renderItem={({ item }) => (
         <ListRow accessibilityLabel={`View ${item.title}`} onPress={() => router.push({ pathname: "/event/[slug]", params: { slug: item.slug } })}>

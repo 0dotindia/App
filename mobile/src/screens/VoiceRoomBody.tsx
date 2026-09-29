@@ -177,7 +177,7 @@ export function VoiceRoomBody({ slug, roomId }: { slug: string; roomId: string }
   if (!detail) {
     return (
       <View style={styles.center}>
-        <EmptyState icon="mic-off-outline" message={error ?? "Room not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="mic-off-outline" title={error ?? "Room not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }
@@ -186,7 +186,7 @@ export function VoiceRoomBody({ slug, roomId }: { slug: string; roomId: string }
       <View style={styles.center}>
         <EmptyState
           icon="mic-off-outline"
-          message={detail.status === "ended" ? "This room has ended." : "This room hasn't started yet."}
+          title={detail.status === "ended" ? "This room has ended." : "This room hasn't started yet."}
         />
       </View>
     );

@@ -79,7 +79,7 @@ export default function CommunitiesScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
       renderSectionHeader={({ section }) => <Text style={styles.sectionHeading}>{section.title}</Text>}
       ListEmptyComponent={
-        <EmptyState icon={error ? "cloud-offline-outline" : "people-circle-outline"} message={error ?? "No communities yet."} onRetry={error ? load : undefined} />
+        <EmptyState icon={error ? "cloud-offline-outline" : "people-circle-outline"} title={error ?? "No communities yet."} onRetry={error ? load : undefined} />
       }
       renderItem={({ item }) => (
         <ListRow accessibilityLabel={`View ${item.name}`} onPress={() => router.push({ pathname: "/community/[slug]", params: { slug: item.slug } })}>

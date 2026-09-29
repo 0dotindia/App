@@ -161,7 +161,7 @@ export default function PostScreen() {
   if (!post) {
     return (
       <View style={[styles.screen, styles.scrollContent]}>
-        <EmptyState icon="document-text-outline" message={error ?? "Post not found."} onRetry={error ? onRetry : undefined} />
+        <EmptyState icon="document-text-outline" title={error ?? "Post not found."} onRetry={error ? onRetry : undefined} />
       </View>
     );
   }

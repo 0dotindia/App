@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as WebBrowser from "expo-web-browser";
@@ -51,6 +51,19 @@ export default function BusinessScreen() {
     WebBrowser.openBrowserAsync(`${API_BASE_URL}/b/${slug}`).catch(() => {});
   }
 
+  // Every other shareable surface (posts, profiles) has this; businesses
+  // didn't — same Share.share({message,url}) shape PostActionsSheet.tsx's
+  // onShare already establishes, same non-recoverable posture on cancel.
+  async function onShare() {
+    haptics.light();
+    const url = `${API_BASE_URL}/b/${slug}`;
+    try {
+      await Share.share({ message: url, url });
+    } catch {
+      // User-cancelled or platform share-sheet failure — nothing to recover.
+    }
+  }
+
   // Optimistic toggle + rollback-on-failure, same shape as
   // ProfileScreenBody.tsx's onToggleFollow — the one native write this
   // otherwise read-only/browser-handoff screen supports (see this file's
@@ -84,14 +97,23 @@ export default function BusinessScreen() {
   if (!business) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="storefront-outline" message={error ?? "Business not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="storefront-outline" title={error ?? "Business not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }
 
   return (
     <>
-      <Stack.Screen options={{ title: business.name }} />
+      <Stack.Screen
+        options={{
+          title: business.name,
+          headerRight: () => (
+            <Pressable onPress={onShare} accessibilityRole="button" accessibilityLabel="Share business" hitSlop={8} style={styles.headerButton}>
+              <Ionicons name="share-outline" size={20} color={theme.colors.foreground} />
+            </Pressable>
+          ),
+        }}
+      />
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         {business.coverUrl ? (
           <Image source={{ uri: business.coverUrl }} style={styles.cover} contentFit="cover" alt={`${business.name} cover photo`} />
@@ -153,6 +175,7 @@ export default function BusinessScreen() {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.colors.background },
+    headerButton: { minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
     content: { paddingBottom: theme.space[8], gap: theme.space[3] },
     center: { alignItems: "center", justifyContent: "center", padding: theme.space[5], gap: theme.space[2] },
     cover: { width: "100%", height: 120 },

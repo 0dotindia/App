@@ -89,7 +89,7 @@ export default function MarketplaceScreen() {
           data={items}
           keyExtractor={(item) => `${item.category}-${item.id}`}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
-          ListEmptyComponent={<EmptyState icon={error ? "cloud-offline-outline" : "bag-outline"} message={error ?? "Nothing here yet."} />}
+          ListEmptyComponent={<EmptyState icon={error ? "cloud-offline-outline" : "bag-outline"} title={error ?? "Nothing here yet."} />}
           renderItem={({ item }) => (
             <MarketplaceItemCard item={item} styles={styles} onOpen={() => onOpenItem(item.href)} />
           )}

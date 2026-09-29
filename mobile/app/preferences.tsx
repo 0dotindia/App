@@ -98,7 +98,7 @@ export default function PreferencesScreen() {
   if (error && !prefs) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="options-outline" message={error} onRetry={load} />
+        <EmptyState icon="options-outline" title={error} onRetry={load} />
       </View>
     );
   }

@@ -204,7 +204,7 @@ export default function WalletScreen() {
   if (!wallet) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="wallet-outline" message={error ?? "Could not load your wallet."} onRetry={error ? () => load(scope) : undefined} />
+        <EmptyState icon="wallet-outline" title={error ?? "Could not load your wallet."} onRetry={error ? () => load(scope) : undefined} />
       </View>
     );
   }
@@ -298,7 +298,7 @@ export default function WalletScreen() {
             </View>
           </View>
         }
-        ListEmptyComponent={<EmptyState icon="receipt-outline" message={isPersonal ? "No transfers yet." : "No activity yet."} />}
+        ListEmptyComponent={<EmptyState icon="receipt-outline" title={isPersonal ? "No transfers yet." : "No activity yet."} />}
         ItemSeparatorComponent={() => <View style={styles.rowSeparator} />}
         renderItem={({ item }) =>
           "amount" in item ? <HistoryRow entry={item} theme={theme} /> : <WalletActivityRow entry={item} />

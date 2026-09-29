@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, RefreshControl, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../src/auth/AuthContext";
 import { getCommunity, getCommunityPosts, joinCommunity, leaveCommunity, createCommunityPost, likePost, repostPost, toggleBookmark, ApiError } from "../../src/api/client";
@@ -14,6 +15,7 @@ import { SkeletonBlock } from "../../src/components/Skeleton";
 import { animateNextLayout } from "../../src/utils/animateLayout";
 import { haptics } from "../../src/utils/haptics";
 import { useContentMaxWidth } from "../../src/utils/responsive";
+import { API_BASE_URL } from "../../src/config";
 import { useTheme, type Theme } from "../../src/theme";
 import type { CommunityDetail, Post } from "../../src/api/types";
 
@@ -36,9 +38,14 @@ export default function CommunityScreen() {
   const [actionsTarget, setActionsTarget] = useState<Post | null>(null);
   const [draft, setDraft] = useState("");
   const [posting, setPosting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // See index.tsx's feedGenerationRef comment — same race, same fix.
+  const loadGenerationRef = useRef(0);
 
   const load = useCallback(async () => {
     setError(null);
+    loadGenerationRef.current += 1;
     try {
       const detail = await getCommunity(slug);
       animateNextLayout();
@@ -66,15 +73,36 @@ export default function CommunityScreen() {
     }, [load])
   );
 
+  async function onRefresh() {
+    setRefreshing(true);
+    haptics.light();
+    await load();
+    setRefreshing(false);
+  }
+
   async function onEndReached() {
     if (!nextCursor || !community?.canViewContent) return;
+    const myGeneration = loadGenerationRef.current;
     try {
       const result = await getCommunityPosts(slug, nextCursor);
+      if (myGeneration !== loadGenerationRef.current) return;
       animateNextLayout();
       setPosts((prev) => [...prev, ...result.items]);
       setNextCursor(result.nextCursor);
     } catch {
       // Best-effort, same posture as every other list screen's onEndReached.
+    }
+  }
+
+  // Same gap/fix as business/[slug].tsx and event/[slug].tsx's onShare —
+  // every other shareable surface already has this.
+  async function onShare() {
+    haptics.light();
+    const url = `${API_BASE_URL}/c/${slug}`;
+    try {
+      await Share.share({ message: url, url });
+    } catch {
+      // User-cancelled or platform share-sheet failure — nothing to recover.
     }
   }
 
@@ -164,7 +192,7 @@ export default function CommunityScreen() {
   if (!community) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="people-circle-outline" message={error ?? "Community not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="people-circle-outline" title={error ?? "Community not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }
@@ -174,7 +202,16 @@ export default function CommunityScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: community.name }} />
+      <Stack.Screen
+        options={{
+          title: community.name,
+          headerRight: () => (
+            <Pressable onPress={onShare} accessibilityRole="button" accessibilityLabel="Share community" hitSlop={8} style={styles.headerButton}>
+              <Ionicons name="share-outline" size={20} color={theme.colors.foreground} />
+            </Pressable>
+          ),
+        }}
+      />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={90}>
         <View style={[styles.contentWrap, maxWidth ? { maxWidth, alignSelf: "center", width: "100%" } : null]}>
           <FlatList
@@ -183,6 +220,7 @@ export default function CommunityScreen() {
             keyExtractor={(post) => post.id}
             onEndReached={onEndReached}
             onEndReachedThreshold={0.4}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
             ListHeaderComponent={
               <View>
                 {community.coverUrl ? (
@@ -231,7 +269,7 @@ export default function CommunityScreen() {
                   </View>
                 </View>
                 {!community.canViewContent ? (
-                  <EmptyState icon="lock-closed-outline" message="Join this community to see its posts." />
+                  <EmptyState icon="lock-closed-outline" title="Join this community to see its posts." />
                 ) : isActiveMember ? (
                   <View style={styles.composer}>
                     <TextInput
@@ -288,6 +326,7 @@ export default function CommunityScreen() {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     flex: { flex: 1 },
+    headerButton: { minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
     contentWrap: { flex: 1 },
     screen: { flex: 1, backgroundColor: theme.colors.background },
     center: { alignItems: "center", justifyContent: "center" },

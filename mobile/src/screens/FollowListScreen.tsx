@@ -25,9 +25,12 @@ export function FollowListScreen({ username, mode }: { username: string; mode: M
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // See index.tsx's feedGenerationRef comment — same race, same fix.
+  const loadGenerationRef = useRef(0);
 
   const load = useCallback(async () => {
     setError(null);
+    loadGenerationRef.current += 1;
     try {
       const res = await fetchPage(username);
       setItems(res.items);
@@ -61,9 +64,11 @@ export function FollowListScreen({ username, mode }: { username: string; mode: M
 
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
+    const myGeneration = loadGenerationRef.current;
     setLoadingMore(true);
     try {
       const res = await fetchPage(username, nextCursor);
+      if (myGeneration !== loadGenerationRef.current) return;
       setItems((prev) => [...(prev ?? []), ...res.items]);
       setNextCursor(res.nextCursor);
     } catch {
@@ -76,7 +81,7 @@ export function FollowListScreen({ username, mode }: { username: string; mode: M
   if (error && !items) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="people-outline" message={error} onRetry={load} />
+        <EmptyState icon="people-outline" title={error} onRetry={load} />
       </View>
     );
   }
@@ -103,7 +108,7 @@ export function FollowListScreen({ username, mode }: { username: string; mode: M
         ListEmptyComponent={
           <EmptyState
             icon="people-outline"
-            message={mode === "followers" ? "No followers yet." : "Not following anyone yet."}
+            title={mode === "followers" ? "No followers yet." : "Not following anyone yet."}
           />
         }
         ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={theme.colors.accent} /> : null}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { getNotifications, markNotificationsRead, ApiError } from "../../src/api/client";
@@ -38,9 +38,17 @@ export default function NotificationsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [offlineCachedAt, setOfflineCachedAt] = useState<number | null>(null);
+  // Bumped every time loadFirstPage starts (mount, a live `notification`/
+  // `resync` event, foreground, or pull-to-refresh) — onEndReached
+  // snapshots it before fetching the next page and checks it again after
+  // awaiting, so a pagination fetch still in flight when one of those
+  // triggers replaces `items` can't append its now-stale page onto the
+  // fresh list.
+  const notificationsGenerationRef = useRef(0);
 
   const loadFirstPage = useCallback(async () => {
     setError(null);
+    notificationsGenerationRef.current += 1;
     try {
       const { items: rows, nextCursor: cursor } = await getNotifications();
       setItems(rows);
@@ -91,9 +99,11 @@ export default function NotificationsScreen() {
 
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
+    const myGeneration = notificationsGenerationRef.current;
     setLoadingMore(true);
     try {
       const { items: rows, nextCursor: cursor } = await getNotifications(nextCursor);
+      if (myGeneration !== notificationsGenerationRef.current) return;
       animateNextLayout();
       setItems((prev) => [...prev, ...rows]);
       setNextCursor(cursor);
@@ -158,7 +168,7 @@ export default function NotificationsScreen() {
       ListEmptyComponent={
         <EmptyState
           icon={error ? "cloud-offline-outline" : "notifications-outline"}
-          message={error ?? "No notifications yet."}
+          title={error ?? "No notifications yet."}
           onRetry={error ? loadFirstPage : undefined}
         />
       }

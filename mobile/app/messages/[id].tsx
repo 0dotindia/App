@@ -249,7 +249,7 @@ export default function ConversationScreen() {
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               <View style={styles.emptyWrap}>
-                <EmptyState icon="chatbubble-ellipses-outline" message={error ?? "Say hello 👋"} />
+                <EmptyState icon="chatbubble-ellipses-outline" title={error ?? "Say hello 👋"} />
               </View>
             }
             renderItem={({ item }) => {

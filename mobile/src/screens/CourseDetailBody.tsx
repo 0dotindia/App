@@ -74,7 +74,7 @@ export function CourseDetailBody({ username, courseId }: { username: string; cou
   if (!course) {
     return (
       <View style={styles.center}>
-        <EmptyState icon="school-outline" message={error ?? "Course not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="school-outline" title={error ?? "Course not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }

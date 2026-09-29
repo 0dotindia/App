@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -77,6 +77,13 @@ export default function ExploreScreen() {
   const [businesses, setBusinesses] = useState<BusinessSummary[]>([]);
   const [events, setEvents] = useState<EventSearchResult[]>([]);
   const [marketplaceItems, setMarketplaceItems] = useState<MarketplaceItem[]>([]);
+  // Bumped every time the main search effect below starts a fresh search
+  // (new query or tab switch) — onPostsEndReached snapshots it before
+  // firing its own request and checks it again after awaiting, so a
+  // pagination fetch that was still in flight when the query/tab changed
+  // can't append its (now-stale) results onto the newer result set the
+  // main effect already replaced `posts` with.
+  const searchGenerationRef = useRef(0);
 
   // 350ms debounce — long enough that fast typing doesn't fire a request
   // per keystroke, short enough to still feel live.
@@ -95,6 +102,7 @@ export default function ExploreScreen() {
   useEffect(() => {
     if (!debouncedQuery) return;
     let cancelled = false;
+    searchGenerationRef.current += 1;
     (async () => {
       setLoading(true);
       setError(null);
@@ -145,9 +153,14 @@ export default function ExploreScreen() {
 
   async function onPostsEndReached() {
     if (!postsNextCursor || loadingMore || !debouncedQuery) return;
+    const myGeneration = searchGenerationRef.current;
     setLoadingMore(true);
     try {
       const result = await searchPosts(debouncedQuery, postsNextCursor);
+      // The query or tab changed (a newer search started) while this
+      // request was in flight — its results belong to a result set that's
+      // no longer on screen, so drop them instead of appending.
+      if (myGeneration !== searchGenerationRef.current) return;
       animateNextLayout();
       setPosts((prev) => [...prev, ...result.items]);
       setPostsNextCursor(result.nextCursor);
@@ -222,7 +235,7 @@ export default function ExploreScreen() {
           data={users}
           keyExtractor={(user) => user.username}
           renderItem={({ item }) => <UserRow user={item} onPress={() => router.push(`/${item.username}`)} />}
-          ListEmptyComponent={<EmptyState icon="people-outline" message={error ?? `No people found for "${debouncedQuery}".`} />}
+          ListEmptyComponent={<EmptyState icon="people-outline" title={error ?? `No people found for "${debouncedQuery}".`} />}
         />
       ) : tab === "posts" ? (
         <FlatList
@@ -232,7 +245,7 @@ export default function ExploreScreen() {
           keyExtractor={(post) => post.id}
           onEndReached={onPostsEndReached}
           onEndReachedThreshold={0.4}
-          ListEmptyComponent={<EmptyState icon="document-text-outline" message={error ?? `No posts found for "${debouncedQuery}".`} />}
+          ListEmptyComponent={<EmptyState icon="document-text-outline" title={error ?? `No posts found for "${debouncedQuery}".`} />}
           ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={theme.colors.accent} /> : null}
           renderItem={({ item }) => (
             <PostRow
@@ -252,7 +265,7 @@ export default function ExploreScreen() {
           contentContainerStyle={tabBarInset}
           data={communities}
           keyExtractor={(item) => item.slug}
-          ListEmptyComponent={<EmptyState icon="people-circle-outline" message={error ?? `No communities found for "${debouncedQuery}".`} />}
+          ListEmptyComponent={<EmptyState icon="people-circle-outline" title={error ?? `No communities found for "${debouncedQuery}".`} />}
           renderItem={({ item }) => (
             <ListRow accessibilityLabel={`View ${item.name}`} onPress={() => router.push({ pathname: "/community/[slug]", params: { slug: item.slug } })}>
               <Avatar uri={item.avatarUrl} name={item.name} size={44} />
@@ -274,7 +287,7 @@ export default function ExploreScreen() {
           contentContainerStyle={tabBarInset}
           data={businesses}
           keyExtractor={(item) => item.slug}
-          ListEmptyComponent={<EmptyState icon="storefront-outline" message={error ?? `No businesses found for "${debouncedQuery}".`} />}
+          ListEmptyComponent={<EmptyState icon="storefront-outline" title={error ?? `No businesses found for "${debouncedQuery}".`} />}
           renderItem={({ item }) => (
             <ListRow accessibilityLabel={`View ${item.name}`} onPress={() => router.push({ pathname: "/business/[slug]", params: { slug: item.slug } })}>
               <Avatar uri={item.logoUrl} name={item.name} size={44} />
@@ -297,7 +310,7 @@ export default function ExploreScreen() {
           contentContainerStyle={tabBarInset}
           data={events}
           keyExtractor={(item) => item.slug}
-          ListEmptyComponent={<EmptyState icon="calendar-outline" message={error ?? `No events found for "${debouncedQuery}".`} />}
+          ListEmptyComponent={<EmptyState icon="calendar-outline" title={error ?? `No events found for "${debouncedQuery}".`} />}
           renderItem={({ item }) => (
             <ListRow accessibilityLabel={`View ${item.title}`} onPress={() => router.push({ pathname: "/event/[slug]", params: { slug: item.slug } })}>
               <View style={[styles.iconFallback, { backgroundColor: theme.colors.accentSoft }]}>
@@ -319,7 +332,7 @@ export default function ExploreScreen() {
           contentContainerStyle={tabBarInset}
           data={marketplaceItems}
           keyExtractor={(item) => `${item.category}-${item.id}`}
-          ListEmptyComponent={<EmptyState icon="bag-outline" message={error ?? `No marketplace results found for "${debouncedQuery}".`} />}
+          ListEmptyComponent={<EmptyState icon="bag-outline" title={error ?? `No marketplace results found for "${debouncedQuery}".`} />}
           renderItem={({ item }) => (
             <ListRow accessibilityLabel={`Open ${item.title}`} onPress={() => onOpenMarketplaceItem(item.href)}>
               <View style={styles.body}>

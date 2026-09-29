@@ -1230,6 +1230,260 @@ is what surfaced both bugs) and M3/M10 (`sendConversationMessage`,
 sending both build on the same conversation/message infra M3 established
 and M10 made live).
 
+### M16 — Bounded dependency upgrade, bug fixes, and small polish (built)
+
+Requested directly by the user: bring the mobile app to "world class pro
+level" — new functions, bug fixes, UI polish — in one open-ended pass. An
+audit before touching anything found the app in unusually good shape
+already (clean `tsc`, 89/89 Jest, zero TODO/console.log/ts-ignore, and the
+M1–M15 history above), so this pass stayed narrow and concrete rather than
+inventing work: bounded dependency bump, a real audit of the
+realtime/auth/offline layers, and a short list of small, verified fixes —
+not a redesign, and not the web-parity feature gaps (Jobs, Map, Podcast,
+Newsletter, Forms, Fundraisers, Affiliate, Organizations, Business
+sub-pages) identified during scoping, which need new `/api/v1` endpoints
+first and are deliberately deferred to their own pass (none of today's
+`/api/v1/*` routes cover them — confirmed by reading `src/app/api/v1`
+directly, not assumed).
+
+**Dependency upgrade.** `npx expo install --check` found every native
+module 1-3 patch versions behind its SDK-57-expected version (`expo` itself
+57.0.19 → 57.0.25, `expo-router`, `expo-notifications`,
+`expo-image-picker`, etc.) — `npx expo install --fix` (two passes; the
+first pass's `expo` bump changed what the second pass expected) brought all
+of them in line. Left `npm outdated`'s major-version bumps alone
+(`@livekit/react-native` 2→3, `react-native` 0.86→0.87,
+`@react-native-async-storage/async-storage` 2→3,
+`react-native-gesture-handler` 2→3) — no simulator/device is attached here
+either (same caveat M15 recorded), so a native-build-breaking major bump
+can't be verified; that's a separate decision for whoever has a device to
+test on. `npm audit` — 0 vulnerabilities before and after.
+
+**Bug: invisible video-area overlay in dark mode
+(`LivestreamViewerBody.tsx`).** `videoArea`'s backdrop is a hardcoded
+`backgroundColor: "#000"` (independent of theme, by design — a video frame
+of unknown content). Its loading spinner, connection-error text, and the
+`RemoteVideo` placeholder spinner were colored with `theme.colors.background`
+instead — which is `#0a0a0a` in dark mode, i.e. near-black text/spinner on
+a black backdrop. Light mode's `#f5f4f1` happened to read fine, which is
+presumably how this shipped unnoticed. Fixed with a `VIDEO_AREA_FOREGROUND
+= "#ffffff"` constant fixed regardless of theme — same reasoning M15's D4
+gave for the profile header's fixed-dark glass buttons: content floating
+over a backdrop of unknown/fixed brightness needs a foreground that doesn't
+follow the theme. Grepped the rest of the app for the same hardcoded-black-
+backdrop-plus-themed-foreground pattern (`"#000"` / `"#000000"` /
+`backgroundColor: "black"`) — this was the only instance.
+
+**Cleanup: `EmptyState`'s deprecated `message` prop.** M-phases before this
+one had already migrated the prop to `title` and left `message` as a
+`@deprecated` alias "kept so existing call sites keep working" — but every
+remaining call site (53 across 39 files, both `message={expr}` and
+`message="literal"` forms, verified individually against the nearest
+enclosing JSX tag so a same-named `message` prop on an unrelated component,
+e.g. `LivestreamViewerBody.tsx`'s `ChatRow`, wasn't touched) still used the
+old name. Migrated all 53, then deleted the dead prop and its `heading =
+title ?? message` fallback from the component itself — a straight
+follow-through on a migration that was left half-done, not a new pattern.
+
+**Small additions.** Pull-to-refresh (`RefreshControl`, matching
+`businesses.tsx`'s existing `refreshing`/`onRefresh` pattern exactly) was
+present on 17 of the app's 21 `FlatList`s; the 4 missing were checked
+individually — 2 are inverted realtime chat lists where pull-to-refresh
+doesn't apply (`messages/[id].tsx`, `CommunityChatBody.tsx`) plus
+`LivestreamViewerBody.tsx`'s chat list (same reason) and a one-time
+recipient-picker list (`messages/new.tsx`, low value), leaving
+`blocked-users.tsx` and `community/[slug].tsx` as real gaps — both fixed.
+`ImageLightbox` (the full-screen avatar/cover viewer) had only an implicit
+tap-anywhere-to-dismiss with no visible affordance; added an explicit close
+button using the same fixed-dark-glass-chip treatment as
+`ProfileScreenBody`'s `GlassIconButton` (`BlurView tint="dark"` on iOS, a
+solid dark disc on Android — the same "photo of unknown brightness" reasoning).
+
+**Bug: hard crash opening any voice room or livestream in the web
+preview.** Surfaced by the user navigating `expo start --web` directly
+(browser automation wasn't connected — see below) and pasting the console
+error: `(0 , _reactNativeWebDistIndex.requireNativeComponent) is not a
+function`, thrown from `VoiceRoomBody.tsx`'s top-level `import {
+registerGlobals, AudioSession } from "@livekit/react-native"`.
+`@livekit/react-native` wraps native WebRTC modules and calls
+`requireNativeComponent` (a native-only RN API `react-native-web` doesn't
+implement) during its own module init — so merely *importing* the package
+crashes on web, before any of this app's code runs; a `Platform.OS` runtime
+guard around `registerGlobals()` can't help since the crash happens at
+import time, not call time. Fixed the idiomatic Expo/Metro way: added
+`VoiceRoomBody.web.tsx` and `LivestreamViewerBody.web.tsx` alongside the
+real files in `src/screens/` — Metro's platform-extension resolution picks
+these over the `.tsx` originals only when bundling for web, rendering a
+plain "not available in the web preview, try a device" `EmptyState`
+instead; iOS/Android continue resolving the real LiveKit-backed screens
+unchanged, since neither route file (`app/community/[slug]/voice/
+[roomId].tsx`, `app/live/[livestreamId].tsx`) needed to change — they just
+import `VoiceRoomBody`/`LivestreamViewerBody` by bare module path, which is
+exactly what platform resolution is for. Confirmed by the web bundle
+shrinking 4.9MB → 3.8MB (LiveKit + its WebRTC dependency tree no longer
+pulled in for web at all).
+
+**Bug: pagination races against full-list refresh, app-wide.** Requested
+by the user to finish the pagination/infinite-scroll audit this pass's plan
+had called out but left undone. Found the same real bug shape in 9 of the
+11 screens combining cursor pagination (`onEndReached`) with an independent
+full-reload trigger (focus, pull-to-refresh, app-foreground, or a realtime
+`resync`/message event): the reload replaces the list (`setItems(fresh)`)
+unconditionally, with no check for a pagination fetch still in flight — so
+scroll down to trigger pagination, then (re-focus the tab / pull to
+refresh / background-and-return / get a new push notification) before it
+resolves, and the stale page lands on top of the fresh list, appending
+content that doesn't belong after it (duplicates, an incoherent cursor
+chain, or in the two chat screens below, silently discarding history the
+user had scrolled up to read). Confirmed by code inspection against the
+concrete input above, not a theoretical worry: `(tabs)/index.tsx` (the home
+feed) and `(tabs)/notifications.tsx` refresh on every tab focus and app
+foreground, both very ordinary things to do mid-scroll.
+
+Two different fixes, matched to what each screen already needed:
+
+- **List screens** (`(tabs)/index.tsx`, `(tabs)/explore.tsx`,
+  `(tabs)/notifications.tsx`, `bookmarks.tsx`, `blocked-users.tsx`,
+  `community/[slug].tsx`, `wallet/transactions.tsx`,
+  `FollowListScreen.tsx`, `ProfileScreenBody.tsx`) — a generation counter
+  (`ProfileScreenBody.tsx` already had one, `loadRequestId`, built for
+  concurrent `load()` calls racing each other but never checked from
+  pagination; every other screen got the same pattern under a new
+  `..GenerationRef`): bumped when the full-reload starts, snapshotted by
+  the pagination call before it fetches, checked again after — a mismatch
+  means a newer reload superseded it, so the stale page is dropped instead
+  of appended.
+- **Chat screens** (`CommunityChatBody.tsx`'s `resync` handler,
+  `LivestreamViewerBody.tsx`'s per-SSE-signal `loadChat()`) — a generation
+  counter doesn't fit here (dropping the "reload" isn't right; new messages
+  did arrive), so both now merge instead of replace, the same pattern
+  `messages/[id].tsx`'s `load()` already used correctly for this exact
+  shape: keep every message already in state, add only what's unseen (dedup
+  by id), and only adopt the reload's own cursor if pagination hadn't
+  started yet (a non-null cursor means the pagination call owns cursor
+  advancement from there on). `LivestreamViewerBody.tsx` was the worse of
+  the two — its `loadChat()` re-runs on *every* incoming chat SSE signal,
+  not just reconnect, so during an active stream this was reproducible on
+  essentially the first scroll-up, not a rare timing window.
+- `messages/[id].tsx` was audited and found already correct — it already
+  merges and already guards its cursor the same way, apparently the
+  original template the chat-screen fix above was matched against.
+
+Verification: `cd mobile && npx tsc --noEmit` clean; `cd mobile && npx
+jest` — 89/89 (including `CommunityChatBody.test.tsx`, whose fixture
+already exercises `load()`); root `npx eslint mobile/src mobile/app` —
+clean; `cd mobile && npx expo export --platform web` bundles successfully.
+
+**Small addition: share button on business/event/community detail
+screens.** Posts, profiles, and the wallet referral screen all already had
+a share affordance (`Share.share({message,url})`, RN's built-in API);
+`business/[slug].tsx`, `event/[slug].tsx`, and `community/[slug].tsx` had
+none — a real, checkable gap (grepped for `Share`/`share` across each file,
+confirmed absent), not a guess. Added a header `share-outline` button to
+all three, same `Share.share({ message: url, url })` call
+`PostActionsSheet.tsx`'s `onShare` already establishes, pointed at each
+screen's own public URL (`/b/[slug]`, `/e/[slug]`, `/c/[slug]` —
+`API_BASE_URL` was already imported and used for the "open full profile"/
+"get tickets" web hand-off in two of the three; added it to
+`community/[slug].tsx`, which didn't need it before).
+
+**Visual QA — partially done, then structurally blocked.** The Chrome
+extension connected mid-session, so this pass is the first that could
+actually drive `expo start --web`. What that surfaced:
+
+- **Bug (found and fixed): a raw technical error shown to users.**
+  `AuthContext.tsx`'s session-restore catch (line ~104) already
+  anticipated `SecureStore`/`LocalAuthentication` throwing on `expo start
+  --web` (its own comment names that exact case) and degrades gracefully —
+  but it did `setError(err.message)`, surfacing the raw underlying message
+  ("ExpoSecureStore.default.getValueWithKeyAsync is not a function")
+  verbatim in the sign-in screen's error banner instead of a friendly one.
+  Changed to a fixed message unconditionally for this catch specifically —
+  unlike `signIn()`/`unlock()` elsewhere in the same file, whose caught
+  errors are `pkceAuth.ts`'s own deliberately-worded user-facing strings,
+  whatever lands here is an arbitrary native-module failure that was never
+  meant to be shown as-is.
+- **Confirmed structurally unreachable, not a bug to fix here:
+  authenticated screens on web.** `app/_layout.tsx` renders `SignInScreen`
+  outright for `status === "signedOut"`, regardless of URL, so nothing past
+  it is reachable without completing real sign-in. Investigating why (the
+  user asked to sign in with their live 0dot.in account) found two
+  independent structural blockers, not one bug: (1) `expo-secure-store`'s
+  web module is `export default {}` — a permanently empty stub, so even a
+  successful OAuth round-trip could never persist a session on web
+  (`saveTokens()` would fail the same way `loadTokens()` did above); (2)
+  `config.ts`'s `REDIRECT_URI` resolves to a native app-scheme
+  (`zerodot-android://oauth/callback`) on web since `Platform.OS` there
+  isn't `"ios"`, which no desktop browser can complete, and no separate
+  "desktop" OAuth client/redirect is registered for this dev-preview build
+  target (the type comment on `FirstPartyPlatform` says as much: "desktop"
+  belongs to a different app, the real PWA, never this native binary).
+  Confirmed this is dev-preview-tool behavior, not a regression — didn't
+  attempt to fix it, since a real fix means registering a new production
+  OAuth client server-side plus a less-secure web storage fallback, real
+  infrastructure work needing its own sign-off, not mobile client polish.
+  Presented this to the user directly rather than either attempting a live
+  sign-in against production (an outward-facing action) or quietly building
+  the workaround unasked; they chose to skip authenticated visual QA for
+  this pass.
+- Onboarding and the sign-in screen itself (the only screens reachable
+  without auth) were visually checked in dark mode and read clean — logo,
+  spacing, the CTA button, and (post-fix) the error banner all rendered as
+  intended. Light mode and a phone-width viewport were not verified — the
+  sandboxed browser's window didn't honor an explicit resize to phone
+  dimensions, and there was no in-toolset way to force
+  `prefers-color-scheme: light` without deeper page scripting.
+- Console warnings noted, not acted on: `expo-notifications` push
+  listening is expected to no-op on web (upstream limitation, not this
+  app's bug); `"shadow*" style props are deprecated, use "boxShadow"` is a
+  react-native-web-only cosmetic note — the native iOS/Android build uses
+  the correct, non-deprecated props, so chasing this would only benefit a
+  dev-only preview surface.
+
+**Net effect: the M15 glass redesign (tab bar, BottomSheet, Skeleton
+shimmer, profile header, wallet, feed) remains visually unverified.**
+That was true after M15 shipped and is still true now — the blocker moved
+from "no simulator" to "no simulator, and the web preview can't
+authenticate by design" — same real outstanding work, now with a clearer
+account of exactly why it can't be shortcut through the web preview
+instead. A native device/simulator pass is the only way to close this.
+
+**Bug (found and fixed), from finishing the pre-auth visual pass
+anyway.** The sandboxed browser's window wouldn't honor a resize to phone
+width (tried twice, gave up rather than fight it further — see "avoid
+rabbit holes" posture), so this stayed at desktop/tablet width throughout.
+That width forced a real find: `SignInScreen.tsx` — the very first screen
+every user sees — was the one screen in the app that never adopted
+`useContentMaxWidth()` (`src/utils/responsive.ts`), the hook that exists
+specifically to stop "a phone column stretched full-bleed across a much
+wider screen" (its own doc comment) on this app's tablet-supported build
+(`app.json`'s `supportsTablet: true`). Concretely: its `perks` list uses
+`alignSelf: "stretch"` against an unconstrained container, so at tablet
+width it fills the full screen and visually disconnects from the centered
+hero above it — not a web-preview artifact, a real tablet layout bug, and
+the most-hit screen in the app for it to be on. Fixed by wrapping the
+screen's content in the same `maxWidth`/`alignSelf: "center"` pattern
+every other screen already uses (see `app/businesses.tsx` for the
+reference shape). Checked the two sibling pre-auth screens for the same
+defect: `LockScreen.tsx` has no stretching element (its buttons are
+intrinsically sized, not `alignSelf: "stretch"`) — nothing to fix;
+`OnboardingScreen.tsx`'s footer button does span full-width at this width
+too, but that's an ordinary, common full-width-CTA pattern (not the
+reading-column anti-pattern the hook targets), and its slide content is
+already centered independently by the paging carousel's own layout — left
+as-is rather than force a fix that isn't actually broken.
+
+Verification: `cd mobile && npx tsc --noEmit` clean; `cd mobile && npx
+jest` — 89/89; root `npx eslint mobile/src/screens/SignInScreen.tsx` —
+clean; visually re-confirmed in the browser post-fix (perks list now
+grouped with the rest of the centered column, matching every other
+tablet-width screen).
+
+Verification: `cd mobile && npx tsc --noEmit` clean; `cd mobile && npx
+jest` — 89/89 across 18 suites; `cd mobile && npx expo export --platform
+web` bundles successfully; root `npx eslint mobile/src mobile/app` — clean,
+no new findings.
+
 ## 7. Dependency vulnerability (image-size DoS) — fixed 2026-08-21
 
 Previously recorded here as an accepted risk: `npm audit` in `mobile/`
