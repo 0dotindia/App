@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as WebBrowser from "expo-web-browser";
 import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { getBusiness, ApiError } from "../../src/api/client";
+import { getBusiness, followBusiness, unfollowBusiness, ApiError } from "../../src/api/client";
 import { Avatar } from "../../src/components/Avatar";
 import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
@@ -51,6 +51,27 @@ export default function BusinessScreen() {
     WebBrowser.openBrowserAsync(`${API_BASE_URL}/b/${slug}`).catch(() => {});
   }
 
+  // Optimistic toggle + rollback-on-failure, same shape as
+  // ProfileScreenBody.tsx's onToggleFollow — the one native write this
+  // otherwise read-only/browser-handoff screen supports (see this file's
+  // top comment).
+  async function onToggleFollow() {
+    if (!business) return;
+    haptics.light();
+    const wasFollowing = business.isFollowing;
+    setBusiness({ ...business, isFollowing: !wasFollowing, followerCount: business.followerCount + (wasFollowing ? -1 : 1) });
+    try {
+      if (wasFollowing) {
+        await unfollowBusiness(slug);
+      } else {
+        await followBusiness(slug);
+      }
+    } catch {
+      haptics.warning();
+      setBusiness((prev) => (prev ? { ...prev, isFollowing: wasFollowing, followerCount: business.followerCount } : prev));
+    }
+  }
+
   if (loading) {
     return (
       <View style={[styles.screen, styles.center, { gap: theme.space[3] }]}>
@@ -92,6 +113,11 @@ export default function BusinessScreen() {
               </Text>
             </View>
           ) : null}
+          {business.followerCount > 0 ? (
+            <Text style={styles.ratingText}>
+              {business.followerCount} {business.followerCount === 1 ? "follower" : "followers"}
+            </Text>
+          ) : null}
         </View>
 
         {business.description ? <Text style={styles.description}>{business.description}</Text> : null}
@@ -109,7 +135,16 @@ export default function BusinessScreen() {
           </View>
         ) : null}
 
-        <Button label="View full profile" onPress={onOpenFullProfile} style={styles.button} />
+        <View style={styles.buttonRow}>
+          <Button
+            label={business.isFollowing ? "Following" : "Follow"}
+            variant={business.isFollowing ? "secondary" : "primary"}
+            onPress={onToggleFollow}
+            accessibilityLabel={business.isFollowing ? "Unfollow" : "Follow"}
+            style={styles.buttonFlex}
+          />
+          <Button label="View full profile" onPress={onOpenFullProfile} variant="secondary" style={styles.buttonFlex} />
+        </View>
       </ScrollView>
     </>
   );
@@ -129,6 +164,7 @@ function createStyles(theme: Theme) {
     description: { color: theme.colors.foreground, fontSize: theme.text.base, lineHeight: theme.text.base * 1.4, paddingHorizontal: theme.space[5] },
     infoRow: { flexDirection: "row", alignItems: "center", gap: theme.space[2], paddingHorizontal: theme.space[5] },
     infoText: { color: theme.colors.foreground, fontSize: theme.text.sm },
-    button: { marginHorizontal: theme.space[5], marginTop: theme.space[3] },
+    buttonRow: { flexDirection: "row", gap: theme.space[2], marginHorizontal: theme.space[5], marginTop: theme.space[3] },
+    buttonFlex: { flex: 1 },
   });
 }
