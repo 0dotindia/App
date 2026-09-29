@@ -54,6 +54,7 @@ import type {
   BusinessWalletResponse,
   WalletTransactionsResponse,
   WalletPurchaseTarget,
+  MarketplaceItemDetail,
   WalletPurchaseResponse,
   ReferralInfo,
   PrivacySettings,
@@ -572,6 +573,16 @@ export function getWallet(): Promise<WalletResponse> {
 
 export function transferCoins(args: { username: string; coinAmount: number }): Promise<{ ok: true }> {
   return authorizedRequest("/api/v1/wallet/transfer", { method: "POST", body: JSON.stringify(args) });
+}
+
+export function getMarketplaceItem(category: string, id: string): Promise<MarketplaceItemDetail> {
+  return authorizedRequest<MarketplaceItemDetail>(`/api/v1/marketplace/${encodeURIComponent(category)}/${encodeURIComponent(id)}`);
+}
+
+// Returns a short-lived signed /api/downloads/[token] path — the token is
+// the credential, so the caller opens `${API_BASE_URL}${url}` directly.
+export function getMarketplaceDownloadUrl(category: string, id: string): Promise<{ url: string }> {
+  return authorizedRequest(`/api/v1/marketplace/${encodeURIComponent(category)}/${encodeURIComponent(id)}/download`, { method: "POST" });
 }
 
 export function getBusinessWallet(businessId: string): Promise<BusinessWalletResponse> {

@@ -9,10 +9,28 @@ import { settleCoinPurchase } from "@/lib/wallet/charge";
 import { coinActionKey } from "@/lib/wallet/limits";
 import { createTipRow } from "@/app/actions/tips";
 import { notifyTipReceived } from "@/lib/notifications";
+import {
+  purchaseListingForUser,
+  purchaseCourseForUser,
+  purchaseProductForUser,
+  type PurchaseOutcome,
+} from "@/lib/purchases";
+
+// Item purchases share lib/purchases.ts with the web actions, so ownership
+// checks, per-feature rate limits, and ledger keys are identical on both
+// surfaces. Each is buy-once-per-buyer, which is what makes a retried
+// request safe without the client's idempotencyKey: the second call finds
+// the existing grant and gets a 409 instead of a second charge.
+const ITEM_PURCHASES: Record<string, (userId: string, id: string) => Promise<PurchaseOutcome>> = {
+  marketplace_listing: purchaseListingForUser,
+  course: purchaseCourseForUser,
+  digital_product: purchaseProductForUser,
+};
 
 // addendum-coin-wallet-v2.md §13.4 — pay for a feature with coins from the
 // API, wrapping the same cores the web actions use (closes the auth-shape
-// gap, #9). body: { target: "premium" | "tip", ...params, idempotencyKey }.
+// gap, #9). body: { target: "premium" | "tip" | "marketplace_listing" |
+// "course" | "digital_product", ...params, idempotencyKey }.
 export async function POST(request: Request) {
   const ctx = await resolveApiRequest(request);
   if ("error" in ctx) return apiError(ctx.error, ctx.status);
@@ -35,6 +53,15 @@ export async function POST(request: Request) {
   const idempotencyKey =
     typeof body?.idempotencyKey === "string" && body.idempotencyKey.trim() ? body.idempotencyKey.trim() : randomUUID();
   const headers = { "X-RateLimit-Limit": String(limit), "X-RateLimit-Remaining": String(remaining) };
+
+  const purchaseItem = Object.hasOwn(ITEM_PURCHASES, target) ? ITEM_PURCHASES[target] : null;
+  if (purchaseItem) {
+    const id = typeof body?.id === "string" ? body.id.trim() : "";
+    if (!id) return apiError("An item id is required.", 400);
+    const result = await purchaseItem(ctx.userId, id);
+    if ("error" in result) return apiError(result.error, result.alreadyOwned ? 409 : 400);
+    return Response.json({ ok: true, target, free: result.free }, { headers });
+  }
 
   if (target === "premium") {
     const billingInterval = body?.billingInterval === "yearly" ? "yearly" : "monthly";

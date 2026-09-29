@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { formatCoins } from "@/lib/coins";
 
 // phase-9 spec §6.1: a query-time union across Course/DigitalProduct/
 // Offering(freelance)/MarketplaceListing, not a master table — each
@@ -36,9 +37,11 @@ export const BROWSE_CATEGORY_LABELS: Record<MarketplaceBrowseCategory, string> =
   app: "App",
 };
 
-function priceLabel(price: number | null, currency: string | null): string {
+// Every price on 0dot is a coin price (addendum-wallet-only-payments.md
+// §4.1); `currency` is a legacy column, not a display unit.
+function priceLabel(price: number | null): string {
   if (price === null) return "Free";
-  return `${(currency ?? "usd").toUpperCase()} ${price.toFixed(2)}`;
+  return formatCoins(price);
 }
 
 // spec §6.2: courses rank by sales volume (accessGrants issued), the closest
@@ -66,7 +69,7 @@ export async function fetchCourses(q: string): Promise<MarketplaceBrowseItem[]> 
         href: `/${handle}/courses/${course.id}`,
         title: course.title,
         subtitle: `by ${handle}`,
-        priceLabel: course.requiredTierId ? "Included with membership" : priceLabel(course.price, course.currency),
+        priceLabel: course.requiredTierId ? "Included with membership" : priceLabel(course.price),
         createdAt: course.createdAt,
       },
     ];
@@ -96,7 +99,7 @@ export async function fetchDigitalProducts(q: string): Promise<MarketplaceBrowse
         href: `/${handle}`,
         title: product.title,
         subtitle: `by ${handle}`,
-        priceLabel: priceLabel(product.price, product.currency),
+        priceLabel: priceLabel(product.price),
         createdAt: product.createdAt,
       },
     ];
@@ -134,7 +137,7 @@ export async function fetchFreelanceServices(q: string): Promise<MarketplaceBrow
         href: `/${handle}/services`,
         title: offering.name,
         subtitle: `by ${handle}`,
-        priceLabel: offering.price !== null ? priceLabel(offering.price, offering.currency) : "Contact for pricing",
+        priceLabel: offering.price !== null ? priceLabel(offering.price) : "Contact for pricing",
         createdAt: offering.createdAt,
       },
     ];
@@ -174,7 +177,7 @@ export async function fetchListings(
       href: `/m/${listing.id}`,
       title: listing.title,
       subtitle: `by ${sellerName}`,
-      priceLabel: priceLabel(listing.price, listing.currency),
+      priceLabel: priceLabel(listing.price),
       createdAt: listing.createdAt,
     };
   });

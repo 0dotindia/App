@@ -8,10 +8,11 @@ const CATEGORIES = new Set<MarketplaceBrowseCategory>(["course", "digital_produc
 // DigitalProduct/Offering(freelance)/MarketplaceListing wholesale — the
 // same lib /m and the web search "Marketplace" tab already share, so
 // mobile gets the real six-category marketplace, not just the raw
-// MarketplaceListing table's three (theme/template/app). Purchase/detail
-// stays a browser hand-off via each item's own `href` (Phase 15 §6: native
-// purchase flows are flagged, not a routine implementation task) — this
-// route is browse-only.
+// MarketplaceListing table's three (theme/template/app). This route is
+// browse-only: listing/digital-product detail is GET ./[category]/[id],
+// course detail is the profile courses route, and buying any of the three
+// is POST /api/v1/wallet/purchases. Freelance services stay a browser
+// hand-off via their `href`.
 export async function GET(request: Request) {
   const ctx = await resolveApiRequest(request);
   if ("error" in ctx) return apiError(ctx.error, ctx.status);
