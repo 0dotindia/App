@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { getBusinessMember, parseBusinessHours } from "@/lib/businesses";
 import { businessCategoryLabel } from "@/lib/business-categories";
-import { leaveBusinessTeam } from "@/app/actions/businesses";
+import { leaveBusinessTeam, followBusiness, unfollowBusiness } from "@/app/actions/businesses";
 import { getPrimaryLiveDomain } from "@/lib/custom-domains";
 import { SITE_DESCRIPTION } from "@/lib/site-metadata";
 import { Logo } from "@/components/Logo";
@@ -94,6 +94,15 @@ export default async function BusinessPage({ params }: { params: Promise<{ slug:
   const isStaff = membership?.role === "owner" || membership?.role === "admin";
   const isOwner = membership?.role === "owner";
 
+  const isFollowing = currentUser
+    ? Boolean(
+        await db.businessFollow.findUnique({
+          where: { followerId_businessId: { followerId: currentUser.id, businessId: business.id } },
+          select: { businessId: true },
+        })
+      )
+    : false;
+
   const publicTeam = await db.businessMember.findMany({
     where: { businessId: business.id, isPublic: true },
     orderBy: { joinedAt: "asc" },
@@ -147,6 +156,11 @@ export default async function BusinessPage({ params }: { params: Promise<{ slug:
                 ★ {business.averageRating.toFixed(1)} ({business.reviewCount})
               </Link>
             )}
+            {business.followerCount > 0 && (
+              <span>
+                {business.followerCount} follower{business.followerCount === 1 ? "" : "s"}
+              </span>
+            )}
             {/* Realtime addendum Phase E — pings for every viewer; shows the
                 live count only to the owner. */}
             <BusinessViewerCount businessSlug={business.slug} isOwner={isOwner} />
@@ -174,14 +188,28 @@ export default async function BusinessPage({ params }: { params: Promise<{ slug:
           didn't divide the item count evenly (live-site QA pass,
           2026-08-25). Messaging a business is also arguably a more
           prominent action than "Documents"/"Catalog", not an equal peer. */}
-      <details style={{ marginTop: "0.75rem" }}>
-        <summary className="button" style={{ display: "inline-block", listStyle: "none" }}>
-          Message
-        </summary>
-        <div style={{ marginTop: "0.5rem" }}>
-          <BusinessContactForm businessId={business.id} isLoggedIn={Boolean(currentUser)} />
-        </div>
-      </details>
+      <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
+        {currentUser && (
+          <form action={isFollowing ? unfollowBusiness : followBusiness}>
+            <input type="hidden" name="businessId" value={business.id} />
+            <button
+              type="submit"
+              className={`button${isFollowing ? " buttonSecondary" : ""}`}
+              aria-pressed={isFollowing}
+            >
+              {isFollowing ? "Following" : "Follow"}
+            </button>
+          </form>
+        )}
+        <details>
+          <summary className="button" style={{ display: "inline-block", listStyle: "none" }}>
+            Message
+          </summary>
+          <div style={{ marginTop: "0.5rem" }}>
+            <BusinessContactForm businessId={business.id} isLoggedIn={Boolean(currentUser)} />
+          </div>
+        </details>
+      </div>
 
       {/* prefetch={false}: 7-8 sibling Links here all mount at once, same
           burst-prefetch-triggers-503 mechanism the persistent chrome nav

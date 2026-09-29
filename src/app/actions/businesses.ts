@@ -10,6 +10,7 @@ import { saveUploadedImage } from "@/lib/uploads";
 import { validateBusinessSlugFormat } from "@/lib/reserved-business-slugs";
 import { BUSINESS_CATEGORY_KEYS } from "@/lib/business-categories";
 import { createTrustSafetyCase } from "@/lib/trust-safety";
+import { notifyBusinessFollow } from "@/lib/notifications";
 import {
   getBusinessMember,
   isBusinessOwner,
@@ -22,6 +23,13 @@ const SIZE_RANGE_VALUES = new Set(["solo", "2_10", "11_50", "51_200", "201_1000"
 // admin can be invited/removed by staff; owner is only ever set at creation
 // or via transferBusinessOwnership — never a directly assignable role.
 const ASSIGNABLE_ROLES = new Set(["admin", "editor", "member"]);
+
+// Same budget/shape as checkFollowRateLimit in actions/follow.ts — a
+// distinct rate-limit key so following users and following businesses don't
+// share one bucket.
+function checkFollowBusinessRateLimit(userId: string): boolean {
+  return checkRateLimit(`business:follow:user:${userId}`, { max: 30, windowMs: 5 * 60 * 1000 });
+}
 
 function checkCreateBusinessRateLimit(userId: string): boolean {
   return checkRateLimit(`business:create:user:${userId}`, { max: 5, windowMs: 60 * 60 * 1000 });
@@ -390,4 +398,58 @@ export async function leaveBusinessTeam(formData: FormData): Promise<void> {
 
   const business = await db.business.findUnique({ where: { id: businessId }, select: { slug: true } });
   if (business) redirect(`/b/${business.slug}`);
+}
+
+// Business-follow feature: same "idempotent, quiet no-op on repeat" shape
+// as followUser (src/app/actions/follow.ts), minus the private-account
+// pending-request branch — a Business has no privacy setting to gate on,
+// so every follow is immediately counted, no approval step.
+export async function followBusiness(formData: FormData): Promise<void> {
+  const user = await requireVerifiedUser();
+  const businessId = String(formData.get("businessId") ?? "");
+  if (!businessId) return;
+  if (!checkFollowBusinessRateLimit(user.id)) return;
+
+  const existing = await db.businessFollow.findUnique({
+    where: { followerId_businessId: { followerId: user.id, businessId } },
+  });
+  if (existing) return; // idempotent — double-follow is a no-op, same as followUser
+
+  const business = await db.business.findUnique({ where: { id: businessId }, select: { id: true, slug: true } });
+  if (!business) return;
+
+  await db.$transaction([
+    db.businessFollow.create({ data: { followerId: user.id, businessId: business.id } }),
+    db.business.update({ where: { id: business.id }, data: { followerCount: { increment: 1 } } }),
+  ]);
+
+  const staff = await db.businessMember.findMany({
+    where: { businessId: business.id, role: { in: ["owner", "admin"] } },
+    select: { userId: true },
+  });
+  await Promise.all(
+    staff.map((m) => notifyBusinessFollow({ recipientId: m.userId, actorId: user.id, businessSlug: business.slug }))
+  );
+
+  revalidatePath(`/b/${business.slug}`);
+}
+
+export async function unfollowBusiness(formData: FormData): Promise<void> {
+  const user = await requireVerifiedUser();
+  const businessId = String(formData.get("businessId") ?? "");
+  if (!businessId) return;
+
+  const existing = await db.businessFollow.findUnique({
+    where: { followerId_businessId: { followerId: user.id, businessId } },
+  });
+  if (!existing) return;
+
+  const business = await db.business.findUnique({ where: { id: businessId }, select: { slug: true } });
+
+  await db.$transaction([
+    db.businessFollow.delete({ where: { followerId_businessId: { followerId: user.id, businessId } } }),
+    db.business.update({ where: { id: businessId }, data: { followerCount: { decrement: 1 } } }),
+  ]);
+
+  if (business) revalidatePath(`/b/${business.slug}`);
 }

@@ -36,6 +36,7 @@ type NotificationInput = {
     | "community_update"
     | "community_invite"
     | "business_review"
+    | "business_follow"
     | "job_application"
     | "application_status"
     | "appointment_request"
@@ -482,6 +483,26 @@ export function notifyBusinessReview(args: {
   });
 }
 
+// Business-follow feature: fires to owner/admin team members when a user
+// follows their business — same fan-out shape as notifyBusinessReview
+// (staff, not a single recipient) and the same subjectId-is-the-slug
+// convention. Not dedupable (DEDUPABLE_TYPES): a repeat follow after an
+// unfollow is a genuinely new event, and followBusiness itself is already
+// idempotent against duplicate rows, so this can't double-fire from one click.
+export function notifyBusinessFollow(args: {
+  recipientId: string;
+  actorId: string;
+  businessSlug: string;
+}): Promise<void> {
+  return createNotification({
+    recipientId: args.recipientId,
+    actorId: args.actorId,
+    type: "business_follow",
+    subjectType: "business",
+    subjectId: args.businessSlug,
+  });
+}
+
 // phase-16 spec §4: fires when a newly posted Job matches a saved
 // JobAlert — no human actor (system-generated match), same
 // bypass-createNotification posture as notifyWebhookDisabled above.
@@ -869,6 +890,8 @@ export function getNotificationVerb(type: string, subjectType?: string, subjectI
       return "invited you to join a community";
     case "business_review":
       return "left a review on your business";
+    case "business_follow":
+      return "started following your business";
     case "business_contact":
       return "sent your business a message";
     case "job_application":
@@ -991,6 +1014,7 @@ export function getNotificationHref(
     case "new_follower":
     case "follow_request":
     case "follow_accepted":
+    case "business_follow":
     case "tip_received":
     case "new_subscriber":
     case "affiliate_conversion":

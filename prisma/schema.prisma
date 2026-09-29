@@ -132,6 +132,7 @@ model User {
 
   createdBusinesses   Business[]
   businessMemberships BusinessMember[]
+  businessFollows     BusinessFollow[]
   sentContactMessages ContactMessage[]
   reviews             Review[]
   reviewResponses     ReviewResponse[]
@@ -482,6 +483,22 @@ model Follow {
   @@id([followerId, followeeId])
   @@index([followeeId, createdAt]) // "who follows this user" list, most-recent-first
   @@index([followerId, createdAt]) // "who this user follows" list, most-recent-first
+}
+
+// Business-follow feature: a user following a Business page — same shape as
+// Follow above, minus the private/pending-request distinction (a Business
+// has no privacy setting to gate on, so every row here is unconditionally
+// "active"; there's no status column).
+model BusinessFollow {
+  followerId String
+  follower   User     @relation(fields: [followerId], references: [id], onDelete: Cascade)
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@id([followerId, businessId])
+  @@index([businessId, createdAt]) // "who follows this business" list, most-recent-first
+  @@index([followerId, createdAt]) // "businesses this user follows" list, most-recent-first
 }
 
 // Minimal block primitive, pulled forward from Phase 12 Trust & Safety
@@ -1318,7 +1335,13 @@ model Business {
   averageRating Float @default(0)
   reviewCount   Int   @default(0)
 
+  // Business-follow feature: denormalized off BusinessFollow, incremented/
+  // decremented transactionally alongside the follow row write, same
+  // pattern as Profile.followerCount/reviewCount above.
+  followerCount Int @default(0)
+
   members           BusinessMember[]
+  followers         BusinessFollow[]
   locations         BusinessLocation[]
   contactInfo       ContactInfo?
   posts             Post[]
