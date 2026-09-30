@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { validateUsernameFormat } from "@/lib/reserved-usernames";
 import { isValidThemePreset, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/theme-presets";
-import { saveUploadedImage } from "@/lib/uploads";
+import { saveUploadedImage, deleteOldBlob } from "@/lib/uploads";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { requireOwnProfile } from "@/lib/auth-guards";
 import { isSafeUrl } from "@/lib/url-safety";
@@ -141,6 +141,9 @@ export async function updateProfile(
     where: { userId: user.id },
     data,
   });
+
+  if (data.avatarUrl) await deleteOldBlob(user.profile!.avatarUrl);
+  if (data.coverUrl) await deleteOldBlob(user.profile!.coverUrl);
 
   revalidateProfilePaths(user.username!.handle);
   redirect(`/s/${user.username!.handle}`);

@@ -6,7 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { saveUploadedImage } from "@/lib/uploads";
+import { saveUploadedImage, deleteOldBlob } from "@/lib/uploads";
 import { validateCommunitySlugFormat } from "@/lib/reserved-community-slugs";
 import { getCommunityMember, isCommunityOwner, isCommunityStaff, logModAction, logMembershipEvent } from "@/lib/communities";
 import { evictBannedUserFromVoiceRooms } from "@/app/actions/voice-rooms";
@@ -190,6 +190,9 @@ export async function updateCommunity(
   }
 
   await db.community.update({ where: { id: communityId }, data });
+
+  if (data.avatarUrl) await deleteOldBlob(community.avatarUrl);
+  if (data.coverUrl) await deleteOldBlob(community.coverUrl);
 
   revalidatePath(`/c/${community.slug}`);
   revalidatePath(`/c/${community.slug}/manage`);

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireOwnProfile, requireVerifiedUser } from "@/lib/auth-guards";
-import { saveUploadedImage, saveDocumentFile } from "@/lib/uploads";
+import { saveUploadedImage, saveDocumentFile, deleteOldBlob } from "@/lib/uploads";
 import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { validateFileSlugFormat } from "@/lib/reserved-file-slugs";
@@ -147,6 +147,12 @@ export async function updatePublishedFile(_prevState: ActionState, formData: For
     data: { ...fields, coverImageUrl, fileUrl, fileKey, fileMimeType, fileSizeBytes },
   });
 
+  // fileKey (protected storage, visibility !== "public") has its own
+  // storage system, not @vercel/blob — only fileUrl/coverImageUrl are
+  // ever put() through uploads.ts, so only those need del() here.
+  if (coverImageUrl !== existing.coverImageUrl) await deleteOldBlob(existing.coverImageUrl);
+  if (fileUrl !== existing.fileUrl) await deleteOldBlob(existing.fileUrl);
+
   if (user.username) revalidatePath(`/${user.username.handle}/files`);
   revalidatePath(`/${user.username?.handle}/files/${existing.slug}`);
   return undefined;
@@ -166,6 +172,8 @@ export async function deletePublishedFile(formData: FormData): Promise<void> {
     db.reaction.deleteMany({ where: { subjectType: "published_file", subjectId: fileId } }),
     db.publishedFile.delete({ where: { id: fileId } }),
   ]);
+  await deleteOldBlob(file.coverImageUrl);
+  await deleteOldBlob(file.fileUrl);
 
   if (user.username) revalidatePath(`/${user.username.handle}/files`);
 }

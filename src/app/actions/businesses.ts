@@ -6,7 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { saveUploadedImage } from "@/lib/uploads";
+import { saveUploadedImage, deleteOldBlob } from "@/lib/uploads";
 import { validateBusinessSlugFormat } from "@/lib/reserved-business-slugs";
 import { BUSINESS_CATEGORY_KEYS } from "@/lib/business-categories";
 import { createTrustSafetyCase } from "@/lib/trust-safety";
@@ -232,6 +232,9 @@ export async function updateBusiness(
       contactInfo: { upsert: { create: { email, phone, website }, update: { email, phone, website } } },
     },
   });
+
+  if (data.logoUrl) await deleteOldBlob(business.logoUrl);
+  if (data.coverUrl) await deleteOldBlob(business.coverUrl);
 
   revalidatePath(`/b/${business.slug}`);
   revalidatePath(`/b/${business.slug}/manage`);

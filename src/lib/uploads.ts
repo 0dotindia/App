@@ -1,8 +1,9 @@
 import "server-only";
 import { randomBytes } from "crypto";
-import { put } from "@vercel/blob";
+import { put, del } from "@vercel/blob";
 import { fileTypeFromBuffer } from "file-type";
 import { createFileAsset, type FileAssetContentType } from "@/lib/ai-accessibility";
+import { logger } from "@/lib/logger";
 
 const ALLOWED_IMAGE_EXTENSIONS: Record<string, string> = {
   "image/png": "png",
@@ -261,5 +262,22 @@ export async function verifyRemoteImageBytes(rawUrl: string): Promise<string | n
     return ALLOWED_IMAGE_EXTENSIONS[detected.mime] ?? null;
   } catch {
     return null;
+  }
+}
+
+// Best-effort cleanup for a "replace" call site (avatar, cover, resume PDF,
+// business document, ...): del() was never called anywhere in this
+// codebase, so every replace/remove left the old blob orphaned in storage
+// forever. Vercel Blob's del() accepts a full URL, not just a pathname, so
+// this needs no schema change — the caller just reads the *old* URL before
+// overwriting the DB row and passes it here afterward. Wrapped so a del()
+// hiccup never fails the request that's replacing it — a stray orphaned
+// blob is far better than a failed save because cleanup errored.
+export async function deleteOldBlob(url: string | null | undefined): Promise<void> {
+  if (!url) return;
+  try {
+    await del(url);
+  } catch (err) {
+    logger.warn("uploads: couldn't delete replaced blob", err, { url });
   }
 }

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { canManageCatalog } from "@/lib/businesses";
-import { saveMessageAttachment } from "@/lib/uploads";
+import { saveMessageAttachment, deleteOldBlob } from "@/lib/uploads";
 import type { ActionState } from "@/app/actions/auth";
 
 const VISIBILITY_VALUES = new Set(["public", "team_only"]);
@@ -54,5 +54,6 @@ export async function deleteDocument(formData: FormData): Promise<void> {
   if (!(await canManageCatalog(document.business.id, user.id))) return;
 
   await db.businessDocument.delete({ where: { id: documentId } });
+  await deleteOldBlob(document.fileUrl);
   revalidatePath(`/b/${document.business.slug}/documents`);
 }

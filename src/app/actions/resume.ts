@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireOwnProfile } from "@/lib/auth-guards";
-import { saveDocumentFile } from "@/lib/uploads";
+import { saveDocumentFile, deleteOldBlob } from "@/lib/uploads";
 import type { ActionState } from "@/app/actions/auth";
 
 function parseDate(raw: FormDataEntryValue | null): Date | null {
@@ -206,7 +206,9 @@ export async function uploadResumePdf(_prevState: ActionState, formData: FormDat
   const result = await saveDocumentFile(file, { uploadedById: user.id });
   if ("error" in result) return { error: result.error };
 
+  const previous = await db.profile.findUnique({ where: { userId: user.id }, select: { resumePdfUrl: true } });
   await db.profile.update({ where: { userId: user.id }, data: { resumePdfUrl: result.url } });
+  await deleteOldBlob(previous?.resumePdfUrl);
 
   if (user.username) revalidateResumePaths(user.username.handle);
   return undefined;
@@ -214,6 +216,8 @@ export async function uploadResumePdf(_prevState: ActionState, formData: FormDat
 
 export async function removeResumePdf(): Promise<void> {
   const user = await requireOwnProfile();
+  const previous = await db.profile.findUnique({ where: { userId: user.id }, select: { resumePdfUrl: true } });
   await db.profile.update({ where: { userId: user.id }, data: { resumePdfUrl: null } });
+  await deleteOldBlob(previous?.resumePdfUrl);
   if (user.username) revalidateResumePaths(user.username.handle);
 }
