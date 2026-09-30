@@ -129,6 +129,7 @@ model User {
   organizationMemberships  OrganizationMember[]
   ssoIdentities            SSOIdentity[]
   organizationAuditActions OrganizationAuditLog[]
+  platformAuditActions     PlatformAuditLog[]
 
   createdBusinesses   Business[]
   businessMemberships BusinessMember[]
@@ -3740,6 +3741,24 @@ model OrganizationAuditLog {
   createdAt      DateTime     @default(now())
 
   @@index([organizationId, createdAt])
+}
+
+// FIX_PLAN P1.4: platform-wide admin audit log. Admin actions on
+// /admin/** left scattered, non-uniform traces before this (a logger.warn
+// here, an overwritten grantedBy column there) with no single queryable
+// log — mirrors OrganizationAuditLog's shape minus the org scope.
+model PlatformAuditLog {
+  id           String   @id @default(uuid())
+  actorId      String?
+  actor        User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action       String
+  targetType   String?
+  targetId     String?
+  metadataJson String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action, createdAt])
 }
 
 // phase-15 spec §4.1: push as a third delivery channel on the existing

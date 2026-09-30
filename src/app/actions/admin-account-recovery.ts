@@ -5,6 +5,7 @@ import { findUserForAdmin } from "@/lib/admin-user-lookup";
 import { issuePasswordRecoveryCodes } from "@/lib/password-recovery";
 import { isInternalSystemAccountEmail } from "@/lib/first-party-apps";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { logPlatformAudit } from "@/lib/platform-audit";
 import { logger } from "@/lib/logger";
 
 export type AdminRecoveryState = { error?: string; handle?: string; codes?: string[] } | undefined;
@@ -46,5 +47,6 @@ export async function issueRecoveryCodesForUser(
 
   const codes = await issuePasswordRecoveryCodes(target.id);
   logger.warn("admin issued password recovery codes", undefined, { adminUserId: admin.id, targetUserId: target.id });
+  await logPlatformAudit({ actorId: admin.id, action: "account_recovery_codes_issued", targetType: "user", targetId: target.id });
   return { handle: target.username?.handle ?? target.id, codes };
 }

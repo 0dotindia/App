@@ -6,6 +6,7 @@ import { requirePlatformRole } from "@/lib/auth-guards";
 import { issuePromoGrant, adminAdjust } from "@/lib/wallet/grants";
 import { coinActionKey } from "@/lib/wallet/limits";
 import { refundToWallet } from "@/lib/wallet/charge";
+import { logPlatformAudit } from "@/lib/platform-audit";
 import type { ActionState } from "@/app/actions/auth";
 
 // addendum-coin-wallet-v2.md §13.3 — the admin grant tool. Caps + required
@@ -54,6 +55,14 @@ export async function grantCoinsAction(_prevState: ActionState, formData: FormDa
 
   if ("error" in result) return { error: result.error };
 
+  await logPlatformAudit({
+    actorId: admin.id,
+    action: mode === "admin_adjustment" ? "admin_coin_adjustment" : "admin_coin_promo_grant",
+    targetType: targetKind,
+    targetId: targetUserId ?? targetBusinessId,
+    metadata: { coins, reason },
+  });
+
   revalidatePath("/admin/wallet");
   return { success: true };
 }
@@ -77,6 +86,14 @@ export async function refundPaymentAction(_prevState: ActionState, formData: For
 
   const result = await refundToWallet({ paymentTransactionId: pt.id, amountUsd: pt.amount, reason, actorUserId: admin.id });
   if ("error" in result) return { error: result.error };
+
+  await logPlatformAudit({
+    actorId: admin.id,
+    action: "payment_refunded",
+    targetType: "payment_transaction",
+    targetId: pt.id,
+    metadata: { reason, amountUsd: pt.amount },
+  });
 
   revalidatePath("/admin/payments/refunds");
   return { success: true };

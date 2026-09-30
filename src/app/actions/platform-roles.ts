@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { requirePlatformRole } from "@/lib/auth-guards";
 import { ROLE_VALUES } from "@/lib/platform-roles";
 import { findUserForAdmin } from "@/lib/admin-user-lookup";
+import { logPlatformAudit } from "@/lib/platform-audit";
 import type { ActionState } from "@/app/actions/auth";
 
 // True if this change would leave zero super_admins — the target currently
@@ -44,6 +45,13 @@ export async function grantPlatformRole(_prevState: ActionState, formData: FormD
     create: { userId: targetUser.id, role: roleRaw, grantedBy: user.id },
     update: { role: roleRaw, grantedBy: user.id, grantedAt: new Date() },
   });
+  await logPlatformAudit({
+    actorId: user.id,
+    action: "platform_role_granted",
+    targetType: "user",
+    targetId: targetUser.id,
+    metadata: { role: roleRaw },
+  });
 
   revalidatePath("/admin/platform-roles");
   return {};
@@ -61,13 +69,23 @@ export async function updatePlatformRole(formData: FormData): Promise<void> {
   // Guard against demoting the last super_admin, mirroring the "can't
   // remove the last owner" guard businesses.ts/organizations.ts already
   // use for their own top role.
-  await db.$transaction(async (tx) => {
-    if (await wouldOrphanSuperAdmins(tx, targetUserId, roleRaw === "super_admin")) return;
+  const changed = await db.$transaction(async (tx) => {
+    if (await wouldOrphanSuperAdmins(tx, targetUserId, roleRaw === "super_admin")) return false;
     await tx.platformRole.updateMany({
       where: { userId: targetUserId },
       data: { role: roleRaw, grantedBy: user.id, grantedAt: new Date() },
     });
+    return true;
   });
+  if (changed) {
+    await logPlatformAudit({
+      actorId: user.id,
+      action: "platform_role_updated",
+      targetType: "user",
+      targetId: targetUserId,
+      metadata: { role: roleRaw },
+    });
+  }
 
   revalidatePath("/admin/platform-roles");
 }
@@ -75,14 +93,18 @@ export async function updatePlatformRole(formData: FormData): Promise<void> {
 // super_admin-only. Revokes a platform role entirely. Same last-super_admin
 // guard as updatePlatformRole.
 export async function revokePlatformRole(formData: FormData): Promise<void> {
-  await requirePlatformRole("super_admin");
+  const { user } = await requirePlatformRole("super_admin");
   const targetUserId = String(formData.get("userId") ?? "");
   if (!targetUserId) return;
 
-  await db.$transaction(async (tx) => {
-    if (await wouldOrphanSuperAdmins(tx, targetUserId, false)) return;
+  const changed = await db.$transaction(async (tx) => {
+    if (await wouldOrphanSuperAdmins(tx, targetUserId, false)) return false;
     await tx.platformRole.deleteMany({ where: { userId: targetUserId } });
+    return true;
   });
+  if (changed) {
+    await logPlatformAudit({ actorId: user.id, action: "platform_role_revoked", targetType: "user", targetId: targetUserId });
+  }
 
   revalidatePath("/admin/platform-roles");
 }
