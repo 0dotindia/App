@@ -24,7 +24,7 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
       BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-      BACKUP_DB_LABEL: "0dot-app-in"
+      BACKUP_DB_LABEL: "dot-0-database"
     steps:
       - uses: actions/checkout@v5
 
