@@ -89,6 +89,24 @@ export default async function FollowingPage({
       )
     : new Set<string>();
 
+  // FIX_PLAN P3 #3: same pending-follow-request state the main profile page
+  // already shows ("Requested") — this list only ever showed "Follow"
+  // forever after a pending request otherwise.
+  const pendingSet = currentUser
+    ? new Set(
+        (
+          await db.follow.findMany({
+            where: {
+              followerId: currentUser.id,
+              followeeId: { in: listedUsers.map((u) => u.id) },
+              status: "pending",
+            },
+            select: { followeeId: true },
+          })
+        ).map((f) => f.followeeId)
+      )
+    : new Set<string>();
+
   return (
     <div className="profileCard">
       <h1 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>
@@ -107,6 +125,7 @@ export default async function FollowingPage({
             displayName={u.profile?.displayName ?? "Unknown"}
             avatarUrl={u.profile?.avatarUrl ?? null}
             isFollowing={followingSet.has(u.id)}
+            isFollowRequestPending={pendingSet.has(u.id)}
             isSelf={currentUser?.id === u.id}
             showFollowButton={Boolean(currentUser)}
           />

@@ -67,6 +67,31 @@ const NOTIFICATION_ICONS: Record<(typeof PUSH_NOTIFICATION_TYPES)[number], Lucid
   appointment_request: CalendarClock,
 };
 
+// FIX_PLAN P3 #7: getNotificationVerb ("liked your post") is written for
+// the live notification feed ("Jane liked your post"), not a settings row
+// — "Push notifications for: liked your post" reads as a sentence fragment
+// missing its subject. Short label, this display only; the feed's own
+// copy is untouched.
+const SETTINGS_LABEL: Partial<Record<(typeof PUSH_NOTIFICATION_TYPES)[number], string>> = {
+  like: "Likes",
+  comment: "Comments and replies",
+  mention: "Mentions",
+  new_follower: "New followers",
+  message: "Messages",
+  community_update: "Community updates",
+  tip_received: "Tips received",
+  coins_received: "Coins received",
+  new_subscriber: "New subscribers",
+  livestream_started: "Livestreams starting",
+  event_cancelled: "Event cancellations",
+  ticket_purchased: "Ticket purchases",
+  appointment_request: "Appointment requests",
+};
+
+function settingsLabel(type: string): string {
+  return SETTINGS_LABEL[type as (typeof PUSH_NOTIFICATION_TYPES)[number]] ?? getNotificationVerb(type) ?? type;
+}
+
 // FIX_PLAN P2: EMAIL_NOTIFICATION_TYPES is currently empty, but the render
 // loop below force-cast its (plain `string`) element type to
 // PUSH_NOTIFICATION_TYPES's literal union to index NOTIFICATION_ICONS — the
@@ -106,13 +131,13 @@ export default async function NotificationSettingsPage({ params }: { params: Pro
           <SettingsRow
             key={type}
             icon={notificationIcon(type)}
-            label={getNotificationVerb(type) || type}
+            label={settingsLabel(type)}
             trailing={
               <DeliveryToggle
                 notificationType={type}
                 channel="push"
                 enabled={pushPrefByType.get(type) ?? true}
-                label={getNotificationVerb(type) || type}
+                label={settingsLabel(type)}
               />
             }
           />
@@ -129,13 +154,13 @@ export default async function NotificationSettingsPage({ params }: { params: Pro
               <SettingsRow
                 key={type}
                 icon={notificationIcon(type)}
-                label={getNotificationVerb(type) || type}
+                label={settingsLabel(type)}
                 trailing={
                   <DeliveryToggle
                     notificationType={type}
                     channel="email"
                     enabled={emailPrefByType.get(type) ?? true}
-                    label={getNotificationVerb(type) || type}
+                    label={settingsLabel(type)}
                   />
                 }
               />

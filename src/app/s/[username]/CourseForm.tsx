@@ -30,7 +30,7 @@ export function CourseForm({
       </div>
       <div className="fieldRow">
         <div className="field">
-          <label htmlFor={`coursePrice-${idSuffix}`}>Price (coins) (optional)</label>
+          <label htmlFor={`coursePrice-${idSuffix}`}>Price (USD) (optional)</label>
           <input id={`coursePrice-${idSuffix}`} name="price" type="number" min="0.01" step="0.01" defaultValue={course?.price ?? undefined} />
         </div>
       </div>

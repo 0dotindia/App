@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 import { ensureTrendingScoresFresh, getTrendingPosts, parseTrendingCursor } from "@/lib/trending";
 import { getVotedPollOptionIds } from "@/lib/feed-query";
 import { FeedList } from "@/app/feed/FeedList";
+import { PageHeader } from "@/components/PageHeader";
 
 export const metadata: Metadata = { title: "Trending" };
 
@@ -49,6 +50,13 @@ export default async function TrendingPage({
       nextCursor={nextCursor}
       basePath="/trending"
       showComposer={false}
+      header={
+        <PageHeader
+          eyebrow="Trending"
+          title="What's picking up right now"
+          description="Velocity-ranked, not just popular — posts gaining traction fast, whether or not you follow the author."
+        />
+      }
     />
   );
 }

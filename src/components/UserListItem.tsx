@@ -13,6 +13,7 @@ export function UserListItem({
   displayName,
   avatarUrl,
   isFollowing,
+  isFollowRequestPending = false,
   isSelf,
   showFollowButton,
   showHandle = true,
@@ -24,6 +25,14 @@ export function UserListItem({
   displayName: string;
   avatarUrl: string | null;
   isFollowing: boolean;
+  // FIX_PLAN P3 #3: only the main profile page showed "Requested" for a
+  // pending private-account follow — every other list (followers/following,
+  // the contextual rail, blocked users) kept showing "Follow" forever after
+  // a pending request, a silent no-op on repeat click. Defaults false so
+  // every existing caller keeps working without passing it; ownership of
+  // computing the actual pending set is per-caller (see followers/page.tsx
+  // etc.) since it needs its own query alongside isFollowing's.
+  isFollowRequestPending?: boolean;
   isSelf: boolean;
   showFollowButton: boolean;
   // Compact rail contexts (ContextualRail's "Suggested for you") drop the
@@ -99,15 +108,16 @@ export function UserListItem({
       </Link>
       {trailing ??
         (showFollowButton && !isSelf && (
-          <form action={isFollowing ? unfollowUser : followUser}>
+          <form action={isFollowing || isFollowRequestPending ? unfollowUser : followUser}>
             <input type="hidden" name="followeeId" value={userId} />
             <button
               type="submit"
-              className={`button${isFollowing ? " buttonSecondary" : ""}${compact ? " buttonSmall" : ""}`}
-              aria-pressed={isFollowing}
+              className={`button${isFollowing || isFollowRequestPending ? " buttonSecondary" : ""}${compact ? " buttonSmall" : ""}`}
+              aria-pressed={isFollowing || isFollowRequestPending}
+              title={isFollowRequestPending ? "Cancel follow request" : undefined}
               style={compact ? { flexShrink: 0 } : { padding: "0.4rem 0.85rem", fontSize: "0.85rem", flexShrink: 0 }}
             >
-              {isFollowing ? "Following" : "Follow"}
+              {isFollowing ? "Following" : isFollowRequestPending ? "Requested" : "Follow"}
             </button>
           </form>
         ))}
