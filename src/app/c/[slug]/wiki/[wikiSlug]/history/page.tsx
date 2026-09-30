@@ -6,6 +6,7 @@ import { getCommunityMember } from "@/lib/communities";
 import { isGatedFromCommunityContent } from "@/lib/organizations";
 import { getWikiRevisions } from "@/lib/wiki";
 import { parseCursor } from "@/lib/pagination";
+import { RelativeTime } from "@/components/RelativeTime";
 
 // spec §10.1: revision history storage is the requirement; a diff view is
 // explicitly deferred as polish, not a data-model concern — this lists
@@ -61,7 +62,7 @@ export default async function WikiPageHistory({
           return (
             <div key={revision.id} className="profileLinkItem" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.35rem" }}>
               <span className="mutedText" style={{ fontSize: "0.8rem" }}>
-                {editorName} · {revision.createdAt.toLocaleString()}
+                {editorName} · <RelativeTime date={revision.createdAt} withTime />
                 {isCurrent && " · current"}
               </span>
               <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{revision.body}</p>

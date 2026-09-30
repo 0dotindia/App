@@ -4,6 +4,7 @@ import { BadgeCheck } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { PresenceDot } from "@/components/PresenceDot";
 import { ConversationRowMenu } from "@/components/ConversationRowMenuLazy";
+import { ClientFormattedDate } from "@/components/ClientFormattedDate";
 
 type ConversationListItemProps = {
   conversationId: string;
@@ -88,7 +89,7 @@ export function ConversationListItem({
           </span>
         </span>
         <span className="mutedText" style={{ fontSize: "0.8rem", flexShrink: 0 }}>
-          {timestamp.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+          <ClientFormattedDate date={timestamp} options={{ month: "short", day: "numeric" }} />
         </span>
       </Link>
       {showMenu && (

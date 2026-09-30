@@ -3,6 +3,7 @@ import { requireVerifiedUser } from "@/lib/auth-guards";
 import { fileAppealAction } from "@/app/actions/trust-safety";
 import { DmcaCounterNoticeForm } from "./DmcaCounterNoticeForm";
 import { EmptyState } from "@/components/EmptyState";
+import { RelativeTime } from "@/components/RelativeTime";
 
 const CASE_TYPE_LABELS: Record<string, string> = {
   content_report: "Content removed following a report",
@@ -68,7 +69,7 @@ export default async function TrustSafetyPage() {
                 <div>
                   <strong>{CASE_TYPE_LABELS[c.caseType] ?? c.caseType}</strong>{" "}
                   <span className="mutedText" style={{ fontSize: "0.85rem" }}>
-                    {c.resolvedAt?.toLocaleDateString()}
+                    {c.resolvedAt && <RelativeTime date={c.resolvedAt} />}
                     {c.resolutionNotes ? ` · ${c.resolutionNotes}` : ""}
                   </span>
                 </div>

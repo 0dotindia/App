@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/session";
 import { publishForm, closeForm, type FormFieldDef } from "@/app/actions/forms";
 import { EmptyState } from "@/components/EmptyState";
 import { EditFormDescriptionForm } from "../EditFormDescriptionForm";
+import { RelativeTime } from "@/components/RelativeTime";
 
 // Best-effort only, same posture as the courses/developer generateMetadata
 // siblings — real access control stays in the page component below, this
@@ -80,7 +81,7 @@ export default async function FormDetailPage({ params }: { params: Promise<{ use
             const answers = JSON.parse(response.answersJson) as Record<string, string>;
             return (
               <div key={response.id} style={{ border: "1px solid var(--border)", borderRadius: "8px", padding: "0.6rem 0.8rem" }}>
-                <p className="mutedText" style={{ margin: 0, fontSize: "var(--text-xs)" }}>{response.submittedAt.toLocaleString()}</p>
+                <p className="mutedText" style={{ margin: 0, fontSize: "var(--text-xs)" }}><RelativeTime date={response.submittedAt} withTime /></p>
                 {fields.map((field) => (
                   <p key={field.label} style={{ margin: "0.2rem 0 0" }}>
                     <strong>{field.label}</strong>

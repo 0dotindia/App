@@ -28,6 +28,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { LikeButton } from "@/components/LikeButton";
 import { PollBlock } from "@/components/PollBlock";
 import { Avatar } from "@/components/Avatar";
+import { RelativeTime } from "@/components/RelativeTime";
 
 // Redesign Phase 1b: the avatar column for a post row. Resolves to the
 // business logo + business route when the post is attributed to a business
@@ -68,18 +69,6 @@ function PostAvatar({ post, size }: { post: BasicPost; size: number }) {
 // disclosure one level deeper (same nested-progressive-disclosure posture
 // as the reply toggle itself).
 const INLINE_REPLY_PREVIEW_COUNT = 3;
-
-function relativeTime(date: Date): string {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d`;
-  return date.toLocaleDateString();
-}
 
 type AuthorInfo = {
   profile: { displayName: string; avatarUrl: string | null } | null;
@@ -188,7 +177,7 @@ function AuthorLine({
           <BadgeCheck size={14} aria-hidden="true" />
         </Link>{" "}
         <span className="mutedText">
-          {relativeTime(createdAt)}
+          <RelativeTime date={createdAt} />
           {community && (
             <>
               {" "}
@@ -223,7 +212,7 @@ function AuthorLine({
         </Link>
       )}{" "}
       <span className="mutedText">
-        {relativeTime(createdAt)}
+        <RelativeTime date={createdAt} />
         {community && (
           <>
             {" "}

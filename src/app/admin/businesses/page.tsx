@@ -6,6 +6,7 @@ import { businessCategoryLabel } from "@/lib/business-categories";
 import { approveBusinessAction, rejectBusinessAction } from "@/app/actions/business-approval";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { EmptyState } from "@/components/EmptyState";
+import { RelativeTime } from "@/components/RelativeTime";
 
 // admin+ platform role — same bar as /admin/trust-safety/appeals, since
 // approving puts a business live/searchable and rejecting deletes it
@@ -59,7 +60,7 @@ export default async function AdminBusinessesPage() {
                     </span>
                   </div>
                   <span className="mutedText" style={{ fontSize: "0.8rem" }}>
-                    {creatorLabel} · {business.createdAt.toLocaleDateString()}
+                    {creatorLabel} · <RelativeTime date={business.createdAt} />
                   </span>
                 </div>
 

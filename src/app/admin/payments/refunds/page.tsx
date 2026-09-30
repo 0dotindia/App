@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { EmptyState } from "@/components/EmptyState";
 import { RefundPaymentForm } from "./RefundPaymentForm";
 import { formatCoins } from "@/lib/coins";
+import { RelativeTime } from "@/components/RelativeTime";
 
 // addendum-wallet-only-payments.md §3.6: refund a coin payment back to the
 // payer's wallet. Lists recent coin payments, optionally narrowed to one
@@ -56,7 +57,7 @@ export default async function AdminRefundsPage({ searchParams }: { searchParams:
                 <strong>{formatCoins(pt.amount)}</strong> · {pt.kind} · {pt.payer?.username ? `@${pt.payer.username.handle}` : "deleted user"} → {payee}
               </span>
               <span className="mutedText" style={{ fontSize: "0.8rem" }}>
-                {pt.createdAt.toLocaleString()} · {pt.status}
+                <RelativeTime date={pt.createdAt} withTime /> · {pt.status}
               </span>
               {pt.status === "succeeded" && pt.payerId && <RefundPaymentForm paymentTransactionId={pt.id} amount={pt.amount} />}
             </div>

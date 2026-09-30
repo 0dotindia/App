@@ -10,6 +10,7 @@ import { walletActivityLabel } from "@/lib/wallet/activity-labels";
 import { EmptyState } from "@/components/EmptyState";
 import { BusinessManageNav } from "../BusinessManageNav";
 import { BusinessSubscribeWithCoinsForm } from "./BusinessWalletForms";
+import { RelativeTime } from "@/components/RelativeTime";
 
 export const metadata: Metadata = { title: "Wallet" };
 
@@ -63,7 +64,7 @@ export default async function BusinessWalletPage({ params }: { params: Promise<{
       {renewal ? (
         <p className="mutedText" style={{ fontSize: "0.9rem" }}>
           {RENEWAL_PREFIX[renewal.kind]}
-          {renewal.date.toLocaleDateString()}.
+          <RelativeTime date={renewal.date} />.
         </p>
       ) : canSpend ? (
         <BusinessSubscribeWithCoinsForm businessId={business.id} prices={PLAN_PRICES.business_subscription} />

@@ -6,6 +6,7 @@ import { getBusinessMember } from "@/lib/businesses";
 import { getAvailableSlots } from "@/lib/appointments";
 import { requestAppointment, cancelMyAppointment } from "@/app/actions/appointments";
 import { RequestSlotButton } from "@/components/RequestSlotButton";
+import { RelativeTime } from "@/components/RelativeTime";
 
 const STATUS_LABEL: Record<string, string> = {
   requested: "Requested",
@@ -103,13 +104,6 @@ export default async function AppointmentsPage({
                       key={slot.startsAt.toISOString()}
                       offeringId={selectedOffering.id}
                       startsAt={slot.startsAt.toISOString()}
-                      label={slot.startsAt.toLocaleString(undefined, {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
                       formAction={requestAppointment}
                     />
                   ))}
@@ -132,7 +126,7 @@ export default async function AppointmentsPage({
                     {STATUS_LABEL[a.status] ?? a.status}
                   </span>
                 </div>
-                <span className="mutedText" style={{ fontSize: "0.85rem" }}>{a.startsAt.toLocaleString()}</span>
+                <span className="mutedText" style={{ fontSize: "0.85rem" }}><RelativeTime date={a.startsAt} withTime /></span>
                 {(a.status === "requested" || a.status === "confirmed") && (
                   <form action={cancelMyAppointment}>
                     <input type="hidden" name="appointmentId" value={a.id} />

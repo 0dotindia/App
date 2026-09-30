@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { EmptyState } from "@/components/EmptyState";
+import { RelativeTime } from "@/components/RelativeTime";
 
 export const metadata: Metadata = { title: "Map" };
 
 type Pin = {
   id: string;
   title: string;
-  subtitle: string;
+  subtitle: React.ReactNode;
   href: string;
   latitude: number;
   longitude: number;
@@ -64,7 +65,7 @@ export default async function MapPage() {
     ...events.map((event) => ({
       id: `event:${event.id}`,
       title: event.title,
-      subtitle: event.startsAt.toLocaleDateString(),
+      subtitle: <RelativeTime date={event.startsAt} />,
       href: `/e/${event.slug}`,
       latitude: event.latitude!,
       longitude: event.longitude!,

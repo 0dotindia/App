@@ -6,6 +6,7 @@ import { getCurrentUser, getCurrentSessionToken, hashToken } from "@/lib/session
 import { revokeSession, revokeAllOtherSessionsAction } from "@/app/actions/session-management";
 import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
+import { RelativeTime } from "@/components/RelativeTime";
 
 export const metadata: Metadata = { title: "Active sessions" };
 
@@ -40,7 +41,7 @@ export default async function ActiveSessionsPage() {
               key={session.id}
               icon={Monitor}
               label={isCurrent ? "This device" : session.userAgent || "Unknown device"}
-              description={`${session.ipAddress ?? "Unknown location"} · Last active ${session.lastSeenAt.toLocaleString()}`}
+              description={<>{session.ipAddress ?? "Unknown location"} · Last active <RelativeTime date={session.lastSeenAt} withTime /></>}
               trailing={
                 isCurrent ? undefined : (
                   <form action={revokeSession}>
@@ -75,7 +76,7 @@ export default async function ActiveSessionsPage() {
             <SettingsRow
               key={event.id}
               label={`${event.success ? "Successful" : "Failed"} sign-in · ${event.method}`}
-              description={`${event.ipAddress ?? "Unknown location"} · ${event.createdAt.toLocaleString()}`}
+              description={<>{event.ipAddress ?? "Unknown location"} · <RelativeTime date={event.createdAt} withTime /></>}
             />
           ))}
         </div>

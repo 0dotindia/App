@@ -5,17 +5,7 @@ import { isBusinessStaff } from "@/lib/businesses";
 import { markContactMessageRead, archiveContactMessage } from "@/app/actions/business-contact";
 import { EmptyState } from "@/components/EmptyState";
 import { BusinessManageNav } from "../BusinessManageNav";
-
-function relativeTime(date: Date): string {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
+import { RelativeTime } from "@/components/RelativeTime";
 
 // admin+-tier inbox (spec §6.1: "visible to admin+ team members as a
 // queue") — status transitions only, no reply-in-app.
@@ -60,7 +50,7 @@ export default async function BusinessContactInboxPage({
           <span>
             <strong>{senderLabel(message)}</strong>{" "}
             <span className="mutedText" style={{ fontSize: "0.8rem" }}>
-              {relativeTime(message.createdAt)}
+              <RelativeTime date={message.createdAt} />
             </span>
           </span>
           <span style={{ display: "flex", gap: "0.4rem" }}>

@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 import { canManageCatalog, isBusinessStaff } from "@/lib/businesses";
 import { createAvailabilityRule, deleteAvailabilityRule, confirmAppointment, cancelAppointment } from "@/app/actions/appointments";
 import { EmptyState } from "@/components/EmptyState";
+import { RelativeTime } from "@/components/RelativeTime";
 
 const DAY_LABEL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const STATUS_LABEL: Record<string, string> = {
@@ -124,7 +125,7 @@ export default async function ManageAppointmentsPage({ params }: { params: Promi
                     {STATUS_LABEL[a.status] ?? a.status}
                   </span>
                 </div>
-                <span className="mutedText" style={{ fontSize: "0.85rem" }}>{a.startsAt.toLocaleString()}</span>
+                <span className="mutedText" style={{ fontSize: "0.85rem" }}><RelativeTime date={a.startsAt} withTime /></span>
                 {a.notes && <p style={{ margin: 0, fontSize: "0.85rem" }}>{a.notes}</p>}
                 {canConfirmCancel && (
                   <div style={{ display: "flex", gap: "0.4rem" }}>

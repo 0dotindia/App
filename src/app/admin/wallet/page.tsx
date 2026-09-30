@@ -5,6 +5,7 @@ import { getWalletOverview } from "@/lib/wallet/reconcile";
 import { SYSTEM_ACCOUNT_IDS } from "@/lib/wallet/accounts";
 import { EmptyState } from "@/components/EmptyState";
 import { GrantCoinsForm } from "./GrantCoinsForm";
+import { RelativeTime } from "@/components/RelativeTime";
 
 const AUDIT_LABEL: Record<string, string> = {
   signup_grant: "signup",
@@ -76,7 +77,7 @@ export default async function AdminWalletPage() {
                 <strong>{AUDIT_LABEL[t.kind] ?? t.kind}</strong>
                 {t.actorUserId ? ` by @${actorHandle.get(t.actorUserId) ?? "?"}` : " (system)"}
                 {t.memo ? ` — ${t.memo}` : ""}
-                <span className="mutedText"> · {t.createdAt.toLocaleDateString()}</span>
+                <span className="mutedText"> · <RelativeTime date={t.createdAt} /></span>
               </span>
               <span className="mutedText" style={{ whiteSpace: "nowrap" }}>{coins > 0 ? "+" : ""}{coins} coins</span>
             </div>

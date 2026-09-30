@@ -14,6 +14,7 @@ import {
 } from "./BusinessBillingForms";
 import { BusinessManageNav } from "../BusinessManageNav";
 import { BusinessSubscribeWithCoinsForm } from "../wallet/BusinessWalletForms";
+import { RelativeTime } from "@/components/RelativeTime";
 
 const ROUTING_LABEL: Record<string, string> = {
   pending_dns: "Waiting for DNS",
@@ -69,7 +70,7 @@ export default async function BusinessBillingPage({ params }: { params: Promise<
           </p>
           <p className="mutedText" style={{ fontSize: "0.85rem" }}>
             {RENEWAL_PREFIX[describeRenewal(subscription).kind]}
-            {describeRenewal(subscription).date.toLocaleDateString()}.
+            <RelativeTime date={describeRenewal(subscription).date} />.
           </p>
           {subscription.status !== "cancelled" && <BusinessCancelSubscriptionButton subscriptionId={subscription.id} />}
         </div>

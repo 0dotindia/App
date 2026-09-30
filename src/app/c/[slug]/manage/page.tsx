@@ -22,6 +22,7 @@ import { FLAIR_COLORS, flairColorStyle, MAX_FLAIRS_PER_COMMUNITY } from "@/lib/f
 import { Logo } from "@/components/Logo";
 import { ManageCommunityForm } from "./ManageCommunityForm";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { RelativeTime } from "@/components/RelativeTime";
 
 const MOD_ACTION_LABELS: Record<string, string> = {
   remove_post: "removed a post",
@@ -38,17 +39,6 @@ const MOD_ACTION_LABELS: Record<string, string> = {
   remove_moderator: "removed as moderator",
   transfer_ownership: "transferred ownership to",
 };
-
-function relativeTime(date: Date): string {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 export default async function ManageCommunityPage({
   params,
@@ -295,7 +285,7 @@ export default async function ManageCommunityPage({
               return (
                 <p key={a.id} className="mutedText" style={{ fontSize: "0.85rem" }}>
                   <strong style={{ color: "var(--foreground)" }}>{moderatorName}</strong> {label}
-                  {targetName ? ` ${targetName}` : ""} · {relativeTime(a.createdAt)}
+                  {targetName ? ` ${targetName}` : ""} · <RelativeTime date={a.createdAt} />
                   {a.reason && ` — "${a.reason}"`}
                 </p>
               );

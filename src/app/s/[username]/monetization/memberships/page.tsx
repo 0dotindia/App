@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { TierForm } from "../../TierForm";
 import { COIN_FUNDED_MARKER, describeRenewal, RENEWAL_PREFIX } from "@/lib/subscription-access";
 import { formatCoins } from "@/lib/coins";
+import { RelativeTime } from "@/components/RelativeTime";
 
 export const metadata: Metadata = { title: "Memberships" };
 
@@ -21,11 +22,15 @@ function membershipStatusText(sub: {
   processorSubscriptionId: string;
   currentPeriodEnd: Date;
   tier: { name: string };
-}): string {
+}): React.ReactNode {
   const renewal = describeRenewal(sub);
   if (sub.status !== "active" && renewal.date <= new Date()) return `${sub.tier.name} (${sub.status})`;
   const next = RENEWAL_PREFIX[renewal.kind].trim().toLowerCase();
-  return `${sub.tier.name} (${sub.status}, ${next} ${renewal.date.toLocaleDateString()})`;
+  return (
+    <>
+      {sub.tier.name} ({sub.status}, {next} <RelativeTime date={renewal.date} />)
+    </>
+  );
 }
 
 export default async function MembershipsSettingsPage() {

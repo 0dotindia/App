@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
+import { ClientFormattedDate } from "@/components/ClientFormattedDate";
 
-function formatDate(date: Date | null): string {
-  return date ? date.toLocaleDateString(undefined, { year: "numeric", month: "short" }) : "Present";
-}
+const MONTH_YEAR: Intl.DateTimeFormatOptions = { year: "numeric", month: "short" };
 
 // spec §6.2/§6.3: a *rendering* of data that already exists elsewhere on
 // the profile (WorkExperience, Education, Skill, featured Projects) — no
@@ -64,7 +63,7 @@ export default async function ResumePage({ params }: { params: Promise<{ usernam
                 <strong>{item.title}</strong> — {item.company}
                 {item.location && <span className="mutedText"> · {item.location}</span>}
                 <p className="mutedText" style={{ margin: "0.1rem 0 0", fontSize: "0.85rem" }}>
-                  {formatDate(item.startDate)} – {formatDate(item.endDate)}
+                  <ClientFormattedDate date={item.startDate} options={MONTH_YEAR} /> – <ClientFormattedDate date={item.endDate} options={MONTH_YEAR} fallback="Present" />
                 </p>
                 {item.description && <p style={{ marginTop: "0.2rem", whiteSpace: "pre-wrap" }}>{item.description}</p>}
               </div>
@@ -83,7 +82,7 @@ export default async function ResumePage({ params }: { params: Promise<{ usernam
                 {item.degree && <span> — {item.degree}</span>}
                 {item.fieldOfStudy && <span className="mutedText"> · {item.fieldOfStudy}</span>}
                 <p className="mutedText" style={{ margin: "0.1rem 0 0", fontSize: "0.85rem" }}>
-                  {formatDate(item.startDate)} – {formatDate(item.endDate)}
+                  <ClientFormattedDate date={item.startDate} options={MONTH_YEAR} /> – <ClientFormattedDate date={item.endDate} options={MONTH_YEAR} fallback="Present" />
                 </p>
                 {item.description && <p style={{ marginTop: "0.2rem", whiteSpace: "pre-wrap" }}>{item.description}</p>}
               </div>

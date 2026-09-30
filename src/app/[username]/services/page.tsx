@@ -143,13 +143,6 @@ export default async function UserServicesPage({
                   key={slot.startsAt.toISOString()}
                   offeringId={selectedOffering.id}
                   startsAt={slot.startsAt.toISOString()}
-                  label={slot.startsAt.toLocaleString(undefined, {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
                   formAction={requestAppointment}
                 />
               ))}

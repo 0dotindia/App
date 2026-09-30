@@ -7,6 +7,7 @@ import { ContactStageSelect } from "./ContactStageSelect";
 import { NewContactForm } from "./NewContactForm";
 import { EmptyState } from "@/components/EmptyState";
 import { BusinessManageNav } from "../BusinessManageNav";
+import { RelativeTime } from "@/components/RelativeTime";
 
 const ACTIVITY_LABEL: Record<string, string> = {
   contact_message: "Sent a message",
@@ -76,7 +77,7 @@ export default async function CrmPage({ params }: { params: Promise<{ slug: stri
               <div style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
                 {contact.activities.map((activity) => (
                   <p key={activity.id} className="mutedText" style={{ margin: 0 }}>
-                    {ACTIVITY_LABEL[activity.activityType] ?? activity.activityType} — {activity.occurredAt.toLocaleDateString()}
+                    {ACTIVITY_LABEL[activity.activityType] ?? activity.activityType} — <RelativeTime date={activity.occurredAt} />
                   </p>
                 ))}
               </div>

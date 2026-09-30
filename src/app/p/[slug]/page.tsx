@@ -10,6 +10,7 @@ import { ProjectCommentForm } from "./ProjectCommentForm";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { JsonLd } from "@/components/JsonLd";
 import { SITE_DESCRIPTION } from "@/lib/site-metadata";
+import { ClientFormattedDate } from "@/components/ClientFormattedDate";
 
 // No visibility gate here, matching the page component's own comment: an
 // unlisted project resolves via direct link same as a public one
@@ -51,9 +52,7 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "Archived",
 };
 
-function formatDate(date: Date | null): string | null {
-  return date ? date.toLocaleDateString(undefined, { year: "numeric", month: "short" }) : null;
-}
+const MONTH_YEAR: Intl.DateTimeFormatOptions = { year: "numeric", month: "short" };
 
 // spec §3.3: unlisted projects resolve here via direct link (this page does
 // no visibility filtering of its own — it looks the project up by slug and
@@ -109,8 +108,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
       <p className="mutedText" style={{ marginTop: "0.4rem", fontSize: "0.85rem" }}>
         {STATUS_LABEL[project.status]}
-        {formatDate(project.startedAt) && ` · Started ${formatDate(project.startedAt)}`}
-        {formatDate(project.completedAt) && ` · Completed ${formatDate(project.completedAt)}`}
+        {project.startedAt && <> · Started <ClientFormattedDate date={project.startedAt} options={MONTH_YEAR} /></>}
+        {project.completedAt && <> · Completed <ClientFormattedDate date={project.completedAt} options={MONTH_YEAR} /></>}
         {project.visibility === "unlisted" && " · Unlisted"}
       </p>
 

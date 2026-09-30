@@ -10,6 +10,7 @@ import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { formatCoins } from "@/lib/coins";
+import { RelativeTime } from "@/components/RelativeTime";
 
 export const metadata: Metadata = { title: "Freelance services" };
 
@@ -212,7 +213,12 @@ export default async function FreelanceServicesSettingsPage() {
                 key={a.id}
                 icon={CalendarClock}
                 label={`${a.offering?.name ?? "Appointment"} — ${customerName}`}
-                description={`${APPOINTMENT_STATUS_LABEL[a.status] ?? a.status} · ${a.startsAt.toLocaleString()}${a.notes ? ` · ${a.notes}` : ""}`}
+                description={
+                  <>
+                    {APPOINTMENT_STATUS_LABEL[a.status] ?? a.status} · <RelativeTime date={a.startsAt} withTime />
+                    {a.notes && ` · ${a.notes}`}
+                  </>
+                }
                 trailing={
                   <>
                     {a.status === "requested" && (

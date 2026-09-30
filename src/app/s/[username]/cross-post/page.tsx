@@ -12,6 +12,7 @@ import { SettingsRow } from "@/components/SettingsRow";
 import { ConnectExternalAccountForm } from "../ConnectExternalAccountForm";
 import { ComposeCrossPostForm } from "../ComposeCrossPostForm";
 import type { CrossPostPlatform } from "@/lib/cross-post-platforms";
+import { RelativeTime } from "@/components/RelativeTime";
 
 export const metadata: Metadata = { title: "Auto-post" };
 
@@ -109,7 +110,7 @@ export default async function CrossPostSettingsPage() {
           <div key={post.id} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
             <SettingsRow
               label={post.content || "(media only)"}
-              description={`${post.scheduledFor.toLocaleString()} · ${post.status}`}
+              description={<><RelativeTime date={post.scheduledFor} withTime /> · {post.status}</>}
               trailing={
                 post.status === "scheduled" ? (
                   <form action={cancelScheduledCrossPost}>

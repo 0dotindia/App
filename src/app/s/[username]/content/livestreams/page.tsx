@@ -9,6 +9,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { SettingsRow } from "@/components/SettingsRow";
 import { EmptyState } from "@/components/EmptyState";
 import { LivestreamForm } from "../../LivestreamForm";
+import { RelativeTime } from "@/components/RelativeTime";
 
 export const metadata: Metadata = { title: "Livestreams" };
 
@@ -32,7 +33,13 @@ export default async function LivestreamsSettingsPage() {
               key={live.id}
               icon={Radio}
               label={live.title}
-              description={`${live.status}${live.scheduledAt ? ` · ${live.scheduledAt.toLocaleString()}` : ""}${live.requiredTierId ? " · member-only" : ""}`}
+              description={
+                <>
+                  {live.status}
+                  {live.scheduledAt && <> · <RelativeTime date={live.scheduledAt} withTime /></>}
+                  {live.requiredTierId && " · member-only"}
+                </>
+              }
               trailing={
                 <>
                   <Link href={`/live/${live.id}`} className="button buttonSecondary buttonSmall">Manage</Link>

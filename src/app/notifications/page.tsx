@@ -12,6 +12,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { ListKeyNav } from "@/components/ListKeyNav";
 import { RefreshOnMount } from "@/components/RefreshOnMount";
 import { EmptyState } from "@/components/EmptyState";
+import { RelativeTime } from "@/components/RelativeTime";
 
 export const metadata: Metadata = { title: "Notifications" };
 
@@ -105,18 +106,6 @@ function groupRows(rows: NotificationRow[], recipientHandle: string | null): Dis
   return groups;
 }
 
-function relativeTime(date: Date): string {
-  const diffMs = Date.now() - date.getTime();
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d`;
-  return date.toLocaleDateString();
-}
-
 function GroupDescription({ group }: { group: DisplayGroup }) {
   const verb = getNotificationVerb(group.type, group.subjectType, group.subjectId);
   const [first, ...rest] = group.actorNames;
@@ -133,7 +122,7 @@ function GroupDescription({ group }: { group: DisplayGroup }) {
         {` ${verb}`}
       </span>
       <span className="mutedText" style={{ fontSize: "var(--text-xs)", marginLeft: "0.5rem" }}>
-        {relativeTime(group.createdAt)}
+        <RelativeTime date={group.createdAt} />
       </span>
     </>
   );

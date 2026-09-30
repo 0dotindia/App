@@ -9,6 +9,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { EmptyState } from "@/components/EmptyState";
 import { SettingsRow } from "@/components/SettingsRow";
 import { CalendarEntryForm } from "./CalendarEntryForm";
+import { RelativeTime } from "@/components/RelativeTime";
 
 export const metadata: Metadata = { title: "Calendar" };
 
@@ -45,7 +46,12 @@ export default async function CalendarSettingsPage() {
               href={item.href ?? undefined}
               icon={KIND_ICON[item.kind]}
               label={item.title}
-              description={`${KIND_LABEL[item.kind]} · ${item.startsAt.toLocaleString()}${item.endsAt ? ` – ${item.endsAt.toLocaleString()}` : ""}`}
+              description={
+                <>
+                  {KIND_LABEL[item.kind]} · <RelativeTime date={item.startsAt} withTime />
+                  {item.endsAt && <> – <RelativeTime date={item.endsAt} withTime /></>}
+                </>
+              }
               trailing={
                 item.kind === "personal" ? (
                   <form action={deleteCalendarEntry}>

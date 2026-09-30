@@ -3,6 +3,7 @@ import { requireVerifiedUser } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { isOrgAdmin } from "@/lib/organizations";
 import { EmptyState } from "@/components/EmptyState";
+import { RelativeTime } from "@/components/RelativeTime";
 
 const ACTION_LABEL: Record<string, string> = {
   member_added: "Member added",
@@ -48,7 +49,7 @@ export default async function OrganizationAuditLogPage({ params }: { params: Pro
           <div key={e.id} className="profileLinkItem" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
             <span>{ACTION_LABEL[e.action] ?? e.action}</span>
             <span className="mutedText" style={{ fontSize: "0.8rem" }}>
-              {actorName(e)} · {e.createdAt.toLocaleString()}
+              {actorName(e)} · <RelativeTime date={e.createdAt} withTime />
             </span>
           </div>
         ))}
