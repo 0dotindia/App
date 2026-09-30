@@ -47,7 +47,7 @@ export default async function JobsPage({ params }: { params: Promise<{ slug: str
     <div className="profileCard">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{business.name} — Jobs</h1>
-        <Link href={`/b/${business.slug}`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+        <Link href={`/b/${business.slug}`} className="button buttonSecondary buttonSmall">
           Back to business page
         </Link>
       </div>
@@ -63,7 +63,7 @@ export default async function JobsPage({ params }: { params: Promise<{ slug: str
         </details>
       )}
 
-      {jobs.length === 0 && <EmptyState message="No open positions right now." />}
+      {jobs.length === 0 && <EmptyState title="No open positions right now." />}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
         {jobs.map((job) => {

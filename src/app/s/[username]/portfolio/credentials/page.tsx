@@ -32,7 +32,7 @@ export default async function CredentialsSettingsPage() {
 
       <p className="settingsGroupLabel">Research papers</p>
       {myResearchPapers.length === 0 ? (
-        <EmptyState message="No papers yet." />
+        <EmptyState title="No papers yet." />
       ) : (
         <div className="settingsGroup">
           {myResearchPapers.map((paper) => (
@@ -76,7 +76,7 @@ export default async function CredentialsSettingsPage() {
       <p className="settingsGroupLabel">Certificates</p>
       <p className="mutedText" style={{ fontSize: "0.8rem", marginBottom: "var(--space-2)" }}>Self-reported — not verified by 0dot. Add a verification link so viewers can check independently.</p>
       {myCertificates.length === 0 ? (
-        <EmptyState message="No certificates yet." />
+        <EmptyState title="No certificates yet." />
       ) : (
         <div className="settingsGroup">
           {myCertificates.map((cert) => (
@@ -119,7 +119,7 @@ export default async function CredentialsSettingsPage() {
 
       <p className="settingsGroupLabel">Awards</p>
       {myAwards.length === 0 ? (
-        <EmptyState message="No awards yet." />
+        <EmptyState title="No awards yet." />
       ) : (
         <div className="settingsGroup">
           {myAwards.map((award) => (

@@ -16,7 +16,7 @@ export function AddLinkForm() {
       }}
       className="settingsForm"
     >
-      <h2 style={{ fontSize: "1.05rem", fontWeight: 700 }}>Add a link</h2>
+      <h2 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Add a link</h2>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <input
           name="label"
@@ -39,7 +39,11 @@ export function AddLinkForm() {
           {pending ? "Adding…" : "Add"}
         </button>
       </div>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

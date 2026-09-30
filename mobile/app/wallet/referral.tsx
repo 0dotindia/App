@@ -54,7 +54,7 @@ export default function WalletReferralScreen() {
   if (!info) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="gift-outline" message={error ?? "Could not load your referral info."} onRetry={error ? load : undefined} />
+        <EmptyState icon="gift-outline" title={error ?? "Could not load your referral info."} onRetry={error ? load : undefined} />
       </View>
     );
   }

@@ -14,7 +14,11 @@ export function AccountRecoveryForm() {
           <label htmlFor="identifier">Username or email</label>
           <input id="identifier" name="identifier" type="text" autoCapitalize="none" spellCheck={false} placeholder="@username" required />
         </div>
-        {state?.error && <p className="errorText">{state.error}</p>}
+        {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
         <button type="submit" className="button buttonSecondary" disabled={pending}>
           {pending ? "Issuing…" : "Issue new recovery codes"}
         </button>

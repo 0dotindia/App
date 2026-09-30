@@ -11,7 +11,7 @@ const DEBOUNCE_MS = 300;
 // just progressively enhances it with debounced live search via
 // router.replace, a soft nav that re-renders this Server Component page
 // with the new searchParams instead of a full reload.
-export function SearchBox({ defaultValue, tab }: { defaultValue: string; tab: string }) {
+export function SearchBox({ defaultValue, tab, when }: { defaultValue: string; tab: string; when?: string }) {
   const router = useRouter();
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Kept current on every render so the debounced callback below reads the
@@ -26,6 +26,14 @@ export function SearchBox({ defaultValue, tab }: { defaultValue: string; tab: st
   useEffect(() => {
     tabRef.current = tab;
   }, [tab]);
+  // Same staleness fix as tabRef, for the events tab's Upcoming/Past filter
+  // — without carrying it through, typing a new query while on "Past"
+  // silently resets the URL back to "Upcoming" (the default) since the
+  // debounced replace() below never included it.
+  const whenRef = useRef(when);
+  useEffect(() => {
+    whenRef.current = when;
+  }, [when]);
 
   // Previously the 300ms debounce window plus the actual navigation was a
   // silent gap — nothing on screen indicated a search was even happening
@@ -51,7 +59,8 @@ export function SearchBox({ defaultValue, tab }: { defaultValue: string; tab: st
     timeoutRef.current = setTimeout(() => {
       setIsDebouncing(false);
       startTransition(() => {
-        router.replace(`/search?q=${encodeURIComponent(value)}&tab=${tabRef.current}`);
+        const whenParam = whenRef.current ? `&when=${whenRef.current}` : "";
+        router.replace(`/search?q=${encodeURIComponent(value)}&tab=${tabRef.current}${whenParam}`);
       });
     }, DEBOUNCE_MS);
   }
@@ -72,11 +81,13 @@ export function SearchBox({ defaultValue, tab }: { defaultValue: string; tab: st
           defaultValue={defaultValue}
           onChange={handleChange}
           placeholder="Search users or posts…"
+          aria-label="Search"
           className="textInput"
           autoFocus
         />
       </div>
       <input type="hidden" name="tab" value={tab} />
+      {when && <input type="hidden" name="when" value={when} />}
     </form>
   );
 }

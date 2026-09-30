@@ -12,6 +12,14 @@ import { isAppStateActive } from "../utils/useAppForeground";
 import { useTheme, type Theme } from "../theme";
 import type { LivestreamDetail, LivestreamChatMessage, LiveKitToken } from "../api/types";
 
+// videoArea/videoPlaceholder are always rendered on a hardcoded black
+// backdrop (styles.videoArea's backgroundColor), independent of the
+// light/dark theme — so their foreground content needs a fixed light color
+// too, not a theme token. theme.colors.background is themed and goes
+// near-black in dark mode (#0a0a0a), which made the loading spinner and
+// connection-error text here nearly invisible against the black video area.
+const VIDEO_AREA_FOREGROUND = "#ffffff";
+
 // react-native-webrtc's globals must be registered once, before any Room is
 // constructed — same module-scope guard as VoiceRoomBody.tsx.
 let globalsRegistered = false;
@@ -69,8 +77,24 @@ export function LivestreamViewerBody({ livestreamId }: { livestreamId: string })
   const loadChat = useCallback(async () => {
     try {
       const page = await getLivestreamChat(livestreamId);
-      setMessages(page.items);
-      setChatCursor(page.nextCursor);
+      // Merge, don't replace: this refetches the *recent* page on every SSE
+      // signal (any new chat message, during an active stream — frequent),
+      // so a plain setMessages(page.items) was snapping anyone who'd
+      // scrolled up via onLoadMoreChat straight back to just the latest
+      // page, discarding the history they'd paged in. Same fix
+      // messages/[id].tsx's load() already uses for the identical
+      // recent-refetch-vs-pagination shape: keep known messages, add
+      // anything new, and only adopt the recent page's cursor if pagination
+      // hadn't started yet (a non-null cursor means onLoadMoreChat owns
+      // cursor advancement from here).
+      setMessages((prev) => {
+        if (prev.length === 0) return page.items;
+        const known = new Set(prev.map((m) => m.id));
+        const fresh = page.items.filter((m) => !known.has(m.id));
+        if (fresh.length === 0) return prev;
+        return [...fresh, ...prev].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      });
+      setChatCursor((prev) => (prev === null && page.nextCursor ? page.nextCursor : prev));
     } catch {
       // Best-effort — the video is the primary content, chat failing to
       // load shouldn't block or error the whole screen.
@@ -153,14 +177,14 @@ export function LivestreamViewerBody({ livestreamId }: { livestreamId: string })
   if (!detail) {
     return (
       <View style={styles.center}>
-        <EmptyState icon="videocam-off-outline" message={error ?? "Livestream not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="videocam-off-outline" title={error ?? "Livestream not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }
   if (!detail.hasAccess) {
     return (
       <View style={styles.center}>
-        <EmptyState icon="lock-closed-outline" message="You don't have access to this livestream." />
+        <EmptyState icon="lock-closed-outline" title="You don't have access to this livestream." />
       </View>
     );
   }
@@ -169,7 +193,7 @@ export function LivestreamViewerBody({ livestreamId }: { livestreamId: string })
       <View style={styles.center}>
         <EmptyState
           icon="videocam-off-outline"
-          message={detail.status === "ended" ? "This livestream has ended." : "This livestream hasn't started yet."}
+          title={detail.status === "ended" ? "This livestream has ended." : "This livestream hasn't started yet."}
         />
       </View>
     );
@@ -197,7 +221,7 @@ export function LivestreamViewerBody({ livestreamId }: { livestreamId: string })
             {tokenError ? (
               <Text style={styles.videoPlaceholderText}>{tokenError}</Text>
             ) : (
-              <ActivityIndicator color={theme.colors.background} />
+              <ActivityIndicator color={VIDEO_AREA_FOREGROUND} />
             )}
           </View>
         )}
@@ -233,14 +257,13 @@ export function LivestreamViewerBody({ livestreamId }: { livestreamId: string })
 // Renders the broadcaster's camera track — must live inside <LiveKitRoom>
 // to read the room context useTracks depends on.
 function RemoteVideo() {
-  const theme = useTheme();
   const tracks = useTracks([Track.Source.Camera]);
   const track = tracks[0];
 
   if (!track) {
     return (
       <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator color={theme.colors.background} />
+        <ActivityIndicator color={VIDEO_AREA_FOREGROUND} />
       </View>
     );
   }
@@ -267,7 +290,7 @@ function createStyles(theme: Theme) {
     center: { flex: 1, alignItems: "center", justifyContent: "center", padding: theme.space[6] },
     videoArea: { width: "100%", aspectRatio: 16 / 9, backgroundColor: "#000" },
     videoPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
-    videoPlaceholderText: { color: theme.colors.background, fontSize: theme.text.sm },
+    videoPlaceholderText: { color: VIDEO_AREA_FOREGROUND, fontSize: theme.text.sm },
     streamerRow: {
       flexDirection: "row",
       alignItems: "center",

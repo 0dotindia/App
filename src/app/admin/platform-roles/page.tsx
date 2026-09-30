@@ -32,7 +32,13 @@ export default async function AdminPlatformRolesPage() {
               <span style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
                 <form action={updatePlatformRole} style={{ display: "flex", gap: "0.3rem" }}>
                   <input type="hidden" name="userId" value={r.userId} />
-                  <select name="role" defaultValue={r.role} className="textInput" style={{ fontSize: "0.8rem" }}>
+                  <select
+                    name="role"
+                    defaultValue={r.role}
+                    className="textInput"
+                    style={{ fontSize: "var(--text-xs)" }}
+                    aria-label="Role"
+                  >
                     <option value="support">Support</option>
                     <option value="admin">Admin</option>
                     <option value="super_admin">Super admin</option>

@@ -40,7 +40,7 @@ export default async function FormDetailPage({ params }: { params: Promise<{ use
     <div className="settingsSection">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h2 className="settingsSectionHeading">{form.title}</h2>
-        <span className="mutedText" style={{ fontSize: "0.85rem" }}>{form.status}</span>
+        <span className="mutedText" style={{ fontSize: "var(--text-xs-plus)" }}>{form.status}</span>
       </div>
 
       {form.status === "draft" && (
@@ -74,13 +74,13 @@ export default async function FormDetailPage({ params }: { params: Promise<{ use
 
       <div style={{ marginTop: "1.5rem" }}>
         <p className="sectionHeading">Responses ({form.responses.length})</p>
-        {form.responses.length === 0 && <EmptyState message="No responses yet." />}
+        {form.responses.length === 0 && <EmptyState title="No responses yet." />}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {form.responses.map((response) => {
             const answers = JSON.parse(response.answersJson) as Record<string, string>;
             return (
               <div key={response.id} style={{ border: "1px solid var(--border)", borderRadius: "8px", padding: "0.6rem 0.8rem" }}>
-                <p className="mutedText" style={{ margin: 0, fontSize: "0.8rem" }}>{response.submittedAt.toLocaleString()}</p>
+                <p className="mutedText" style={{ margin: 0, fontSize: "var(--text-xs)" }}>{response.submittedAt.toLocaleString()}</p>
                 {fields.map((field) => (
                   <p key={field.label} style={{ margin: "0.2rem 0 0" }}>
                     <strong>{field.label}</strong>

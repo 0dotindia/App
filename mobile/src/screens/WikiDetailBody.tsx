@@ -47,7 +47,7 @@ export function WikiDetailBody({ username, slug }: { username: string; slug: str
   if (!page) {
     return (
       <View style={styles.center}>
-        <EmptyState icon="book-outline" message={error ?? "Page not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="book-outline" title={error ?? "Page not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { ensureTrendingScoresFresh, getTrendingPosts, parseTrendingCursor } from "@/lib/trending";
+import { getVotedPollOptionIds } from "@/lib/feed-query";
 import { FeedList } from "@/app/feed/FeedList";
 
 export const metadata: Metadata = { title: "Trending" };
@@ -24,16 +25,19 @@ export default async function TrendingPage({
   const { items: posts, nextCursor } = await getTrendingPosts({ cursor, viewerId: currentUser?.id ?? null });
 
   const postIds = posts.map((p) => p.id);
-  const [likedPostIds, bookmarkedPostIds] = currentUser
-    ? await Promise.all([
-        db.postLike
+  const [likedPostIds, bookmarkedPostIds, votedOptionIds] = await Promise.all([
+    currentUser
+      ? db.postLike
           .findMany({ where: { userId: currentUser.id, postId: { in: postIds } }, select: { postId: true } })
-          .then((rows) => new Set(rows.map((r) => r.postId))),
-        db.bookmark
+          .then((rows) => new Set(rows.map((r) => r.postId)))
+      : Promise.resolve(new Set<string>()),
+    currentUser
+      ? db.bookmark
           .findMany({ where: { userId: currentUser.id, postId: { in: postIds } }, select: { postId: true } })
-          .then((rows) => new Set(rows.map((r) => r.postId))),
-      ])
-    : [new Set<string>(), new Set<string>()];
+          .then((rows) => new Set(rows.map((r) => r.postId)))
+      : Promise.resolve(new Set<string>()),
+    getVotedPollOptionIds(currentUser?.id, posts),
+  ]);
 
   return (
     <FeedList
@@ -41,6 +45,7 @@ export default async function TrendingPage({
       currentUser={currentUser}
       likedPostIds={likedPostIds}
       bookmarkedPostIds={bookmarkedPostIds}
+      votedOptionIds={votedOptionIds}
       nextCursor={nextCursor}
       basePath="/trending"
       showComposer={false}

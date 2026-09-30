@@ -15,7 +15,11 @@ export function RefundPaymentForm({ paymentTransactionId, amount }: { paymentTra
       <button type="submit" className="button buttonSecondary buttonSmall" disabled={pending}>
         {pending ? "Refunding…" : `Refund ${amount} coin${amount === 1 ? "" : "s"}`}
       </button>
-      {state?.error && <p className="errorText" style={{ width: "100%", margin: 0 }}>{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert" style={{ width: "100%", margin: 0 }}>
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

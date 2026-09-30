@@ -36,7 +36,7 @@ export default async function CalendarSettingsPage() {
       </div>
 
       {items.length === 0 ? (
-        <EmptyState message="Nothing on your calendar yet." />
+        <EmptyState title="Nothing on your calendar yet." />
       ) : (
         <div className="settingsGroup" style={{ marginTop: "1.5rem" }}>
           {items.map((item) => (

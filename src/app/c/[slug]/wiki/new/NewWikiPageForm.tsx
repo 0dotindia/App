@@ -21,7 +21,11 @@ export function NewWikiPageForm({ communityId }: { communityId: string }) {
         Content
         <textarea name="body" rows={12} required className="textInput" placeholder="# Heading&#10;&#10;Body text with **bold**, *italic*, `code`, [links](https://example.com), and&#10;- bullet lists" />
       </label>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button" disabled={pending} style={{ alignSelf: "flex-start" }}>
         {pending ? "Creating…" : "Create page"}
       </button>

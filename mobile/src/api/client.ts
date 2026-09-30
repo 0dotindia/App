@@ -545,6 +545,14 @@ export function getBusiness(slug: string): Promise<BusinessDetail> {
   return authorizedRequest<BusinessDetail>(`/api/v1/businesses/${encodeURIComponent(slug)}`);
 }
 
+export function followBusiness(slug: string): Promise<{ following: true }> {
+  return authorizedRequest(`/api/v1/businesses/${encodeURIComponent(slug)}/follow`, { method: "POST" });
+}
+
+export function unfollowBusiness(slug: string): Promise<{ following: false }> {
+  return authorizedRequest(`/api/v1/businesses/${encodeURIComponent(slug)}/follow`, { method: "DELETE" });
+}
+
 export function getMarketplace(category?: MarketplaceCategory | null, q?: string): Promise<MarketplaceResponse> {
   const params = new URLSearchParams();
   if (category) params.set("category", category);

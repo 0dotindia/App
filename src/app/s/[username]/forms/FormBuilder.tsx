@@ -80,12 +80,19 @@ export function FormBuilder() {
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
             <input
               placeholder="Field label"
+              aria-label={`Field ${index + 1} label`}
               value={field.label}
               onChange={(e) => updateField(index, { label: e.target.value })}
               className="textInput"
               style={{ flex: "2 1 140px" }}
             />
-            <select value={field.type} onChange={(e) => updateField(index, { type: e.target.value })} className="textInput" style={{ flex: "1 1 100px" }}>
+            <select
+              value={field.type}
+              onChange={(e) => updateField(index, { type: e.target.value })}
+              className="textInput"
+              style={{ flex: "1 1 100px" }}
+              aria-label={`Field ${index + 1} type`}
+            >
               <option value="text">Text</option>
               <option value="choice">Choice</option>
               <option value="rating">Rating</option>
@@ -94,6 +101,7 @@ export function FormBuilder() {
             {field.type === "choice" && (
               <input
                 placeholder="Options, comma-separated"
+                aria-label={`Field ${index + 1} options`}
                 value={field.optionsText ?? ""}
                 onChange={(e) => updateField(index, { optionsText: e.target.value })}
                 className="textInput"
@@ -145,7 +153,11 @@ export function FormBuilder() {
       <button type="submit" className="button" disabled={pending} style={{ alignSelf: "flex-start" }}>
         {pending ? "Creating…" : "Create"}
       </button>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

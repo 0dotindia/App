@@ -40,7 +40,11 @@ export function BusinessLinksForm({ businessId }: { businessId: string }) {
           {pending ? "Adding…" : "Add"}
         </button>
       </div>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

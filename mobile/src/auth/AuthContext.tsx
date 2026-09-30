@@ -101,13 +101,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await afterAuthEstablished();
           }
         }
-      } catch (err) {
+      } catch {
         // getStoredTokens/isBiometricLockAvailable can throw on platforms
         // where SecureStore/LocalAuthentication aren't implemented (e.g.
         // `expo start --web`) — without this catch, an uncaught rejection
         // here left setLoading(false) below unreachable, stranding the app
-        // on its loading spinner forever with no way to recover.
-        setError(err instanceof Error ? err.message : "Could not restore your session.");
+        // on its loading spinner forever with no way to recover. Always a
+        // fixed friendly message, never err.message: unlike signIn()/
+        // unlock() below (whose errors are pkceAuth.ts's own deliberately
+        // user-facing strings), whatever lands here is an arbitrary native-
+        // module failure with a raw technical message ("ExpoSecureStore...
+        // is not a function" on web) that shouldn't reach the user verbatim.
+        setError("Could not restore your session.");
       } finally {
         setLoading(false);
       }

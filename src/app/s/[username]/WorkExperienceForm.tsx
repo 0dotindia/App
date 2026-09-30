@@ -67,7 +67,11 @@ export function WorkExperienceForm({ item }: { item?: WorkExperienceFormItem }) 
         generate={suggestWorkExperienceBullets}
         onInsert={setDescriptionValue}
       />
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Saving…" : item ? "Save changes" : "Add work experience"}
       </button>

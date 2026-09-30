@@ -10,7 +10,11 @@ export function EditWikiPageForm({ wikiPageId, currentBody }: { wikiPageId: stri
     <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       <input type="hidden" name="wikiPageId" value={wikiPageId} />
       <textarea name="body" rows={12} required defaultValue={currentBody} className="textInput" />
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSmall" disabled={pending} style={{ alignSelf: "flex-start" }}>
         {pending ? "Saving…" : "Save edit"}
       </button>

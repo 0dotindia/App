@@ -52,8 +52,20 @@ export function CommunityChatBody({ slug, communityName }: { slug: string; commu
   const load = useCallback(async () => {
     try {
       const result = await getCommunityChat(slug);
-      setMessages(result.items);
-      setNextCursor(result.nextCursor);
+      // Merge, don't replace: `resync` (reconnect / app-foreground, via the
+      // effect below) calls this too, and a plain setMessages(result.items)
+      // would silently discard any older history onLoadOlder had already
+      // paged in, plus reset nextCursor mid-pagination — same fix
+      // messages/[id].tsx's load() and LivestreamViewerBody's loadChat()
+      // both use for this exact recent-refetch-vs-pagination shape.
+      setMessages((prev) => {
+        if (prev.length === 0) return result.items;
+        const known = new Set(prev.map((m) => m.id));
+        const fresh = result.items.filter((m) => !known.has(m.id));
+        if (fresh.length === 0) return prev;
+        return [...fresh, ...prev].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      });
+      setNextCursor((prev) => (prev === null && result.nextCursor ? result.nextCursor : prev));
       setCanSend(result.canSend);
       setError(null);
     } catch (err) {
@@ -216,7 +228,7 @@ export function CommunityChatBody({ slug, communityName }: { slug: string; commu
             <View style={styles.emptyWrap}>
               <EmptyState
                 icon="chatbubble-ellipses-outline"
-                message={error ?? (communityName ? `Start the conversation in ${communityName}` : "No messages yet")}
+                title={error ?? (communityName ? `Start the conversation in ${communityName}` : "No messages yet")}
               />
             </View>
           }

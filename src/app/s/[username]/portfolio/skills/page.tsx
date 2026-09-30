@@ -38,7 +38,7 @@ export default async function SkillsSettingsPage() {
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Skills</h2>
       {mySkills.length === 0 ? (
-        <EmptyState message="No skills listed yet." />
+        <EmptyState title="No skills listed yet." />
       ) : (
         <div className="settingsGroup">
           {mySkills.map((skill, index) => (

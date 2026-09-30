@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { getBlockedUsers, unblockUser, ApiError } from "../src/api/client";
 import { Avatar } from "../src/components/Avatar";
@@ -21,10 +21,14 @@ export default function BlockedUsersScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  // See index.tsx's feedGenerationRef comment — same race, same fix.
+  const loadGenerationRef = useRef(0);
 
   const load = useCallback(() => {
     setError(null);
-    getBlockedUsers()
+    loadGenerationRef.current += 1;
+    return getBlockedUsers()
       .then((res) => {
         setItems(res.items);
         setNextCursor(res.nextCursor);
@@ -32,13 +36,26 @@ export default function BlockedUsersScreen() {
       .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load your blocked users."));
   }, []);
 
-  useFocusEffect(load);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  async function onRefresh() {
+    setRefreshing(true);
+    haptics.light();
+    await load();
+    setRefreshing(false);
+  }
 
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
+    const myGeneration = loadGenerationRef.current;
     setLoadingMore(true);
     try {
       const res = await getBlockedUsers(nextCursor);
+      if (myGeneration !== loadGenerationRef.current) return;
       setItems((prev) => [...(prev ?? []), ...res.items]);
       setNextCursor(res.nextCursor);
     } catch {
@@ -69,7 +86,7 @@ export default function BlockedUsersScreen() {
   if (error && !items) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="ban-outline" message={error} onRetry={load} />
+        <EmptyState icon="ban-outline" title={error} onRetry={load} />
       </View>
     );
   }
@@ -95,7 +112,8 @@ export default function BlockedUsersScreen() {
           keyExtractor={(item) => item.userId}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.4}
-          ListEmptyComponent={<EmptyState icon="ban-outline" message="You haven't blocked anyone." />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
+          ListEmptyComponent={<EmptyState icon="ban-outline" title="You haven't blocked anyone." />}
           ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={theme.colors.accent} /> : null}
           renderItem={({ item }) => (
             <View style={styles.row}>

@@ -281,6 +281,8 @@ export type BusinessDetail = {
   isVerified: boolean;
   averageRating: number;
   reviewCount: number;
+  followerCount: number;
+  isFollowing: boolean;
   location: { label: string; address: string } | null;
   website: string | null;
 };

@@ -224,9 +224,24 @@ export async function joinCommunity(formData: FormData): Promise<void> {
 
   const status = community.visibility === "public" ? "active" : "pending";
 
-  await db.communityMember.create({ data: { communityId, userId: user.id, role: "member", status } });
-  if (status === "active") {
-    await db.community.update({ where: { id: communityId }, data: { memberCount: { increment: 1 } } });
+  // Read + write in one transaction (not just the write) — same TOCTOU fix
+  // as toggleLike/toggleBookmark/toggleRepost in posts.ts and castVote in
+  // polls.ts: two concurrent join calls could otherwise both pass the
+  // `existing` check above before either write commits, and the second
+  // create() would throw unhandled on the [communityId, userId] primary key
+  // instead of quietly no-opping.
+  const joined = await db.$transaction(async (tx) => {
+    const stillNoRow = !(await tx.communityMember.findUnique({
+      where: { communityId_userId: { communityId, userId: user.id } },
+    }));
+    if (!stillNoRow) return false;
+    await tx.communityMember.create({ data: { communityId, userId: user.id, role: "member", status } });
+    if (status === "active") {
+      await tx.community.update({ where: { id: communityId }, data: { memberCount: { increment: 1 } } });
+    }
+    return true;
+  });
+  if (joined && status === "active") {
     await logMembershipEvent({ communityId, userId: user.id, type: "join" });
   }
 
@@ -248,9 +263,21 @@ export async function leaveCommunity(formData: FormData): Promise<void> {
   const member = await getCommunityMember(communityId, user.id);
   if (!member || member.role === "owner" || member.status === "banned") return;
 
-  await db.communityMember.delete({ where: { communityId_userId: { communityId, userId: user.id } } });
-  if (member.status === "active" || member.status === "muted") {
-    await db.community.update({ where: { id: communityId }, data: { memberCount: { decrement: 1 } } });
+  // Read + delete in one transaction — same TOCTOU fix as joinCommunity
+  // above: a double-leave (two tabs, rapid double-click) would otherwise let
+  // the second delete() throw unhandled once the row is already gone.
+  const left = await db.$transaction(async (tx) => {
+    const stillMember = await tx.communityMember.findUnique({
+      where: { communityId_userId: { communityId, userId: user.id } },
+    });
+    if (!stillMember) return false;
+    await tx.communityMember.delete({ where: { communityId_userId: { communityId, userId: user.id } } });
+    if (stillMember.status === "active" || stillMember.status === "muted") {
+      await tx.community.update({ where: { id: communityId }, data: { memberCount: { decrement: 1 } } });
+    }
+    return true;
+  });
+  if (left && (member.status === "active" || member.status === "muted")) {
     await logMembershipEvent({ communityId, userId: user.id, type: "leave" });
   }
 

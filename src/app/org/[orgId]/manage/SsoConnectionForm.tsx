@@ -35,7 +35,11 @@ export function SsoConnectionForm({
           required
         />
       </div>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSecondary buttonSmall" disabled={pending}>
         {pending ? "Saving…" : "Save SSO connection"}
       </button>

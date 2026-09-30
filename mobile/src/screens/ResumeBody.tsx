@@ -52,7 +52,7 @@ export function ResumeBody({ username }: { username: string }) {
   if (!resume) {
     return (
       <View style={styles.center}>
-        <EmptyState icon="document-text-outline" message={error ?? "Résumé not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="document-text-outline" title={error ?? "Résumé not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }
@@ -69,7 +69,7 @@ export function ResumeBody({ username }: { username: string }) {
         <Button label="Download PDF" variant="secondary" onPress={() => Linking.openURL(resume.resumePdfUrl!)} style={styles.pdfButton} />
       ) : null}
 
-      {!hasAnything ? <EmptyState icon="document-text-outline" message="Nothing on this résumé yet." /> : null}
+      {!hasAnything ? <EmptyState icon="document-text-outline" title="Nothing on this résumé yet." /> : null}
 
       {resume.workExperiences.length > 0 ? (
         <Section title="Work experience">

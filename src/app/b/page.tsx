@@ -66,7 +66,7 @@ export default async function BusinessesIndexPage() {
     <div className="profileCard">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Businesses</h1>
-        <Link href="/b/new" className="button" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+        <Link href="/b/new" className="button buttonSmall">
           Create business
         </Link>
       </div>
@@ -93,7 +93,7 @@ export default async function BusinessesIndexPage() {
       <div>
         <p className="sectionHeading">Discover</p>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-          {discover.length === 0 && <EmptyState message="No businesses yet." />}
+          {discover.length === 0 && <EmptyState title="No businesses yet." />}
           {discover.map((b) => (
             <BusinessRow key={b.id} slug={b.slug} name={b.name} logoUrl={b.logoUrl} category={b.category} />
           ))}

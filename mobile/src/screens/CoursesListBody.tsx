@@ -59,7 +59,7 @@ export function CoursesListBody({ username }: { username: string }) {
       data={courses}
       keyExtractor={(c) => c.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
-      ListEmptyComponent={<EmptyState icon="school-outline" message={error ?? "No courses yet."} onRetry={error ? load : undefined} />}
+      ListEmptyComponent={<EmptyState icon="school-outline" title={error ?? "No courses yet."} onRetry={error ? load : undefined} />}
       renderItem={({ item }) => (
         <Pressable
           style={styles.row}

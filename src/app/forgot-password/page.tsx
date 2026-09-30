@@ -60,13 +60,17 @@ export default function ForgotPasswordPage() {
           required
         />
 
-        {state?.error && <p className="errorText">{state.error}</p>}
+        {state?.error && (
+          <p className="errorText" role="alert">
+            {state.error}
+          </p>
+        )}
 
         <button type="submit" className="button" disabled={pending}>
           {pending ? "Resetting…" : "Reset password"}
         </button>
 
-        <p className="mutedText" style={{ fontSize: "0.8rem" }}>
+        <p className="mutedText" style={{ fontSize: "var(--text-xs)" }}>
           Lost your recovery codes too? Contact 0dot support — after confirming it&apos;s your
           account, they can issue you a new set.
         </p>

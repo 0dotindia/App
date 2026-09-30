@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useAuth } from "../src/auth/AuthContext";
@@ -37,9 +37,15 @@ export default function BookmarksScreen() {
   const [offlineCachedAt, setOfflineCachedAt] = useState<number | null>(null);
   const [replyTarget, setReplyTarget] = useState<Post | null>(null);
   const [actionsTarget, setActionsTarget] = useState<Post | null>(null);
+  // See index.tsx's identical feedGenerationRef comment — same race, same fix:
+  // onEndReached snapshots this before fetching the next page and checks it
+  // again after awaiting, so a pagination fetch still in flight when a
+  // focus/refresh replaces `posts` can't append its now-stale page onto it.
+  const bookmarksGenerationRef = useRef(0);
 
   const loadFirstPage = useCallback(async () => {
     setError(null);
+    bookmarksGenerationRef.current += 1;
     try {
       const { items, nextCursor: cursor } = await getBookmarks();
       setPosts(items);
@@ -78,9 +84,11 @@ export default function BookmarksScreen() {
 
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
+    const myGeneration = bookmarksGenerationRef.current;
     setLoadingMore(true);
     try {
       const { items, nextCursor: cursor } = await getBookmarks(nextCursor);
+      if (myGeneration !== bookmarksGenerationRef.current) return;
       animateNextLayout();
       setPosts((prev) => [...prev, ...items]);
       setNextCursor(cursor);
@@ -163,7 +171,7 @@ export default function BookmarksScreen() {
         ListEmptyComponent={
           <EmptyState
             icon={error ? "cloud-offline-outline" : "bookmark-outline"}
-            message={error ?? "Nothing bookmarked yet. Tap the bookmark icon on any post to save it here."}
+            title={error ?? "Nothing bookmarked yet. Tap the bookmark icon on any post to save it here."}
             onRetry={error ? loadFirstPage : undefined}
           />
         }

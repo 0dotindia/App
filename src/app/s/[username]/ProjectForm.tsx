@@ -165,17 +165,17 @@ export function ProjectForm({ project, ownSkills = [] }: { project?: ProjectForm
           </select>
         </div>
       </div>
-      <label className="mutedText" style={{ fontSize: "0.85rem", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+      <label className="mutedText" style={{ fontSize: "var(--text-xs-plus)", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
         <input type="checkbox" name="featuredOnResume" value="true" defaultChecked={project?.featuredOnResume} />
         Feature on resume
       </label>
 
       {ownSkills.length > 0 && (
         <div>
-          <span className="mutedText" style={{ fontSize: "0.85rem" }}>Skills used</span>
+          <span className="mutedText" style={{ fontSize: "var(--text-xs-plus)" }}>Skills used</span>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.3rem" }}>
             {ownSkills.map((skill) => (
-              <label key={skill.id} className="mutedText" style={{ fontSize: "0.85rem", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+              <label key={skill.id} className="mutedText" style={{ fontSize: "var(--text-xs-plus)", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
                 <input type="checkbox" name="skillIds" value={skill.id} defaultChecked={project?.skillIds?.includes(skill.id)} />
                 {skill.name}
               </label>
@@ -185,7 +185,7 @@ export function ProjectForm({ project, ownSkills = [] }: { project?: ProjectForm
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "0.3rem" }}>
-        <span className="mutedText" style={{ fontSize: "0.85rem" }}>External links</span>
+        <span className="mutedText" style={{ fontSize: "var(--text-xs-plus)" }}>External links</span>
         {links.map((link, index) => (
           <div key={index} style={{ display: "flex", gap: "0.4rem" }}>
             <input
@@ -219,7 +219,11 @@ export function ProjectForm({ project, ownSkills = [] }: { project?: ProjectForm
         )}
       </div>
 
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Saving…" : project ? "Save changes" : "Create project"}
       </button>

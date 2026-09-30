@@ -28,7 +28,7 @@ export function BusinessPostList({
   return (
     <div className="profileCard">
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-        {posts.length === 0 && <EmptyState message="No posts yet." />}
+        {posts.length === 0 && <EmptyState title="No posts yet." />}
         {posts.map((post, index) => (
           <PostCard
             key={post.id}

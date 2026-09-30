@@ -60,7 +60,11 @@ export function EducationForm({ item }: { item?: EducationFormItem }) {
         maxLength={1000}
         rows={3}
       />
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Saving…" : item ? "Save changes" : "Add education"}
       </button>

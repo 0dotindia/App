@@ -39,7 +39,7 @@ export default async function BooksSettingsPage() {
   return (
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Books</h2>
-      {myBooks.length === 0 && <EmptyState message="No books yet." />}
+      {myBooks.length === 0 && <EmptyState title="No books yet." />}
       {myBooks.map((book) => {
         const chapters = chaptersByBook.get(book.id) ?? [];
         return (

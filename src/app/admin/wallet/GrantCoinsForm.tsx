@@ -38,7 +38,11 @@ export function GrantCoinsForm() {
       )}
       <input name="reason" placeholder="Reason (required, audited)" className="textInput" required minLength={3} />
 
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       {state?.success && <p className="mutedText" style={{ fontSize: "0.85rem" }}>Done — recorded in the issuance audit.</p>}
       <button type="submit" className="button buttonSmall" disabled={pending}>
         {pending ? "Issuing…" : "Issue"}

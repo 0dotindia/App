@@ -43,7 +43,7 @@ export default async function FormsSettingsPage() {
       </details>
 
       {forms.length === 0 ? (
-        <EmptyState message="No forms yet." />
+        <EmptyState title="No forms yet." />
       ) : (
         <div className="settingsGroup">
           {forms.map((form) => (

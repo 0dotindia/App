@@ -132,7 +132,7 @@ function GroupDescription({ group }: { group: DisplayGroup }) {
         {rest.length > 0 && ` and ${rest.length} other${rest.length === 1 ? "" : "s"}`}
         {` ${verb}`}
       </span>
-      <span className="mutedText" style={{ fontSize: "0.8rem", marginLeft: "0.5rem" }}>
+      <span className="mutedText" style={{ fontSize: "var(--text-xs)", marginLeft: "0.5rem" }}>
         {relativeTime(group.createdAt)}
       </span>
     </>
@@ -212,18 +212,13 @@ export default async function NotificationsPage({
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Notifications</h1>
         <div style={{ display: "flex", gap: "0.5rem" }}>
           <form action={markAllNotificationsRead}>
-            <button
-              type="submit"
-              className="button buttonSecondary"
-              style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}
-            >
+            <button type="submit" className="button buttonSecondary buttonSmall">
               Mark all read
             </button>
           </form>
           <form action={clearAllNotifications}>
             <ConfirmButton
-              className="button buttonSecondary"
-              style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}
+              className="button buttonSecondary buttonSmall"
               title="Clear all notifications?"
               description="This permanently deletes every notification in this list. This can't be undone."
               confirmLabel="Clear all"
@@ -236,7 +231,7 @@ export default async function NotificationsPage({
 
       <ListKeyNav helpTitle="Notifications">
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {groups.length === 0 && <EmptyState message="No notifications yet." />}
+          {groups.length === 0 && <EmptyState title="No notifications yet." />}
           {groups.map((group) => {
             // A still-pending follow_request gets Accept/Reject controls
             // instead of a plain navigate-away Link — see pendingRequesterIds
@@ -262,13 +257,13 @@ export default async function NotificationsPage({
                   <div style={{ display: "flex", gap: "0.4rem" }}>
                     <form action={acceptFollowRequest}>
                       <input type="hidden" name="followerId" value={group.actorId!} />
-                      <button type="submit" className="button buttonSmall" style={{ fontSize: "0.8rem", padding: "0.3rem 0.6rem" }}>
+                      <button type="submit" className="button buttonSmall">
                         Accept
                       </button>
                     </form>
                     <form action={rejectFollowRequest}>
                       <input type="hidden" name="followerId" value={group.actorId!} />
-                      <button type="submit" className="button buttonSecondary buttonSmall" style={{ fontSize: "0.8rem", padding: "0.3rem 0.6rem" }}>
+                      <button type="submit" className="button buttonSecondary buttonSmall">
                         Reject
                       </button>
                     </form>

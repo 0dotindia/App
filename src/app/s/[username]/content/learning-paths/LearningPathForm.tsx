@@ -24,12 +24,13 @@ export function LearningPathForm({
       <input
         name="title"
         placeholder="Learning path title"
+        aria-label="Learning path title"
         defaultValue={path?.title}
         required
         maxLength={160}
         className="textInput"
       />
-      <p className="mutedText" style={{ fontSize: "0.85rem", margin: 0 }}>Courses, in order:</p>
+      <p className="mutedText" style={{ fontSize: "var(--text-xs-plus)", margin: 0 }}>Courses, in order:</p>
       <OrderedPicker
         name="courseIds"
         options={courses.map((c) => ({ id: c.id, label: c.title }))}
@@ -38,7 +39,11 @@ export function LearningPathForm({
       <button type="submit" className="button" disabled={pending} style={{ alignSelf: "flex-start" }}>
         {pending ? "Saving…" : path ? "Save changes" : "Create learning path"}
       </button>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

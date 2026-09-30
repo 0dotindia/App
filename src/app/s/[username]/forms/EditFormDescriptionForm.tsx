@@ -32,7 +32,11 @@ export function EditFormDescriptionForm({ formId, description }: { formId: strin
         generate={suggestFormDescription}
         onInsert={setDescriptionValue}
       />
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSmall" disabled={pending} style={{ alignSelf: "flex-start" }}>
         {pending ? "Saving…" : "Save"}
       </button>

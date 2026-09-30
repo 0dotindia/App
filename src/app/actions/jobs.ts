@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
-import { canManageCatalog, isBusinessStaff } from "@/lib/businesses";
+import { canManageCatalog, isBusinessStaff, getBusinessMember } from "@/lib/businesses";
 import { notifyJobApplication, notifyApplicationStatusChange } from "@/lib/notifications";
 import { notifyMatchingJobAlerts } from "@/lib/job-alerts";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -102,9 +102,24 @@ export async function applyToJob(_prevState: ActionState, formData: FormData): P
     return { error: "This job posting is closed." };
   }
 
+  // Same reasoning as createOrUpdateReview's self-review guard: a business's
+  // own team applying to its own listing would be meaningless at best.
+  if (await getBusinessMember(job.business.id, user.id)) {
+    return { error: "You can't apply to your own business's job." };
+  }
+
   if (!checkApplicationRateLimit(user.id)) {
     return { error: "You're applying too fast. Please slow down." };
   }
+
+  // JobApplication has no unique constraint on (jobId, applicantId) — check
+  // explicitly rather than letting a double-submit or retry create repeat
+  // applications (and repeat notifications to the business's staff).
+  const existingApplication = await db.jobApplication.findFirst({
+    where: { jobId: job.id, applicantId: user.id },
+    select: { id: true },
+  });
+  if (existingApplication) return { error: "You've already applied to this job." };
 
   const coverNote = String(formData.get("coverNote") ?? "").trim();
   if (coverNote.length > 3000) return { error: "Cover note must be 3000 characters or fewer." };

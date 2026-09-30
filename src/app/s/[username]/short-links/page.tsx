@@ -32,7 +32,7 @@ export default async function ShortLinksSettingsPage() {
       </div>
 
       {shortLinks.length === 0 ? (
-        <EmptyState message="No short links yet." />
+        <EmptyState title="No short links yet." />
       ) : (
         <div className="settingsGroup" style={{ marginTop: "1.5rem" }}>
           {shortLinks.map((link) => (

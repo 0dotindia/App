@@ -13,6 +13,7 @@ export function ClaimDomainForm() {
           name="domain"
           type="text"
           placeholder="links.yourdomain.com"
+          aria-label="Domain"
           required
           className="textInput"
           style={{ flex: "2 1 200px" }}
@@ -25,7 +26,11 @@ export function ClaimDomainForm() {
           {pending ? "Claiming…" : "Claim domain"}
         </button>
       </div>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

@@ -61,7 +61,7 @@ export function ArticlesListBody({ username }: { username: string }) {
       keyExtractor={(a) => a.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
       ListEmptyComponent={
-        <EmptyState icon="document-text-outline" message={error ?? "No published articles yet."} onRetry={error ? load : undefined} />
+        <EmptyState icon="document-text-outline" title={error ?? "No published articles yet."} onRetry={error ? load : undefined} />
       }
       renderItem={({ item }) => (
         <Pressable onPress={() => router.push({ pathname: "/[username]/articles/[slug]", params: { username, slug: item.slug } })}>

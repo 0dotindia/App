@@ -84,7 +84,11 @@ export function BookChapterForm({
         </div>
       </div>
 
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Saving…" : chapter ? "Save changes" : "Add chapter"}
       </button>

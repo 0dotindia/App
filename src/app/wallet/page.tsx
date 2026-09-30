@@ -71,7 +71,10 @@ export default async function WalletPage({
 
       <h2 className="settingsSectionHeading" style={{ fontSize: "0.95rem" }}>Send coins</h2>
       <div className="settingsGroup" style={{ padding: "0.9rem 1rem" }}>
-        <TransferCoinsForm />
+        <TransferCoinsForm
+          minCoins={WALLET_LIMITS.TRANSFER_MIN_COINS}
+          maxCoins={WALLET_LIMITS.TRANSFER_MAX_COINS_PER_TX}
+        />
       </div>
 
       <h2 className="settingsSectionHeading" style={{ fontSize: "0.95rem" }}>Invite &amp; earn</h2>
@@ -90,7 +93,7 @@ export default async function WalletPage({
         </a>
       </div>
       <div className="settingsGroup" style={{ padding: activity.entries.length ? "0.4rem" : "0.9rem 1rem" }}>
-        {activity.entries.length === 0 && <EmptyState message="No wallet activity yet." />}
+        {activity.entries.length === 0 && <EmptyState title="No wallet activity yet." />}
         {activity.entries.map((e) => (
           <div key={e.id} className="navLink" style={{ justifyContent: "space-between" }}>
             <span>{walletActivityLabel(e)}{e.memo ? ` — ${e.memo}` : ""}</span>

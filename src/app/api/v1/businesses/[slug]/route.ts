@@ -26,6 +26,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   if (!business || business.status !== "active") return apiError("Not found.", 404);
 
   const primaryLocation = business.locations[0] ?? null;
+  // Business-follow feature: unlike the rest of this read-only route,
+  // follow/unfollow itself is a native action (see the follow/route.ts
+  // sibling) — the card needs its own state, not just a link out.
+  const isFollowing = Boolean(
+    await db.businessFollow.findUnique({
+      where: { followerId_businessId: { followerId: ctx.userId, businessId: business.id } },
+      select: { businessId: true },
+    })
+  );
 
   return Response.json(
     {
@@ -39,6 +48,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       isVerified: business.isVerified,
       averageRating: business.averageRating,
       reviewCount: business.reviewCount,
+      followerCount: business.followerCount,
+      isFollowing,
       location: primaryLocation ? { label: primaryLocation.label, address: primaryLocation.address } : null,
       website: business.contactInfo?.website ?? null,
     },

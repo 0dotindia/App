@@ -30,7 +30,7 @@ export default async function WikiSettingsPage() {
   return (
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Wiki &amp; Documentation</h2>
-      {pages.length === 0 && <EmptyState message="No pages yet." />}
+      {pages.length === 0 && <EmptyState title="No pages yet." />}
       {pages.map((page) => {
         // Reordering is scoped to siblings under the same parent (matches
         // moveWikiPage's own scoping) — `pages` groups siblings contiguously

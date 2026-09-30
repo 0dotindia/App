@@ -105,7 +105,13 @@ export default async function ManageBusinessPage({ params }: { params: Promise<{
                   <form action={updateTeamMemberRole} className="row-sm">
                     <input type="hidden" name="businessId" value={business.id} />
                     <input type="hidden" name="userId" value={m.userId} />
-                    <select name="role" defaultValue={m.role} className="textInput" style={{ fontSize: "0.8rem" }}>
+                    <select
+                      name="role"
+                      defaultValue={m.role}
+                      className="textInput"
+                      style={{ fontSize: "var(--text-xs)" }}
+                      aria-label="Role"
+                    >
                       <option value="admin">Admin</option>
                       <option value="editor">Editor</option>
                       <option value="member">Member</option>
@@ -155,7 +161,7 @@ export default async function ManageBusinessPage({ params }: { params: Promise<{
 
       <div style={{ marginTop: "1.5rem" }}>
         <p className="sectionHeading">Locations</p>
-        {business.locations.length === 0 && <EmptyState message="No locations yet." />}
+        {business.locations.length === 0 && <EmptyState title="No locations yet." />}
         {business.locations.map((location) => (
           <div key={location.id} className="profileLinkItem" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.35rem", marginBottom: "0.5rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -195,7 +201,7 @@ export default async function ManageBusinessPage({ params }: { params: Promise<{
 
       <div className="linksSection" style={{ marginTop: "1.5rem" }}>
         <p className="sectionHeading">Links</p>
-        {links.length === 0 && <EmptyState message="No links yet." />}
+        {links.length === 0 && <EmptyState title="No links yet." />}
         {links.map((link, index) => (
           <div key={link.id} className="profileLinkItem" style={{ flexDirection: "column", alignItems: "stretch", gap: "0.35rem" }}>
             <div className="row">
@@ -254,7 +260,7 @@ export default async function ManageBusinessPage({ params }: { params: Promise<{
                 </p>
                 <form action={transferBusinessOwnership} className="stack">
                   <input type="hidden" name="businessId" value={business.id} />
-                  <select name="userId" required>
+                  <select name="userId" required aria-label="New owner">
                     {transferCandidates.map((m) => (
                       <option key={m.userId} value={m.userId}>
                         {memberName(m)}

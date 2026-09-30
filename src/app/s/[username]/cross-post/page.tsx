@@ -52,7 +52,7 @@ export default async function CrossPostSettingsPage() {
 
       <p className="settingsGroupLabel">Connected accounts</p>
       {connectedAccounts.length === 0 ? (
-        <EmptyState message="No accounts connected yet." />
+        <EmptyState title="No accounts connected yet." />
       ) : (
         <div className="settingsGroup">
           {connectedAccounts.map((account) => (
@@ -103,7 +103,7 @@ export default async function CrossPostSettingsPage() {
 
       <p className="settingsGroupLabel">Scheduled &amp; sent</p>
       {profileRow.scheduledCrossPosts.length === 0 ? (
-        <EmptyState message="Nothing scheduled yet." />
+        <EmptyState title="Nothing scheduled yet." />
       ) : (
         profileRow.scheduledCrossPosts.map((post) => (
           <div key={post.id} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
@@ -127,7 +127,7 @@ export default async function CrossPostSettingsPage() {
                 ) : undefined
               }
             />
-            <div className="mutedText settingsAddPanelBody" style={{ fontSize: "0.85rem", paddingTop: 0, display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+            <div className="mutedText settingsAddPanelBody" style={{ fontSize: "var(--text-xs-plus)", paddingTop: 0, display: "flex", flexDirection: "column", gap: "0.3rem" }}>
               {post.targets.map((target) => (
                 <span key={target.id} style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
                   <SocialIcon platform={target.externalAccount.platform as CrossPostPlatform} />

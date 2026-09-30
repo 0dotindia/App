@@ -83,11 +83,23 @@ export default async function ManageOrganizationPage({ params }: { params: Promi
                   <form action={updateOrganizationMember} style={{ display: "flex", gap: "0.3rem" }}>
                     <input type="hidden" name="organizationId" value={orgId} />
                     <input type="hidden" name="userId" value={m.userId} />
-                    <select name="role" defaultValue={m.role} className="textInput" style={{ fontSize: "0.8rem" }}>
+                    <select
+                      name="role"
+                      defaultValue={m.role}
+                      className="textInput"
+                      style={{ fontSize: "var(--text-xs)" }}
+                      aria-label="Role"
+                    >
                       <option value="org_admin">Admin</option>
                       <option value="member">Member</option>
                     </select>
-                    <input name="title" defaultValue={m.title ?? ""} placeholder="Title" className="textInput" style={{ fontSize: "0.8rem", width: "100px" }} />
+                    <input
+                      name="title"
+                      defaultValue={m.title ?? ""}
+                      placeholder="Title"
+                      className="textInput"
+                      style={{ fontSize: "var(--text-xs)", width: "100px" }}
+                    />
                     <input name="department" defaultValue={m.department ?? ""} placeholder="Department" className="textInput" style={{ fontSize: "0.8rem", width: "110px" }} />
                     <button type="submit" className="button buttonSecondary buttonSmall">
                       Update

@@ -102,7 +102,11 @@ export function LocationForm({ businessId, location }: { businessId: string; loc
         ))}
       </div>
 
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Saving…" : location ? "Save changes" : "Add location"}
       </button>

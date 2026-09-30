@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { getWalletTransactions, ApiError } from "../../src/api/client";
@@ -24,9 +24,12 @@ export default function WalletTransactionsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // See index.tsx's feedGenerationRef comment — same race, same fix.
+  const loadGenerationRef = useRef(0);
 
   const loadFirstPage = useCallback(async () => {
     setError(null);
+    loadGenerationRef.current += 1;
     try {
       const page = await getWalletTransactions();
       setEntries(page.entries);
@@ -55,9 +58,11 @@ export default function WalletTransactionsScreen() {
 
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
+    const myGeneration = loadGenerationRef.current;
     setLoadingMore(true);
     try {
       const page = await getWalletTransactions({ cursor: nextCursor });
+      if (myGeneration !== loadGenerationRef.current) return;
       setEntries((prev) => [...prev, ...page.entries]);
       setNextCursor(page.nextCursor);
     } catch {
@@ -87,7 +92,7 @@ export default function WalletTransactionsScreen() {
       onEndReached={onEndReached}
       onEndReachedThreshold={0.4}
       ListEmptyComponent={
-        <EmptyState icon="receipt-outline" message={error ?? "No activity yet."} onRetry={error ? loadFirstPage : undefined} />
+        <EmptyState icon="receipt-outline" title={error ?? "No activity yet."} onRetry={error ? loadFirstPage : undefined} />
       }
       ListFooterComponent={loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={theme.colors.accent} /> : null}
       renderItem={({ item }) => <WalletActivityRow entry={item} />}

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { POST_PAGE_SIZE } from "@/lib/pagination";
 import { getBlockedEitherWayUserIds, getPostVisibilityConditions } from "@/lib/post-visibility";
 import { cached } from "@/lib/cache/redis-cache";
+import { pollInclude } from "@/lib/feed-query";
 
 // phase-2 spec §6.2: velocity, not lifetime popularity or plain recency —
 // an old post with many likes accumulated slowly must not outrank a new
@@ -257,6 +258,11 @@ async function fetchTrendingPosts({
     include: {
       author: { include: authorInclude },
       media: mediaInclude,
+      // Was missing entirely — posts with polls never carried poll data on
+      // /trending (unlike /feed and /explore, which both include this),
+      // so PollBlock never rendered here at all. Mirrors feed-query.ts's
+      // getFeedPosts include exactly.
+      poll: pollInclude,
       repostOf: { include: { author: { include: authorInclude }, media: mediaInclude } },
       replies: {
         where: { deletedAt: null, authorId: { notIn: blockedIds } },

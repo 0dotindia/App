@@ -15,7 +15,11 @@ export function DocumentForm({ businessId }: { businessId: string }) {
         <option value="team_only">Team only</option>
       </select>
       <input type="file" name="file" accept=".pdf,.txt,image/png,image/jpeg,image/webp,image/gif" required className="textInput" />
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSmall" style={{ alignSelf: "flex-start" }} disabled={pending}>
         {pending ? "Uploading…" : "Upload"}
       </button>

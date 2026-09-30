@@ -10,8 +10,6 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Props = {
   icon: keyof typeof Ionicons.glyphMap;
-  /** @deprecated use `title` — kept so existing call sites keep working. */
-  message?: string;
   title?: string;
   description?: string;
   /** A primary action (e.g. a <Button>) for a designed — not error — empty state. */
@@ -22,15 +20,14 @@ type Props = {
 
 // Shared by every screen's empty/error list state. Redesign Phase 5
 // (docs/specs/phase-0-redesign.md §5) brought it to parity with the web
-// EmptyState: the icon sits in a soft accent disc, `message` became the
-// foreground title with an optional muted `description` line, and an
+// EmptyState: the icon sits in a soft accent disc, `title` sits as the
+// foreground heading with an optional muted `description` line, and an
 // `action` slot for a designed empty state. `onRetry` stays for the real
 // error case (a dropped connection, a 5xx) the user otherwise had no
 // prompt to recover from.
-export function EmptyState({ icon, message, title, description, action, onRetry }: Props) {
+export function EmptyState({ icon, title, description, action, onRetry }: Props) {
   const theme = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const heading = title ?? message;
   // M15/D3: the retry button used a bare `pressed ? 0.6 : 1` opacity
   // callback — now the same shared spring press feedback every other
   // pressable in the app uses.
@@ -41,7 +38,7 @@ export function EmptyState({ icon, message, title, description, action, onRetry 
       <View style={styles.iconDisc}>
         <Ionicons name={icon} size={24} color={theme.colors.accent} />
       </View>
-      {heading ? <Text style={styles.title}>{heading}</Text> : null}
+      {title ? <Text style={styles.title}>{title}</Text> : null}
       {description ? <Text style={styles.description}>{description}</Text> : null}
       {action ? <View style={styles.action}>{action}</View> : null}
       {onRetry ? (

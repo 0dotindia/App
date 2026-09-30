@@ -56,7 +56,11 @@ export function EditDeveloperAppForm({
         mode="single"
         initialUrls={logoUrl ? [logoUrl] : []}
       />
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSmall" disabled={pending} style={{ alignSelf: "flex-start" }}>
         {pending ? "Saving…" : "Save"}
       </button>

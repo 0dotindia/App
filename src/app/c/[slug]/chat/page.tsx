@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
@@ -34,13 +35,13 @@ export default async function CommunityChatPage({ params }: { params: Promise<{ 
   const canModerate = currentUser ? await isCommunityStaff(community.id, currentUser.id) : false;
 
   return (
-    <div className="profileCard" style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 8rem)" }}>
+    <div className="profileCard" style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 8rem)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           <Link href={`/c/${community.slug}`} className="button buttonSecondary iconButton" aria-label="Back to community">
-            ←
+            <ArrowLeft size={16} aria-hidden="true" />
           </Link>
-          <h1 style={{ fontSize: "1.05rem", fontWeight: 700 }}>{community.name} chat</h1>
+          <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{community.name} chat</h1>
         </div>
       </div>
 

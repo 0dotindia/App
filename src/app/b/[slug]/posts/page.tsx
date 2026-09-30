@@ -56,7 +56,7 @@ export default async function BusinessPostsPage({
       <div className="profileCard" style={{ marginBottom: "1rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{business.name} — Posts</h1>
-          <Link href={`/b/${business.slug}`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+          <Link href={`/b/${business.slug}`} className="button buttonSecondary buttonSmall">
             Back to business page
           </Link>
         </div>

@@ -57,7 +57,7 @@ export function BooksListBody({ username }: { username: string }) {
       keyExtractor={(b) => b.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
       ListEmptyComponent={
-        <EmptyState icon="library-outline" message={error ?? "No published books yet."} onRetry={error ? load : undefined} />
+        <EmptyState icon="library-outline" title={error ?? "No published books yet."} onRetry={error ? load : undefined} />
       }
       renderItem={({ item }) => (
         <Pressable

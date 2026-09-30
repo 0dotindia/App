@@ -75,9 +75,13 @@ export function SignupForm() {
           showStrength
         />
 
-        {state?.error && <p className="errorText">{state.error}</p>}
+        {state?.error && (
+          <p className="errorText" role="alert">
+            {state.error}
+          </p>
+        )}
 
-        <p className="mutedText" style={{ fontSize: "0.8rem" }}>
+        <p className="mutedText" style={{ fontSize: "var(--text-xs)" }}>
           By signing up you agree to the <Link href="/terms" prefetch={false}>Terms</Link> and{" "}
           <Link href="/privacy" prefetch={false}>Privacy Policy</Link>.
         </p>
@@ -87,8 +91,8 @@ export function SignupForm() {
         </button>
 
         {/* prefetch={false}: same DB-connection-burst-503 fix as
-            DigitalHomeVisual/ExploreLiveLink/MarketingNav, which mount
-            alongside this form on the same page. */}
+            DigitalHomeVisual/ExploreLiveLink, which mount alongside this
+            form on the same page. */}
         <p className="authFooter">
           Already have an account? <Link href="/login" prefetch={false}>Log in</Link>
         </p>

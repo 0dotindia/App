@@ -20,7 +20,11 @@ export function BusinessContactForm({ businessId, isLoggedIn }: { businessId: st
         </>
       )}
       <textarea name="body" placeholder="Message" maxLength={2000} rows={4} required className="textInput" />
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSmall" style={{ alignSelf: "flex-start" }} disabled={pending}>
         {pending ? "Sending…" : "Send message"}
       </button>

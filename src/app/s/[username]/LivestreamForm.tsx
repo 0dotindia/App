@@ -25,7 +25,11 @@ export function LivestreamForm({ ownTiers }: { ownTiers: { id: string; name: str
           ))}
         </select>
       </div>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Creating…" : "Schedule livestream"}
       </button>

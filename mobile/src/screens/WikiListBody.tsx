@@ -58,7 +58,7 @@ export function WikiListBody({ username }: { username: string }) {
       data={pages}
       keyExtractor={(p) => p.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
-      ListEmptyComponent={<EmptyState icon="book-outline" message={error ?? "No pages yet."} onRetry={error ? load : undefined} />}
+      ListEmptyComponent={<EmptyState icon="book-outline" title={error ?? "No pages yet."} onRetry={error ? load : undefined} />}
       renderItem={({ item }) => (
         <Pressable
           style={styles.row}

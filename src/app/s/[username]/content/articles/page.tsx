@@ -44,7 +44,7 @@ export default async function ArticlesSettingsPage() {
   return (
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Articles</h2>
-      {myArticles.length === 0 && <EmptyState message="No articles yet." />}
+      {myArticles.length === 0 && <EmptyState title="No articles yet." />}
       {myArticles.map((article) => (
         <div key={article.id} id={`article-${article.id}`} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow
@@ -81,7 +81,7 @@ export default async function ArticlesSettingsPage() {
           <form action={setContentLicense} style={{ display: "flex", gap: "0.35rem", alignItems: "center", padding: "0 var(--space-4) var(--space-3)" }}>
             <input type="hidden" name="subjectType" value="article" />
             <input type="hidden" name="subjectId" value={article.id} />
-            <label className="mutedText" style={{ fontSize: "0.8rem" }} htmlFor={`license-${article.id}`}>
+            <label className="mutedText" style={{ fontSize: "var(--text-xs)" }} htmlFor={`license-${article.id}`}>
               License
             </label>
             <select
@@ -89,7 +89,7 @@ export default async function ArticlesSettingsPage() {
               name="licenseType"
               defaultValue={licenseByArticleId.get(article.id) ?? "all_rights_reserved"}
               className="textInput"
-              style={{ fontSize: "0.8rem", padding: "0.2rem 0.4rem" }}
+              style={{ fontSize: "var(--text-xs)", padding: "0.2rem 0.4rem" }}
             >
               {Object.entries(LICENSE_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>

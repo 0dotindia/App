@@ -8,6 +8,7 @@ import { BrandMark } from "../components/BrandMark";
 import { useTheme, type Theme } from "../theme";
 import { haptics } from "../utils/haptics";
 import { usePressScale } from "../utils/usePressScale";
+import { useContentMaxWidth } from "../utils/responsive";
 import { API_BASE_URL } from "../config";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -24,70 +25,79 @@ const PERKS: { icon: keyof typeof Ionicons.glyphMap; label: string }[] = [
 export function SignInScreen() {
   const { error, signIn } = useAuth();
   const theme = useTheme();
+  const maxWidth = useContentMaxWidth();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const press = usePressScale({ scale: 0.97, opacity: 0.9 });
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <View style={styles.hero}>
-        <Animated.View entering={FadeInDown.duration(500)}>
-          <BrandMark size={96} />
-        </Animated.View>
-        <Animated.Text entering={FadeInDown.duration(500).delay(80)} style={styles.wordmark}>
-          0dot
-        </Animated.Text>
-        <Animated.Text entering={FadeInDown.duration(500).delay(140)} style={styles.tagline}>
-          One identity. One profile. Infinite possibilities.
-        </Animated.Text>
+      {/* Tablet-and-up width cap: without it, `perks` below (alignSelf:
+          "stretch") fills the full unconstrained screen width instead of
+          staying grouped under the centered hero — the exact "phone column
+          stretched full-bleed across a much wider screen" useContentMaxWidth
+          exists to prevent everywhere else in the app; this screen (the
+          very first one every user sees) was the one place still missing it. */}
+      <View style={[styles.inner, maxWidth ? { maxWidth, alignSelf: "center", width: "100%" } : null]}>
+        <View style={styles.hero}>
+          <Animated.View entering={FadeInDown.duration(500)}>
+            <BrandMark size={96} />
+          </Animated.View>
+          <Animated.Text entering={FadeInDown.duration(500).delay(80)} style={styles.wordmark}>
+            0dot
+          </Animated.Text>
+          <Animated.Text entering={FadeInDown.duration(500).delay(140)} style={styles.tagline}>
+            One identity. One profile. Infinite possibilities.
+          </Animated.Text>
 
-        <Animated.View entering={FadeIn.duration(500).delay(260)} style={styles.perks}>
-          {PERKS.map((perk) => (
-            <View key={perk.label} style={styles.perkRow}>
-              <View style={styles.perkIcon}>
-                <Ionicons name={perk.icon} size={16} color={theme.colors.accent} />
+          <Animated.View entering={FadeIn.duration(500).delay(260)} style={styles.perks}>
+            {PERKS.map((perk) => (
+              <View key={perk.label} style={styles.perkRow}>
+                <View style={styles.perkIcon}>
+                  <Ionicons name={perk.icon} size={16} color={theme.colors.accent} />
+                </View>
+                <Text style={styles.perkLabel}>{perk.label}</Text>
               </View>
-              <Text style={styles.perkLabel}>{perk.label}</Text>
-            </View>
-          ))}
-        </Animated.View>
-      </View>
+            ))}
+          </Animated.View>
+        </View>
 
-      {/* Plain View, not an entering-animated one: a Reanimated layout
-          animation that fails to run leaves its subtree stuck at opacity 0,
-          and the primary sign-in CTA must never be able to end up invisible
-          or untappable. The hero above can animate — it's decorative. */}
-      <View style={styles.footer}>
-        <AnimatedPressable
-          onPress={() => {
-            haptics.light();
-            signIn();
-          }}
-          onPressIn={press.onPressIn}
-          onPressOut={press.onPressOut}
-          accessibilityRole="button"
-          accessibilityLabel="Continue with 0dot"
-          style={[styles.primaryButton, press.animatedStyle]}
-        >
-          <Text style={styles.primaryButtonText}>Continue with 0dot</Text>
-          <Ionicons name="arrow-forward" size={18} color={theme.colors.onAccent} />
-        </AnimatedPressable>
-
-        {error ? (
-          <View style={styles.errorRow}>
-            <Ionicons name="alert-circle" size={15} color={theme.colors.danger} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : (
-          <Pressable
-            onPress={() => Linking.openURL(API_BASE_URL)}
-            accessibilityRole="link"
-            accessibilityLabel="Learn more at 0dot.in"
-            hitSlop={8}
-            style={styles.learnMore}
+        {/* Plain View, not an entering-animated one: a Reanimated layout
+            animation that fails to run leaves its subtree stuck at opacity 0,
+            and the primary sign-in CTA must never be able to end up invisible
+            or untappable. The hero above can animate — it's decorative. */}
+        <View style={styles.footer}>
+          <AnimatedPressable
+            onPress={() => {
+              haptics.light();
+              signIn();
+            }}
+            onPressIn={press.onPressIn}
+            onPressOut={press.onPressOut}
+            accessibilityRole="button"
+            accessibilityLabel="Continue with 0dot"
+            style={[styles.primaryButton, press.animatedStyle]}
           >
-            <Text style={styles.learnMoreText}>New here? Learn more at 0dot.in</Text>
-          </Pressable>
-        )}
+            <Text style={styles.primaryButtonText}>Continue with 0dot</Text>
+            <Ionicons name="arrow-forward" size={18} color={theme.colors.onAccent} />
+          </AnimatedPressable>
+
+          {error ? (
+            <View style={styles.errorRow}>
+              <Ionicons name="alert-circle" size={15} color={theme.colors.danger} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => Linking.openURL(API_BASE_URL)}
+              accessibilityRole="link"
+              accessibilityLabel="Learn more at 0dot.in"
+              hitSlop={8}
+              style={styles.learnMore}
+            >
+              <Text style={styles.learnMoreText}>New here? Learn more at 0dot.in</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -95,7 +105,8 @@ export function SignInScreen() {
 
 function createStyles(theme: Theme) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.background, justifyContent: "space-between", padding: theme.space[6] },
+    container: { flex: 1, backgroundColor: theme.colors.background },
+    inner: { flex: 1, justifyContent: "space-between", padding: theme.space[6] },
     hero: { flex: 1, alignItems: "center", justifyContent: "center", gap: theme.space[3] },
     wordmark: { fontSize: theme.text.xxl, fontWeight: theme.weight.heading, color: theme.colors.foreground, marginTop: theme.space[2] },
     tagline: {

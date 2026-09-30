@@ -95,7 +95,14 @@ export default async function NotificationSettingsPage({ params }: { params: Pro
             key={type}
             icon={NOTIFICATION_ICONS[type]}
             label={getNotificationVerb(type) || type}
-            trailing={<DeliveryToggle notificationType={type} channel="push" enabled={pushPrefByType.get(type) ?? true} />}
+            trailing={
+              <DeliveryToggle
+                notificationType={type}
+                channel="push"
+                enabled={pushPrefByType.get(type) ?? true}
+                label={getNotificationVerb(type) || type}
+              />
+            }
           />
         ))}
       </div>
@@ -111,7 +118,14 @@ export default async function NotificationSettingsPage({ params }: { params: Pro
                 key={type}
                 icon={NOTIFICATION_ICONS[type as (typeof PUSH_NOTIFICATION_TYPES)[number]]}
                 label={getNotificationVerb(type) || type}
-                trailing={<DeliveryToggle notificationType={type} channel="email" enabled={emailPrefByType.get(type) ?? true} />}
+                trailing={
+                  <DeliveryToggle
+                    notificationType={type}
+                    channel="email"
+                    enabled={emailPrefByType.get(type) ?? true}
+                    label={getNotificationVerb(type) || type}
+                  />
+                }
               />
             ))}
           </div>

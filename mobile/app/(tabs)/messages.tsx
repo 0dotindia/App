@@ -116,7 +116,7 @@ export default function MessagesScreen() {
           ListEmptyComponent={
             <EmptyState
               icon={error ? "cloud-offline-outline" : "chatbubbles-outline"}
-              message={error ?? "No messages yet. Start a conversation with someone you follow."}
+              title={error ?? "No messages yet. Start a conversation with someone you follow."}
               onRetry={error ? () => load() : undefined}
             />
           }

@@ -50,7 +50,7 @@ export default async function ManageAppointmentsPage({ params }: { params: Promi
     <div className="profileCard">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Appointments — {business.name}</h1>
-        <Link href={`/b/${business.slug}/appointments`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+        <Link href={`/b/${business.slug}/appointments`} className="button buttonSecondary buttonSmall">
           Customer view
         </Link>
       </div>
@@ -110,7 +110,7 @@ export default async function ManageAppointmentsPage({ params }: { params: Promi
 
       <div>
         <p className="sectionHeading">Requests & upcoming</p>
-        {appointments.length === 0 && <EmptyState message="Nothing scheduled." />}
+        {appointments.length === 0 && <EmptyState title="Nothing scheduled." />}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {appointments.map((a) => {
             const customerName = a.customer.profile?.displayName ?? a.customer.username?.handle ?? "Unknown";

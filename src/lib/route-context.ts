@@ -19,9 +19,13 @@ export function isProfilePagePath(pathname: string): boolean {
 // (globals.css) but were missing from this set (live-site QA pass,
 // 2026-08-25) — they rendered with the full SiteHeader/Sidebar shell wrapped
 // around a card visually designed to stand alone, which looked broken.
+// /login/2fa (same .landingWrap/.authCard shape as /login) had the same gap
+// — a mobile QA pass found its card rendering off-center, wrapped in the
+// full SiteHeader/Sidebar shell instead of standing alone like /login does.
 const CHROMELESS_PATHS = new Set([
   "/",
   "/login",
+  "/login/2fa",
   "/signup",
   "/forgot-password",
   "/reset-password/success",
@@ -42,14 +46,17 @@ export function isChromelessPath(pathname: string): boolean {
   return CHROMELESS_PATHS.has(pathname);
 }
 
-// Narrower than CHROMELESS_PATHS: only /login and /signup pin to exactly
-// one viewport (body.fixedViewport in globals.css — fixed 100dvh, no page
-// scroll, single-purpose task pages per spec §15). "/" was the same until
-// the marketing-page redesign added nav/product-story/features/footer below
-// the hero — that content needs the page to actually scroll, so "/" keeps
-// isChromelessPath's true (no SiteHeader/Sidebar) but drops out of this
-// narrower set.
-const FIXED_VIEWPORT_PATHS = new Set(["/login", "/signup"]);
+// Narrower than CHROMELESS_PATHS: only /login, /login/2fa, and /signup pin
+// to exactly one viewport (body.fixedViewport in globals.css — fixed
+// 100dvh, no page scroll, single-purpose task pages per spec §15). "/" was
+// the same until the marketing-page redesign added
+// nav/product-story/features/footer below the hero — that content needs the
+// page to actually scroll, so "/" keeps isChromelessPath's true (no
+// SiteHeader/Sidebar) but drops out of this narrower set. /login/2fa is the
+// same single-purpose task-page shape as /login (same .landingWrap/.authCard
+// markup, just reached mid-flow), so it gets the same fixed-viewport
+// treatment rather than /signup/recovery-codes's plain-scrolling .authWrap.
+const FIXED_VIEWPORT_PATHS = new Set(["/login", "/login/2fa", "/signup"]);
 
 export function isFixedViewportPath(pathname: string): boolean {
   return FIXED_VIEWPORT_PATHS.has(pathname);

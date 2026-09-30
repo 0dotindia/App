@@ -97,7 +97,7 @@ export default async function BusinessContactInboxPage({
         contactCount={newMessages.length}
       />
 
-      {messages.length === 0 && <EmptyState message="No messages yet." />}
+      {messages.length === 0 && <EmptyState title="No messages yet." />}
 
       {newMessages.length > 0 && (
         <div style={{ marginBottom: "1.5rem" }}>

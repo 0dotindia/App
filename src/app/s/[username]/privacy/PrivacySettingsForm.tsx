@@ -22,7 +22,13 @@ export function PrivacySettingsForm({
         <SettingsRow
           label="Who can message you"
           trailing={
-            <select id="allowDmsFrom" name="allowDmsFrom" defaultValue={allowDmsFrom} className="settingsRowSelect">
+            <select
+              id="allowDmsFrom"
+              name="allowDmsFrom"
+              defaultValue={allowDmsFrom}
+              className="settingsRowSelect"
+              aria-label="Who can message you"
+            >
               <option value="everyone">Everyone</option>
               <option value="followers">People you follow</option>
               <option value="none">No one</option>

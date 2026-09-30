@@ -18,7 +18,11 @@ export function ApplyForm({ jobId }: { jobId: string }) {
         Resume (optional)
       </label>
       <input type="file" name="resume" accept=".pdf,.txt,image/png,image/jpeg,image/webp,image/gif" className="textInput" />
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSmall" style={{ alignSelf: "flex-start" }} disabled={pending}>
         {pending ? "Applying…" : "Apply"}
       </button>

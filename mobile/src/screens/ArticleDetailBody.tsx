@@ -49,7 +49,7 @@ export function ArticleDetailBody({ username, slug }: { username: string; slug: 
   if (!article) {
     return (
       <View style={styles.center}>
-        <EmptyState icon="document-text-outline" message={error ?? "Article not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="document-text-outline" title={error ?? "Article not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }

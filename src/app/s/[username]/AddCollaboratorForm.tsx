@@ -24,7 +24,11 @@ export function AddCollaboratorForm({ projectId }: { projectId: string }) {
       <button type="submit" className="button buttonSecondary buttonSmall" disabled={pending}>
         {pending ? "Adding…" : "Add collaborator"}
       </button>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

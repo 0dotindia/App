@@ -41,12 +41,19 @@ export default function HomeScreen() {
   const [hasNewPosts, setHasNewPosts] = useState(false);
   const listRef = useRef<FlatList<Post>>(null);
   const newestPostId = useRef<string | null>(null);
+  // Bumped every time loadFirstPage starts (focus, foreground, pull-to-
+  // refresh, or the "new posts" pill) — onEndReached snapshots it before
+  // fetching the next page and checks it again after awaiting, so a
+  // pagination fetch still in flight when a full refresh replaces `posts`
+  // can't then append its now-stale page onto the fresh list.
+  const feedGenerationRef = useRef(0);
 
   // Phase 15 spec §5.2: read-time offline caching. A live fetch always
   // wins and refreshes the cache; the cache is only ever consulted after a
   // live fetch has already failed, never as a first choice.
   const loadFirstPage = useCallback(async () => {
     setError(null);
+    feedGenerationRef.current += 1;
     try {
       const { items, nextCursor: cursor } = await getFeed();
       setPosts(items);
@@ -135,9 +142,13 @@ export default function HomeScreen() {
 
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
+    const myGeneration = feedGenerationRef.current;
     setLoadingMore(true);
     try {
       const { items, nextCursor: cursor } = await getFeed(nextCursor);
+      // A full refresh (focus/foreground/pull/new-posts-pill) replaced
+      // `posts` while this was in flight — its results are stale, drop them.
+      if (myGeneration !== feedGenerationRef.current) return;
       animateNextLayout();
       setPosts((prev) => [...prev, ...items]);
       setNextCursor(cursor);
@@ -223,7 +234,7 @@ export default function HomeScreen() {
           ListHeaderComponent={offlineCachedAt ? <OfflineBanner cachedAt={offlineCachedAt} /> : null}
           ListEmptyComponent={
             error ? (
-              <EmptyState icon="cloud-offline-outline" message={error} onRetry={loadFirstPage} />
+              <EmptyState icon="cloud-offline-outline" title={error} onRetry={loadFirstPage} />
             ) : (
               <EmptyState
                 icon="newspaper-outline"

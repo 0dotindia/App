@@ -22,7 +22,11 @@ export function NewContactForm({ businessId }: { businessId: string }) {
       <button type="submit" className="button buttonSmall" disabled={pending}>
         {pending ? "Adding…" : "Add contact"}
       </button>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

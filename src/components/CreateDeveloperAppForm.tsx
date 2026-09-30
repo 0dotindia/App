@@ -60,7 +60,11 @@ export function CreateDeveloperAppForm({ businesses }: { businesses: { id: strin
         <label htmlFor="redirectUris">Redirect URIs (one per line)</label>
         <textarea id="redirectUris" name="redirectUris" required className="textInput" rows={3} placeholder="https://example.com/oauth/callback" />
       </div>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSmall" style={{ alignSelf: "flex-start" }} disabled={pending}>
         {pending ? "Registering…" : "Register app"}
       </button>

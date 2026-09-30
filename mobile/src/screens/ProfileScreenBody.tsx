@@ -165,9 +165,14 @@ export function ProfileScreenBody({
 
   async function onPostsEndReached() {
     if (!postsNextCursor || postsLoadingMore) return;
+    const requestId = loadRequestId.current;
     setPostsLoadingMore(true);
     try {
       const result = await getUserPosts(username, postsNextCursor);
+      // A newer load() (refocus, pull-to-refresh, or a username change) ran
+      // while this was in flight — same guard load() uses on itself, extended
+      // to pagination so a stale page can't get appended onto fresher posts.
+      if (loadRequestId.current !== requestId) return;
       animateNextLayout();
       setPosts((prev) => [...prev, ...result.items]);
       setPostsNextCursor(result.nextCursor);
@@ -318,7 +323,7 @@ export function ProfileScreenBody({
   if (!profile) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="person-outline" message={error ?? "Profile not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="person-outline" title={error ?? "Profile not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }

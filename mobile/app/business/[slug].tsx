@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as WebBrowser from "expo-web-browser";
 import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { getBusiness, ApiError } from "../../src/api/client";
+import { getBusiness, followBusiness, unfollowBusiness, ApiError } from "../../src/api/client";
 import { Avatar } from "../../src/components/Avatar";
 import { Button } from "../../src/components/Button";
 import { EmptyState } from "../../src/components/EmptyState";
@@ -51,6 +51,40 @@ export default function BusinessScreen() {
     WebBrowser.openBrowserAsync(`${API_BASE_URL}/b/${slug}`).catch(() => {});
   }
 
+  // Every other shareable surface (posts, profiles) has this; businesses
+  // didn't — same Share.share({message,url}) shape PostActionsSheet.tsx's
+  // onShare already establishes, same non-recoverable posture on cancel.
+  async function onShare() {
+    haptics.light();
+    const url = `${API_BASE_URL}/b/${slug}`;
+    try {
+      await Share.share({ message: url, url });
+    } catch {
+      // User-cancelled or platform share-sheet failure — nothing to recover.
+    }
+  }
+
+  // Optimistic toggle + rollback-on-failure, same shape as
+  // ProfileScreenBody.tsx's onToggleFollow — the one native write this
+  // otherwise read-only/browser-handoff screen supports (see this file's
+  // top comment).
+  async function onToggleFollow() {
+    if (!business) return;
+    haptics.light();
+    const wasFollowing = business.isFollowing;
+    setBusiness({ ...business, isFollowing: !wasFollowing, followerCount: business.followerCount + (wasFollowing ? -1 : 1) });
+    try {
+      if (wasFollowing) {
+        await unfollowBusiness(slug);
+      } else {
+        await followBusiness(slug);
+      }
+    } catch {
+      haptics.warning();
+      setBusiness((prev) => (prev ? { ...prev, isFollowing: wasFollowing, followerCount: business.followerCount } : prev));
+    }
+  }
+
   if (loading) {
     return (
       <View style={[styles.screen, styles.center, { gap: theme.space[3] }]}>
@@ -63,14 +97,23 @@ export default function BusinessScreen() {
   if (!business) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="storefront-outline" message={error ?? "Business not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="storefront-outline" title={error ?? "Business not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }
 
   return (
     <>
-      <Stack.Screen options={{ title: business.name }} />
+      <Stack.Screen
+        options={{
+          title: business.name,
+          headerRight: () => (
+            <Pressable onPress={onShare} accessibilityRole="button" accessibilityLabel="Share business" hitSlop={8} style={styles.headerButton}>
+              <Ionicons name="share-outline" size={20} color={theme.colors.foreground} />
+            </Pressable>
+          ),
+        }}
+      />
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         {business.coverUrl ? (
           <Image source={{ uri: business.coverUrl }} style={styles.cover} contentFit="cover" alt={`${business.name} cover photo`} />
@@ -92,6 +135,11 @@ export default function BusinessScreen() {
               </Text>
             </View>
           ) : null}
+          {business.followerCount > 0 ? (
+            <Text style={styles.ratingText}>
+              {business.followerCount} {business.followerCount === 1 ? "follower" : "followers"}
+            </Text>
+          ) : null}
         </View>
 
         {business.description ? <Text style={styles.description}>{business.description}</Text> : null}
@@ -109,7 +157,16 @@ export default function BusinessScreen() {
           </View>
         ) : null}
 
-        <Button label="View full profile" onPress={onOpenFullProfile} style={styles.button} />
+        <View style={styles.buttonRow}>
+          <Button
+            label={business.isFollowing ? "Following" : "Follow"}
+            variant={business.isFollowing ? "secondary" : "primary"}
+            onPress={onToggleFollow}
+            accessibilityLabel={business.isFollowing ? "Unfollow" : "Follow"}
+            style={styles.buttonFlex}
+          />
+          <Button label="View full profile" onPress={onOpenFullProfile} variant="secondary" style={styles.buttonFlex} />
+        </View>
       </ScrollView>
     </>
   );
@@ -118,6 +175,7 @@ export default function BusinessScreen() {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.colors.background },
+    headerButton: { minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
     content: { paddingBottom: theme.space[8], gap: theme.space[3] },
     center: { alignItems: "center", justifyContent: "center", padding: theme.space[5], gap: theme.space[2] },
     cover: { width: "100%", height: 120 },
@@ -129,6 +187,7 @@ function createStyles(theme: Theme) {
     description: { color: theme.colors.foreground, fontSize: theme.text.base, lineHeight: theme.text.base * 1.4, paddingHorizontal: theme.space[5] },
     infoRow: { flexDirection: "row", alignItems: "center", gap: theme.space[2], paddingHorizontal: theme.space[5] },
     infoText: { color: theme.colors.foreground, fontSize: theme.text.sm },
-    button: { marginHorizontal: theme.space[5], marginTop: theme.space[3] },
+    buttonRow: { flexDirection: "row", gap: theme.space[2], marginHorizontal: theme.space[5], marginTop: theme.space[3] },
+    buttonFlex: { flex: 1 },
   });
 }

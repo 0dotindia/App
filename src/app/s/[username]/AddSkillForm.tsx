@@ -23,7 +23,11 @@ export function AddSkillForm() {
       <button type="submit" className="button buttonSecondary buttonSmall" disabled={pending}>
         {pending ? "Adding…" : "Add"}
       </button>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

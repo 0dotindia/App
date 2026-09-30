@@ -28,7 +28,7 @@ export default async function LearningPathsSettingsPage() {
       </p>
 
       {courses.length === 0 ? (
-        <EmptyState message="Create a course first." />
+        <EmptyState title="Create a course first." />
       ) : (
         <div className="settingsGroup" style={{ marginTop: "1rem" }}>
           <div className="settingsAddPanelBody">
@@ -38,7 +38,7 @@ export default async function LearningPathsSettingsPage() {
       )}
 
       {paths.length === 0 ? (
-        <EmptyState message="No learning paths yet." />
+        <EmptyState title="No learning paths yet." />
       ) : (
         paths.map((path) => {
           const courseIds = JSON.parse(path.courseIdsJson) as string[];

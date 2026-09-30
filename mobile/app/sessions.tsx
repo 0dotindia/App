@@ -83,7 +83,7 @@ export default function SessionsScreen() {
   if (error && !data) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="desktop-outline" message={error} onRetry={load} />
+        <EmptyState icon="desktop-outline" title={error} onRetry={load} />
       </View>
     );
   }

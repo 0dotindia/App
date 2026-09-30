@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as WebBrowser from "expo-web-browser";
@@ -78,6 +78,18 @@ export default function EventScreen() {
     WebBrowser.openBrowserAsync(`${API_BASE_URL}/e/${slug}`).catch(() => {});
   }
 
+  // Same gap/fix as business/[slug].tsx's onShare — every other shareable
+  // surface already has this.
+  async function onShare() {
+    haptics.light();
+    const url = `${API_BASE_URL}/e/${slug}`;
+    try {
+      await Share.share({ message: url, url });
+    } catch {
+      // User-cancelled or platform share-sheet failure — nothing to recover.
+    }
+  }
+
   if (loading) {
     return (
       <View style={[styles.screen, styles.center, { gap: theme.space[3] }]}>
@@ -90,14 +102,23 @@ export default function EventScreen() {
   if (!event) {
     return (
       <View style={styles.screen}>
-        <EmptyState icon="calendar-outline" message={error ?? "Event not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="calendar-outline" title={error ?? "Event not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }
 
   return (
     <>
-      <Stack.Screen options={{ title: event.title }} />
+      <Stack.Screen
+        options={{
+          title: event.title,
+          headerRight: () => (
+            <Pressable onPress={onShare} accessibilityRole="button" accessibilityLabel="Share event" hitSlop={8} style={styles.headerButton}>
+              <Ionicons name="share-outline" size={20} color={theme.colors.foreground} />
+            </Pressable>
+          ),
+        }}
+      />
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         {event.coverImageUrl ? (
           <Image source={{ uri: event.coverImageUrl }} style={styles.cover} contentFit="cover" alt={`${event.title} cover image`} />
@@ -155,6 +176,7 @@ export default function EventScreen() {
 function createStyles(theme: Theme) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.colors.background },
+    headerButton: { minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
     center: { alignItems: "center", justifyContent: "center", padding: theme.space[5] },
     content: { paddingBottom: theme.space[8] },
     cover: { width: "100%", height: 180 },

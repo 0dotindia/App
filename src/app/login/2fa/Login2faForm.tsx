@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { verifyLoginTwoFactor } from "@/app/actions/two-factor";
+import { ThemeToggleLogo } from "@/components/ThemeToggleLogo";
 
 export function Login2faForm() {
   const [state, formAction, pending] = useActionState(verifyLoginTwoFactor, undefined);
@@ -9,6 +10,7 @@ export function Login2faForm() {
   return (
     <form action={formAction} className="authCard">
       <div className="authHeader">
+        <ThemeToggleLogo size={48} />
         <p>Two-factor authentication</p>
       </div>
       <h1>Enter your code</h1>
@@ -18,10 +20,22 @@ export function Login2faForm() {
 
       <div className="field">
         <label htmlFor="code">Verification code</label>
-        <input id="code" name="code" type="text" inputMode="numeric" autoComplete="one-time-code" autoFocus required />
+        <input
+          id="code"
+          name="code"
+          type="text"
+          autoComplete="one-time-code"
+          maxLength={20}
+          autoFocus
+          required
+        />
       </div>
 
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
 
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Verifying…" : "Verify"}

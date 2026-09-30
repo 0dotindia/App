@@ -13,7 +13,6 @@
      its full 1240px max on phones instead of the viewport. */
   width: 100%;
   min-width: 0;
-  max-width: 1240px;
   margin: 0 auto;
   padding: 0 var(--space-6) var(--space-16);
   color: var(--foreground);
@@ -721,7 +720,6 @@
 
 /* The "link unavailable" notice page.tsx renders above the masthead. */
 .landingNotice {
-  max-width: 1240px;
   margin: var(--space-4) auto 0;
   padding: 0 var(--space-6);
 }
@@ -793,7 +791,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  max-width: 1240px;
   height: 60px;
   margin: 0 auto;
   padding: 0 var(--space-6);
@@ -922,6 +919,14 @@
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
 }
 
+/* .button has no base text-align, so the "Create your 0dot"/"Log in" <a>
+   tags — stretched to the panel's full width by the flex column's default
+   align-items: stretch above — read left-aligned inside a wide pill instead
+   of centered like every other .button in the app (mobile QA pass). */
+.fpNavMenuPanel .button {
+  text-align: center;
+}
+
 .fpNavMenuPanel > nav:first-child {
   display: flex;
   flex-direction: column;
@@ -973,19 +978,16 @@
   .fpNavLogin {
     display: none;
   }
+  /* Mobile header is logo + menu button only — Log in / Create your 0dot
+     stay one tap away inside the menu panel instead of crowding the bar. */
+  .fpNavActions > .button {
+    display: none;
+  }
   .fpNavMenu {
     display: block;
   }
   .fpNavNameplate {
     font-size: 1.1rem;
-  }
-}
-
-@media (max-width: 420px) {
-  /* The condensed nameplate takes the CTA's place on small phones; the
-     CTA stays one tap away in the menu. */
-  .fpNavCondensed .fpNavActions > .button {
-    display: none;
   }
 }
 

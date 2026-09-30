@@ -20,6 +20,7 @@ export function ShortLinkForm() {
         name="destinationUrl"
         type="url"
         placeholder="https://…"
+        aria-label="Destination URL"
         required
         className="textInput"
         style={{ flex: "1 1 240px" }}
@@ -27,7 +28,11 @@ export function ShortLinkForm() {
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Shortening…" : "Shorten"}
       </button>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

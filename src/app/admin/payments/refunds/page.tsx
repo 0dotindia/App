@@ -46,7 +46,7 @@ export default async function AdminRefundsPage({ searchParams }: { searchParams:
         <button type="submit" className="button buttonSmall">Filter</button>
       </form>
 
-      {payments.length === 0 && <EmptyState message={handle && !payer ? "No user with that username." : "No coin payments yet."} />}
+      {payments.length === 0 && <EmptyState title={handle && !payer ? "No user with that username." : "No coin payments yet."} />}
       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {payments.map((pt) => {
           const payee = pt.payee?.username ? `@${pt.payee.username.handle}` : pt.payeeBusiness ? `/b/${pt.payeeBusiness.slug}` : "0dot";

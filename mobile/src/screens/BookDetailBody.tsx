@@ -49,7 +49,7 @@ export function BookDetailBody({ username, slug }: { username: string; slug: str
   if (!book) {
     return (
       <View style={styles.center}>
-        <EmptyState icon="library-outline" message={error ?? "Book not found."} onRetry={error ? load : undefined} />
+        <EmptyState icon="library-outline" title={error ?? "Book not found."} onRetry={error ? load : undefined} />
       </View>
     );
   }

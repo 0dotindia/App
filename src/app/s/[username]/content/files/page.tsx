@@ -25,7 +25,7 @@ export default async function FilesSettingsPage() {
   return (
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Files</h2>
-      {myFiles.length === 0 && <EmptyState message="No files yet." />}
+      {myFiles.length === 0 && <EmptyState title="No files yet." />}
       {myFiles.map((file) => (
         <div key={file.id} id={`file-${file.id}`} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow

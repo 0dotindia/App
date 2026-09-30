@@ -79,7 +79,7 @@ export default function BusinessesScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
       renderSectionHeader={({ section }) => <Text style={styles.sectionHeading}>{section.title}</Text>}
       ListEmptyComponent={
-        <EmptyState icon={error ? "cloud-offline-outline" : "storefront-outline"} message={error ?? "No businesses yet."} onRetry={error ? load : undefined} />
+        <EmptyState icon={error ? "cloud-offline-outline" : "storefront-outline"} title={error ?? "No businesses yet."} onRetry={error ? load : undefined} />
       }
       renderItem={({ item }) => (
         <ListRow accessibilityLabel={`View ${item.name}`} onPress={() => router.push({ pathname: "/business/[slug]", params: { slug: item.slug } })}>

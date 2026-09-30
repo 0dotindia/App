@@ -113,7 +113,7 @@ export default async function AdminTrustSafetyPage() {
       </p>
 
       {withPreviews.length === 0 ? (
-        <EmptyState message="Nothing pending." />
+        <EmptyState title="Nothing pending." />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {withPreviews.map(({ case: c, preview, link }) => (

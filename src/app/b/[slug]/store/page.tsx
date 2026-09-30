@@ -52,16 +52,16 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{business.name} — Store</h1>
         <div style={{ display: "flex", gap: "0.5rem" }}>
-          <Link href={`/b/${business.slug}/catalog`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+          <Link href={`/b/${business.slug}/catalog`} className="button buttonSecondary buttonSmall">
             Full catalog
           </Link>
-          <Link href={`/b/${business.slug}`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+          <Link href={`/b/${business.slug}`} className="button buttonSecondary buttonSmall">
             Back to business page
           </Link>
         </div>
       </div>
 
-      {offerings.length === 0 && <EmptyState message="Nothing here yet." />}
+      {offerings.length === 0 && <EmptyState title="Nothing here yet." />}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "0.75rem" }}>
         {offerings.map((offering) => {
