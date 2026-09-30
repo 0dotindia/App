@@ -85,6 +85,14 @@ export async function blockUser(blockerId: string, blockedId: string) {
   return db.block.create({ data: { blockerId, blockedId } });
 }
 
+export async function createFollow(followerId: string, followeeId: string, overrides: Partial<{ status: string }> = {}) {
+  return db.follow.create({ data: { followerId, followeeId, status: overrides.status ?? "accepted" } });
+}
+
+export async function setProfilePrivacy(userId: string, isPrivate: boolean) {
+  return db.profile.update({ where: { userId }, data: { isPrivate } });
+}
+
 // Credits a test user's coin ledger from system_promo_issuance.
 // `bucket: "spendable"` funds user_wallet (can be transferred); `"promo"`
 // funds user_promo (restricted, expiring). createUser() itself deliberately

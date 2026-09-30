@@ -62,6 +62,29 @@ export async function getPostVisibilityConditions(viewerId: string | null, preco
 
   const blockExclusion = { authorId: { notIn: blockedIds } };
 
+  // Security fix: a private account's posts must not appear in a
+  // scope-crossing list (Home/Explore/Trending/a public profile's post
+  // list) unless the viewer is the author or an *accepted* follower.
+  // Follow.status distinguishes "pending" (a request against a private
+  // account, not yet approved) from "accepted" specifically so approval
+  // can gate this (see the Follow model's own comment in schema.prisma),
+  // but nothing here actually enforced it — only the profile page's own
+  // canViewFullProfile did, which this function's callers never go
+  // through. That left Explore/Trending open to literally anyone and Home
+  // open to any pending (unapproved) follower; see getFolloweeIds
+  // (follow-graph.ts) for the matching fix on the Home-feed author list.
+  const accountPrivacy = {
+    OR: [
+      { author: { is: { profile: { is: { isPrivate: false } } } } },
+      ...(viewerId
+        ? [
+            { authorId: viewerId },
+            { author: { is: { followedBy: { some: { followerId: viewerId, status: "accepted" } } } } },
+          ]
+        : []),
+    ],
+  };
+
   const pendingBusinessExclusion = {
     OR: [{ businessAuthorId: null }, { businessAuthor: { is: { status: { not: "pending" } } } }],
   };
@@ -69,9 +92,9 @@ export async function getPostVisibilityConditions(viewerId: string | null, preco
   const repostVisibility = {
     OR: [
       { repostOfId: null },
-      { repostOf: { is: { AND: [communityPrivacy, blockExclusion, pendingBusinessExclusion, tierGating] } } },
+      { repostOf: { is: { AND: [communityPrivacy, blockExclusion, pendingBusinessExclusion, tierGating, accountPrivacy] } } },
     ],
   };
 
-  return [communityPrivacy, blockExclusion, pendingBusinessExclusion, tierGating, repostVisibility];
+  return [communityPrivacy, blockExclusion, pendingBusinessExclusion, tierGating, accountPrivacy, repostVisibility];
 }

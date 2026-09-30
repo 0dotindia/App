@@ -1,6 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { getFeedPosts } from "@/lib/feed-query";
-import { createUser, createCommunity, addCommunityMember, createPost, createBusiness, blockUser } from "@/test/factories";
+import { getFolloweeIds } from "@/lib/follow-graph";
+import {
+  createUser,
+  createCommunity,
+  addCommunityMember,
+  createPost,
+  createBusiness,
+  blockUser,
+  createFollow,
+  setProfilePrivacy,
+} from "@/test/factories";
 
 // Regression coverage for BUGS.md #1-#3 in the second review batch: private
 // community posts, blocked users' posts, and pending-business posts must
@@ -56,5 +66,55 @@ describe("getFeedPosts visibility", () => {
 
     const { items } = await getFeedPosts({ cursor: null, viewerId: viewer.id });
     expect(items.map((p) => p.id)).toContain(post.id);
+  });
+
+  // Regression coverage for a privacy bug found during the FIX_PLAN P3
+  // session: getPostVisibilityConditions had no isPrivate check at all, so
+  // a private account's posts leaked onto the fully public Explore/Trending
+  // surface (getFeedPosts with no viewer), and getFolloweeIds had no
+  // status filter, so a *pending* (unapproved) follow request leaked them
+  // into that requester's Home feed too.
+  describe("private accounts", () => {
+    it("excludes a private account's posts from an anonymous/global view (Explore/Trending)", async () => {
+      const author = await createUser();
+      await setProfilePrivacy(author.id, true);
+      const post = await createPost({ authorId: author.id });
+
+      const { items } = await getFeedPosts({ cursor: null, viewerId: null });
+      expect(items.map((p) => p.id)).not.toContain(post.id);
+    });
+
+    it("excludes a private account's posts from a viewer with only a pending follow request", async () => {
+      const viewer = await createUser();
+      const author = await createUser();
+      await setProfilePrivacy(author.id, true);
+      await createFollow(viewer.id, author.id, { status: "pending" });
+      const post = await createPost({ authorId: author.id });
+
+      expect(await getFolloweeIds(viewer.id)).not.toContain(author.id);
+      const { items } = await getFeedPosts({ cursor: null, viewerId: viewer.id });
+      expect(items.map((p) => p.id)).not.toContain(post.id);
+    });
+
+    it("includes a private account's posts for an accepted follower", async () => {
+      const viewer = await createUser();
+      const author = await createUser();
+      await setProfilePrivacy(author.id, true);
+      await createFollow(viewer.id, author.id, { status: "accepted" });
+      const post = await createPost({ authorId: author.id });
+
+      expect(await getFolloweeIds(viewer.id)).toContain(author.id);
+      const { items } = await getFeedPosts({ cursor: null, viewerId: viewer.id });
+      expect(items.map((p) => p.id)).toContain(post.id);
+    });
+
+    it("includes a private account's own posts for themselves", async () => {
+      const author = await createUser();
+      await setProfilePrivacy(author.id, true);
+      const post = await createPost({ authorId: author.id });
+
+      const { items } = await getFeedPosts({ cursor: null, viewerId: author.id });
+      expect(items.map((p) => p.id)).toContain(post.id);
+    });
   });
 });
