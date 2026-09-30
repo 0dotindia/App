@@ -3,18 +3,17 @@
 import { useActionState, useRef } from "react";
 import { addSocialLink } from "@/app/actions/profile";
 import { SOCIAL_PLATFORMS, getSocialPlatformLabel } from "@/lib/theme-presets";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 export function SocialLinksForm() {
   const [state, formAction, pending] = useActionState(addSocialLink, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       className="settingsForm"
     >
       <h2 style={{ fontSize: "1.05rem", fontWeight: 700 }}>Add a social link</h2>

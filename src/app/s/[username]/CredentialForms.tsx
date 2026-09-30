@@ -2,18 +2,17 @@
 
 import { useActionState, useRef } from "react";
 import { addResearchPaper, addCertificate, addAward } from "@/app/actions/credentials";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 export function ResearchPaperForm({ ownProjects }: { ownProjects: { id: string; title: string }[] }) {
   const [state, formAction, pending] = useActionState(addResearchPaper, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       className="settingsForm"
     >
       <div className="field">
@@ -70,14 +69,12 @@ export function ResearchPaperForm({ ownProjects }: { ownProjects: { id: string; 
 export function CertificateForm() {
   const [state, formAction, pending] = useActionState(addCertificate, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       className="settingsForm"
     >
       <div className="field">
@@ -121,14 +118,12 @@ export function CertificateForm() {
 export function AwardForm() {
   const [state, formAction, pending] = useActionState(addAward, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       className="settingsForm"
     >
       <div className="field">

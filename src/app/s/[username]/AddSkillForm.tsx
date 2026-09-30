@@ -2,18 +2,17 @@
 
 import { useActionState, useRef } from "react";
 import { addSkill } from "@/app/actions/skills";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 export function AddSkillForm() {
   const [state, formAction, pending] = useActionState(addSkill, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       style={{ display: "flex", gap: "0.4rem", alignItems: "flex-end" }}
     >
       <div className="field">

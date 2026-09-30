@@ -2,18 +2,17 @@
 
 import { useActionState, useRef } from "react";
 import { createPost } from "@/app/actions/posts";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 export function ReplyForm({ replyToId }: { replyToId: string }) {
   const [state, formAction, pending] = useActionState(createPost, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.5rem" }}
     >
       <input type="hidden" name="replyToId" value={replyToId} />

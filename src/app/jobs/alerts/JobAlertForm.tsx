@@ -2,18 +2,17 @@
 
 import { useActionState, useRef } from "react";
 import { createJobAlert } from "@/app/actions/job-alerts";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 export function JobAlertForm() {
   const [state, formAction, pending] = useActionState(createJobAlert, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
     >
       <input name="keywords" placeholder="Keywords" className="textInput" style={{ flex: "2 1 160px" }} />

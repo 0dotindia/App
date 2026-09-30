@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { createEpisode } from "@/app/actions/podcasts";
 import { suggestPodcastShowNotes } from "@/app/actions/ai-content";
 import { AISuggestButton } from "@/components/AISuggestButton";
 import { MarkdownField } from "@/components/MarkdownField";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 // spec §9.1: episode audio + optional tier gate, uploaded to
 // protected-storage.ts (never a public URL, even for ungated episodes —
@@ -21,21 +22,14 @@ export function EpisodeForm({ podcastId, ownTiers }: { podcastId: string; ownTie
   // createEpisode returns undefined on success (same as its never-submitted
   // initial state) — the falling edge of `pending`, with no error present,
   // is what actually distinguishes "just succeeded" from "never submitted."
-  // Unlike the `await formAction(formData); formRef.current?.reset()`
-  // anti-pattern elsewhere in this codebase (which resets on error too,
-  // since that dispatch's return isn't tied to completion), this only
-  // resets once the action has genuinely finished without an error —
-  // letting a creator add several episodes in a row without manually
-  // clearing every field between uploads.
-  const wasPending = useRef(false);
-  useEffect(() => {
-    if (wasPending.current && !pending && !state?.error) {
-      formRef.current?.reset();
-      setDurationS(null);
-      setDescriptionValue("");
-    }
-    wasPending.current = pending;
-  }, [pending, state]);
+  // useResetOnSuccess only resets once the action has genuinely finished
+  // without an error — letting a creator add several episodes in a row
+  // without manually clearing every field between uploads. This form was
+  // the original hand-written version of the hook (see useResetOnSuccess.ts).
+  useResetOnSuccess(formRef, pending, state, () => {
+    setDurationS(null);
+    setDescriptionValue("");
+  });
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

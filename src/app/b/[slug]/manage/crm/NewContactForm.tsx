@@ -2,18 +2,17 @@
 
 import { useActionState, useRef } from "react";
 import { createManualContact } from "@/app/actions/crm";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 export function NewContactForm({ businessId }: { businessId: string }) {
   const [state, formAction, pending] = useActionState(createManualContact, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
     >
       <input type="hidden" name="businessId" value={businessId} />

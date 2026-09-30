@@ -2,6 +2,7 @@
 
 import { useActionState, useRef } from "react";
 import { createComment } from "@/app/actions/reactions";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 // Mirrors ProjectCommentForm.tsx exactly, generalized to the subjectType/
 // subjectId pair the shared Reaction/Comment primitive (spec §4) uses
@@ -9,14 +10,12 @@ import { createComment } from "@/app/actions/reactions";
 export function ArticleCommentForm({ articleId }: { articleId: string }) {
   const [state, formAction, pending] = useActionState(createComment, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.5rem" }}
     >
       <input type="hidden" name="subjectType" value="article" />

@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3, Camera, CircleHelp, X } from "lucide-react";
 import { upload } from "@vercel/blob/client";
 import { createPost } from "@/app/actions/posts";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 const MAX_MEDIA = 4;
 
@@ -56,6 +57,7 @@ export function ComposeBox({
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  useResetOnSuccess(formRef, pending, state, () => setFiles([]));
   // Derived during render, not via setState-in-effect (react-hooks/set-state-in-effect)
   // — the effect below only handles revoking the previous URLs, not computing state.
   const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files]);
@@ -118,8 +120,6 @@ export function ComposeBox({
           setUploading(false);
         }
         await formAction(formData);
-        formRef.current?.reset();
-        setFiles([]);
       }}
       className="authCard"
       style={{ maxWidth: "none", marginBottom: "1.5rem" }}

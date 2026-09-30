@@ -2,18 +2,17 @@
 
 import { useActionState, useRef } from "react";
 import { createLink } from "@/app/actions/profile";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 export function AddLinkForm() {
   const [state, formAction, pending] = useActionState(createLink, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       className="settingsForm"
     >
       <h2 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Add a link</h2>

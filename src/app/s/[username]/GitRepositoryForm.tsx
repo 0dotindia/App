@@ -2,18 +2,17 @@
 
 import { useActionState, useRef } from "react";
 import { addGitRepository } from "@/app/actions/git-repositories";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 export function GitRepositoryForm({ ownProjects }: { ownProjects: { id: string; title: string }[] }) {
   const [state, formAction, pending] = useActionState(addGitRepository, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       className="settingsForm"
     >
       <div className="field">

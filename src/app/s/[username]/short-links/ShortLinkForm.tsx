@@ -2,18 +2,17 @@
 
 import { useActionState, useRef } from "react";
 import { createShortLink } from "@/app/actions/short-links";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 export function ShortLinkForm() {
   const [state, formAction, pending] = useActionState(createShortLink, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
     >
       <input

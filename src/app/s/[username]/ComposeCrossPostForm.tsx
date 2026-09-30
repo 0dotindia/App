@@ -8,6 +8,7 @@ import { AISuggestButton } from "@/components/AISuggestButton";
 import { SocialIcon } from "@/components/SocialIcon";
 import { getSocialPlatformLabel } from "@/lib/theme-presets";
 import type { CrossPostPlatform } from "@/lib/cross-post-platforms";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 const MAX_MEDIA = 4;
 
@@ -24,6 +25,10 @@ export function ComposeCrossPostForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [contentValue, setContentValue] = useState("");
+  useResetOnSuccess(formRef, pending, state, () => {
+    setFiles([]);
+    setContentValue("");
+  });
   const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files]);
 
   useEffect(() => {
@@ -51,9 +56,6 @@ export function ComposeCrossPostForm({
       action={async (formData: FormData) => {
         files.forEach((file) => formData.append("media", file));
         await formAction(formData);
-        formRef.current?.reset();
-        setFiles([]);
-        setContentValue("");
       }}
       className="settingsForm"
     >

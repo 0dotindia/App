@@ -3,6 +3,7 @@
 import { useActionState, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { createPollPost } from "@/app/actions/polls";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 10;
@@ -37,6 +38,13 @@ export function PollComposeForm({
     { id: 0, value: "" },
     { id: 1, value: "" },
   ]);
+  useResetOnSuccess(formRef, pending, state, () => {
+    nextOptionId.current = 2;
+    setOptions([
+      { id: 0, value: "" },
+      { id: 1, value: "" },
+    ]);
+  });
 
   function updateOption(id: number, value: string) {
     setOptions((prev) => prev.map((o) => (o.id === id ? { ...o, value } : o)));
@@ -53,15 +61,7 @@ export function PollComposeForm({
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-        nextOptionId.current = 2;
-        setOptions([
-          { id: 0, value: "" },
-          { id: 1, value: "" },
-        ]);
-      }}
+      action={formAction}
       className="authCard"
       style={{ maxWidth: "none", marginBottom: "1.5rem" }}
     >

@@ -2,21 +2,16 @@
 
 import { useActionState, useRef } from "react";
 import { createBusinessLink } from "@/app/actions/business-links";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 // Mirrors AddLinkForm.tsx (src/app/s/[username]/AddLinkForm.tsx) exactly.
 export function BusinessLinksForm({ businessId }: { businessId: string }) {
   const [state, formAction, pending] = useActionState(createBusinessLink, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
-    <form
-      ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
-      style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}
-    >
+    <form ref={formRef} action={formAction} style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       <input type="hidden" name="businessId" value={businessId} />
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <input

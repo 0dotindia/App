@@ -4,6 +4,7 @@ import { useActionState, useRef } from "react";
 import { connectExternalAccount } from "@/app/actions/cross-post";
 import { CROSS_POST_PLATFORMS } from "@/lib/cross-post-platforms";
 import { getSocialPlatformLabel } from "@/lib/theme-presets";
+import { useResetOnSuccess } from "@/hooks/useResetOnSuccess";
 
 // Same shape as SocialLinksForm.tsx's "add a social link" form — a select
 // + one text field + submit, reset on success. connectExternalAccount is a
@@ -13,14 +14,12 @@ import { getSocialPlatformLabel } from "@/lib/theme-presets";
 export function ConnectExternalAccountForm() {
   const [state, formAction, pending] = useActionState(connectExternalAccount, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  useResetOnSuccess(formRef, pending, state);
 
   return (
     <form
       ref={formRef}
-      action={async (formData: FormData) => {
-        await formAction(formData);
-        formRef.current?.reset();
-      }}
+      action={formAction}
       className="settingsForm"
     >
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
