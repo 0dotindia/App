@@ -1,16 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { purchaseProductForUser } from "@/lib/purchases";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
 import { saveUploadedImage } from "@/lib/uploads";
-import { randomUUID } from "crypto";
-import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
-import { getAffiliateAttribution } from "@/lib/affiliate";
-import { notifyAffiliateConversion } from "@/lib/notifications";
-import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import type { ActionState } from "@/app/actions/auth";
 
@@ -18,10 +13,6 @@ const MAX_FILE_BYTES = 200 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const STATUS_VALUES = new Set(["draft", "active", "archived"]);
 
-// Same convention as tips.ts's checkTipRateLimit for this class of action.
-function checkPurchaseRateLimit(userId: string): boolean {
-  return checkRateLimit(`product-purchase:${userId}`, { max: 10, windowMs: 15 * 60 * 1000 });
-}
 
 type ProductFields = { title: string; description: string; price: number; currency: string; status: string };
 
@@ -142,59 +133,12 @@ export async function archiveProduct(formData: FormData): Promise<void> {
   if (user.username) revalidatePath(`/s/${user.username.handle}`);
 }
 
-// spec §5: one-time purchase through the same payments backbone every
-// other money-moving feature uses (kind: digital_purchase) — charge, then
-// ledger row + purchase row in one transaction, only after a succeeded
-// charge, same shape sendTip/subscribeToTier already established.
+// Core lives in lib/purchases.ts, shared with POST /api/v1/wallet/purchases.
 export async function purchaseProduct(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
-  const productId = String(formData.get("productId") ?? "");
-
-  const product = await db.digitalProduct.findUnique({ where: { id: productId } });
-  if (!product || product.status !== "active") return { error: "This product isn't available." };
-  if (product.creatorId === user.id) return { error: "You can't buy your own product." };
-
-  const existing = await db.digitalProductPurchase.findFirst({ where: { productId: product.id, buyerId: user.id } });
-  if (existing) return { error: "You already own this product." };
-
-  if (!checkPurchaseRateLimit(user.id)) {
-    return { error: "You're purchasing too fast. Please slow down." };
-  }
-
-  // addendum-coin-wallet-v2.md §6.3/§6.4: coin purchases settle synchronously
-  // and need no payout account on the creator. An attributed affiliate earns
-  // a coin commission out of the creator's share
-  // (addendum-wallet-only-payments.md §8 #3).
-  const affiliate = await getAffiliateAttribution("digital_product", product.id, user.id);
-  const result = await settleCoinPurchase({
-    kind: "digital_purchase",
-    payerId: user.id,
-    payeeUserId: product.creatorId,
-    amountUsd: product.price,
-    currency: product.currency,
-    relatedObjectType: "digital_product",
-    relatedObjectId: product.id,
-    idempotencyKey: `digital:coin:${randomUUID()}`,
-    metadata: { productId: product.id },
-    createRows: createDigitalPurchaseRow,
-    affiliate,
-  });
+  const result = await purchaseProductForUser(user.id, String(formData.get("productId") ?? ""));
   if ("error" in result) return { error: result.error };
-  if (result.creditedAffiliateId) await notifyAffiliateConversion({ recipientId: result.creditedAffiliateId, actorId: user.id });
-  if (!result.alreadySettled) {
-    const h = await db.username.findUnique({ where: { userId: product.creatorId }, select: { handle: true } });
-    if (h) revalidatePath(`/${h.handle}`);
-  }
   return { success: true };
-}
-
-// The purchase row, created with the coin charge by settleCoinPurchase
-// (addendum-coin-wallet-v2.md §6.2). @@unique([productId, buyerId]) makes
-// a concurrent double purchase roll the whole charge back.
-export async function createDigitalPurchaseRow(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
-  await tx.digitalProductPurchase.create({
-    data: { productId: s.metadata.productId, buyerId: s.payerId, paymentTransactionId: s.paymentTransactionId },
-  });
 }
 
 // spec §5.3/§5.4: not a "use server" action wired to a <form>'s action prop

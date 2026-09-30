@@ -1,26 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { purchaseCourseForUser } from "@/lib/purchases";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { saveProtectedFile, issueDownloadToken } from "@/lib/protected-storage";
-import { randomUUID } from "crypto";
-import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
-import { getAffiliateAttribution } from "@/lib/affiliate";
-import { notifyAffiliateConversion } from "@/lib/notifications";
 import { hasCourseAccess } from "@/lib/course-access";
 import { checkCourseCompletion } from "@/lib/learning-completion";
-import { checkRateLimit } from "@/lib/rate-limit";
 import type { ActionState } from "@/app/actions/auth";
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
 const STATUS_VALUES = new Set(["draft", "active", "archived"]);
 
-// Same convention as tips.ts's checkTipRateLimit for this class of action.
-function checkPurchaseRateLimit(userId: string): boolean {
-  return checkRateLimit(`course-purchase:${userId}`, { max: 10, windowMs: 15 * 60 * 1000 });
-}
 const CONTENT_TYPE_VALUES = new Set(["video", "text", "download"]);
 
 type CourseFields = {
@@ -198,65 +189,12 @@ export async function deleteLesson(formData: FormData): Promise<void> {
   if (user.username) revalidatePath(`/s/${user.username.handle}/courses/${lesson.module.courseId}`);
 }
 
-// spec §11.1: mirrors purchaseProduct's shape (charge → ledger row +
-// access-grant row in one transaction, kind: course_purchase). Only
-// reachable when the course has a standalone price — a tier-only course
-// has nothing to "buy" directly, matching parseAndValidateCourseFields'
-// own requirement that at least one access path exists.
+// Core lives in lib/purchases.ts, shared with POST /api/v1/wallet/purchases.
 export async function purchaseCourse(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
-  const courseId = String(formData.get("courseId") ?? "");
-
-  const course = await db.course.findUnique({ where: { id: courseId } });
-  if (!course || course.status !== "active") return { error: "This course isn't available." };
-  if (course.price === null || course.currency === null) return { error: "This course isn't available for direct purchase." };
-  if (course.creatorId === user.id) return { error: "You can't buy your own course." };
-
-  const existing = await db.courseAccessGrant.findUnique({ where: { courseId_userId: { courseId, userId: user.id } } });
-  if (existing) return { error: "You already have access to this course." };
-
-  if (!checkPurchaseRateLimit(user.id)) {
-    return { error: "You're purchasing too fast. Please slow down." };
-  }
-
-  // addendum-coin-wallet-v2.md §6.3/§6.4: coins settle now, no creator
-  // payout account required. An attributed affiliate earns a coin
-  // commission out of the creator's share (addendum-wallet-only-payments.md
-  // §8 #3).
-  const affiliate = await getAffiliateAttribution("course", course.id, user.id);
-  const result = await settleCoinPurchase({
-    kind: "course_purchase",
-    payerId: user.id,
-    payeeUserId: course.creatorId,
-    amountUsd: course.price,
-    currency: course.currency,
-    relatedObjectType: "course",
-    relatedObjectId: course.id,
-    idempotencyKey: `course:coin:${randomUUID()}`,
-    metadata: { courseId: course.id },
-    createRows: createCoursePurchaseRow,
-    affiliate,
-  });
+  const result = await purchaseCourseForUser(user.id, String(formData.get("courseId") ?? ""));
   if ("error" in result) return { error: result.error };
-  if (result.creditedAffiliateId) await notifyAffiliateConversion({ recipientId: result.creditedAffiliateId, actorId: user.id });
-  if (!result.alreadySettled) {
-    const h = await db.username.findUnique({ where: { userId: course.creatorId }, select: { handle: true } });
-    if (h) revalidatePath(`/${h.handle}/courses/${course.id}`);
-  }
   return { success: true };
-}
-
-// The access grant, created with the coin charge by settleCoinPurchase
-// (addendum-coin-wallet-v2.md §6.2).
-export async function createCoursePurchaseRow(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
-  await tx.courseAccessGrant.create({
-    data: {
-      courseId: s.metadata.courseId,
-      userId: s.payerId,
-      grantedVia: "purchase",
-      paymentTransactionId: s.paymentTransactionId,
-    },
-  });
 }
 
 // spec §11.2's third criterion: only recorded for a user who currently has

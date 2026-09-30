@@ -117,6 +117,7 @@ function RootNavigator() {
       <Stack.Screen name="businesses" options={{ title: "Businesses" }} />
       <Stack.Screen name="business/[slug]" options={{ title: "Business" }} />
       <Stack.Screen name="marketplace" options={{ title: "Marketplace" }} />
+      <Stack.Screen name="marketplace/[category]/[id]" options={{ title: "Item" }} />
       <Stack.Screen name="events" options={{ title: "Events" }} />
       <Stack.Screen name="event/[slug]" options={{ title: "Event" }} />
       {/* M15/D2: previously forced a literal #000 / #fff header, bypassing

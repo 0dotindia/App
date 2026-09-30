@@ -11,6 +11,21 @@ entries are grouped by date. The mobile app is separately versioned
 
 ---
 
+## 2026-09-29 — Mobile: buy marketplace items and courses with coins
+
+- **Native buying on mobile.** Themes, templates, apps, digital products,
+  and courses can be bought with coins in the app: a confirm sheet shows
+  price, balance, and balance after purchase, and is biometric-gated where
+  the device supports it. Digital products download after purchase.
+- **One purchase core for web and API.** The listing/course/product
+  purchase logic moved from the web server actions into
+  `src/lib/purchases.ts`; the web actions and `POST /api/v1/wallet/purchases`
+  (new targets `marketplace_listing`, `course`, `digital_product`; 409 when
+  already owned) both call it. New `GET /api/v1/marketplace/[category]/[id]`
+  and `POST …/download`.
+- **Marketplace browse prices read in coins** (`10 coins`, not
+  `USD 10.00`) on `/m`, web search, and mobile.
+
 ## 2026-09-26 — Signup without email or OTP verification
 
 - **Signup is name + username + password only.** No email, phone, or date

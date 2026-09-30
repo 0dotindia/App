@@ -6,6 +6,7 @@ import { API_BASE_URL } from "../config";
 import { Button } from "../components/Button";
 import { Chip } from "../components/Chip";
 import { EmptyState } from "../components/EmptyState";
+import { PurchaseSheet, type PurchaseSheetItem } from "../components/PurchaseSheet";
 import { haptics } from "../utils/haptics";
 import { useContentMaxWidth } from "../utils/responsive";
 import { useTheme, type Theme } from "../theme";
@@ -17,8 +18,8 @@ import { formatCoins } from "../utils/formatCoins";
 // content only ever arrives from the server once hasAccess is true — this
 // screen never decides access itself, it just renders what the route
 // already gated (see that route's own comment). v1 scope: reading,
-// progress, and quizzes — purchasing a course stays web-only for now (no
-// CourseBuyButton bearer-API equivalent yet).
+// progress, quizzes, and buying a priced course with coins (PurchaseSheet →
+// POST /api/v1/wallet/purchases). Membership-tier access stays web-only.
 export function CourseDetailBody({ username, courseId }: { username: string; courseId: string }) {
   const theme = useTheme();
   const maxWidth = useContentMaxWidth();
@@ -27,6 +28,7 @@ export function CourseDetailBody({ username, courseId }: { username: string; cou
   const [course, setCourse] = useState<CourseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [purchase, setPurchase] = useState<PurchaseSheetItem | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -79,52 +81,78 @@ export function CourseDetailBody({ username, courseId }: { username: string; cou
     );
   }
 
+  const canBuy = !course.hasAccess && course.price !== null && course.status === "active";
+  const accessText = course.hasAccess
+    ? "You have access to this course."
+    : canBuy
+      ? course.requiredTier
+        ? `Buy it to unlock every lesson, or subscribe to ${course.requiredTier.name} on the web.`
+        : "Buy it to unlock every lesson."
+      : "Subscribe on the web to unlock this course.";
+
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[styles.content, maxWidth ? { maxWidth, alignSelf: "center", width: "100%" } : null]}
-    >
-      <Text style={styles.title}>{course.title}</Text>
-      {course.description ? <Text style={styles.description}>{course.description}</Text> : null}
+    <>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={[styles.content, maxWidth ? { maxWidth, alignSelf: "center", width: "100%" } : null]}
+      >
+        <Text style={styles.title}>{course.title}</Text>
+        {course.description ? <Text style={styles.description}>{course.description}</Text> : null}
 
-      <Text style={styles.priceLine}>
-        {course.price !== null ? formatCoins(course.price) : ""}
-        {course.price !== null && course.requiredTier ? " or " : ""}
-        {course.requiredTier ? `included with ${course.requiredTier.name} membership` : ""}
-      </Text>
-
-      <View style={styles.accessRow}>
-        <Ionicons
-          name={course.hasAccess ? "checkmark-circle-outline" : "lock-closed-outline"}
-          size={16}
-          color={course.hasAccess ? theme.colors.success : theme.colors.mutedForeground}
-        />
-        <Text style={styles.accessText}>
-          {course.hasAccess ? "You have access to this course." : "Purchase or subscribe on the web to unlock this course."}
+        <Text style={styles.priceLine}>
+          {course.price !== null ? formatCoins(course.price) : ""}
+          {course.price !== null && course.requiredTier ? " or " : ""}
+          {course.requiredTier ? `included with ${course.requiredTier.name} membership` : ""}
         </Text>
-      </View>
 
-      {course.modules.map((courseModule) => (
-        <View key={courseModule.id} style={styles.moduleSection}>
-          <Text style={styles.moduleTitle}>{courseModule.title}</Text>
-          {courseModule.lessons.map((lesson) => (
-            <LessonCard
-              key={lesson.id}
-              lesson={lesson}
-              hasAccess={course.hasAccess}
-              theme={theme}
-              onMarkComplete={() => onMarkComplete(lesson.id)}
-              onOpenFile={() => onOpenFile(lesson.id)}
-              onQuizSubmit={async (quizId, answers) => {
-                const result = await submitQuizAttempt(username, courseId, quizId, answers);
-                await load();
-                return result;
-              }}
-            />
-          ))}
+        <View style={styles.accessRow}>
+          <Ionicons
+            name={course.hasAccess ? "checkmark-circle-outline" : "lock-closed-outline"}
+            size={16}
+            color={course.hasAccess ? theme.colors.success : theme.colors.mutedForeground}
+          />
+          <Text style={styles.accessText}>{accessText}</Text>
         </View>
-      ))}
-    </ScrollView>
+        {canBuy ? (
+          <Button
+            label={`Buy for ${formatCoins(course.price!)}`}
+            onPress={() => {
+              haptics.light();
+              setPurchase({ target: "course", id: course.id, title: course.title, price: course.price });
+            }}
+          />
+        ) : null}
+
+        {course.modules.map((courseModule) => (
+          <View key={courseModule.id} style={styles.moduleSection}>
+            <Text style={styles.moduleTitle}>{courseModule.title}</Text>
+            {courseModule.lessons.map((lesson) => (
+              <LessonCard
+                key={lesson.id}
+                lesson={lesson}
+                hasAccess={course.hasAccess}
+                theme={theme}
+                onMarkComplete={() => onMarkComplete(lesson.id)}
+                onOpenFile={() => onOpenFile(lesson.id)}
+                onQuizSubmit={async (quizId, answers) => {
+                  const result = await submitQuizAttempt(username, courseId, quizId, answers);
+                  await load();
+                  return result;
+                }}
+              />
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+      <PurchaseSheet
+        item={purchase}
+        onClose={() => setPurchase(null)}
+        onPurchased={async () => {
+          setPurchase(null);
+          await load();
+        }}
+      />
+    </>
   );
 }
 

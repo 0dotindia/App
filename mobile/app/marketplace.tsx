@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
-import * as WebBrowser from "expo-web-browser";
 import { useFocusEffect } from "expo-router";
 import { getMarketplace, ApiError } from "../src/api/client";
+import { openMarketplaceItem } from "../src/links/openMarketplaceItem";
 import { Card } from "../src/components/Card";
 import { EmptyState } from "../src/components/EmptyState";
 import { SegmentedControl } from "../src/components/SegmentedControl";
@@ -11,7 +11,6 @@ import { FeedRowSkeleton } from "../src/components/Skeleton";
 import { haptics } from "../src/utils/haptics";
 import { usePressScale } from "../src/utils/usePressScale";
 import { useContentMaxWidth } from "../src/utils/responsive";
-import { API_BASE_URL } from "../src/config";
 import { useTheme, type Theme } from "../src/theme";
 import type { MarketplaceCategory, MarketplaceItem } from "../src/api/types";
 
@@ -26,8 +25,8 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "freelance_service", label: "Services" },
 ];
 
-// Detail/purchase stays a browser hand-off (each item's own `href`) — see
-// GET /api/v1/marketplace's own comment for why this is browse-only.
+// Tapping an item goes through openMarketplaceItem — native detail/course
+// screens where they exist, a browser hand-off for freelance services.
 export default function MarketplaceScreen() {
   const theme = useTheme();
   const maxWidth = useContentMaxWidth();
@@ -66,10 +65,11 @@ export default function MarketplaceScreen() {
     setRefreshing(false);
   }
 
-  function onOpenItem(href: string) {
+  function onOpenItem(item: MarketplaceItem) {
     haptics.light();
-    WebBrowser.openBrowserAsync(`${API_BASE_URL}${href}`).catch(() => {});
+    openMarketplaceItem(item);
   }
+
 
   return (
     <View style={[styles.screen, maxWidth ? { maxWidth, alignSelf: "center", width: "100%" } : null]}>
@@ -91,7 +91,7 @@ export default function MarketplaceScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
           ListEmptyComponent={<EmptyState icon={error ? "cloud-offline-outline" : "bag-outline"} title={error ?? "Nothing here yet."} />}
           renderItem={({ item }) => (
-            <MarketplaceItemCard item={item} styles={styles} onOpen={() => onOpenItem(item.href)} />
+            <MarketplaceItemCard item={item} styles={styles} onOpen={() => onOpenItem(item)} />
           )}
         />
       )}

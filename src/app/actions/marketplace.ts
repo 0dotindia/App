@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { purchaseListingForUser } from "@/lib/purchases";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
@@ -15,7 +16,6 @@ import {
   resolveInstaller,
   hasVerifiedListingAccess,
 } from "@/lib/marketplace";
-import { settleCoinPurchase, type FeatureSettlement } from "@/lib/wallet/charge";
 import { canManageCatalog } from "@/lib/businesses";
 import { isCommunityStaff } from "@/lib/communities";
 import { createTrustSafetyCase } from "@/lib/trust-safety";
@@ -25,10 +25,6 @@ const CATEGORY_SET = new Set<string>(MARKETPLACE_CATEGORIES);
 
 function checkListingRateLimit(userId: string): boolean {
   return checkRateLimit(`marketplace:listing:create:user:${userId}`, { max: 10, windowMs: 60 * 60 * 1000 });
-}
-
-function checkPurchaseRateLimit(userId: string): boolean {
-  return checkRateLimit(`marketplace:purchase:user:${userId}`, { max: 20, windowMs: 15 * 60 * 1000 });
 }
 
 function checkInstallRateLimit(userId: string): boolean {
@@ -201,63 +197,14 @@ export async function linkDeveloperAppToListing(_prevState: ActionState, formDat
   return undefined;
 }
 
-// spec §4.3/§5.1: free (payload.price null) skips the payment backbone
-// entirely, same nullable-price-means-free shape Offering/DigitalProduct/
-// Ticket already use. A paid purchase is a coin charge through
-// settleCoinPurchase (kind: "marketplace_purchase"), never a parallel ledger.
+// Core (free "get it" vs coin charge, ownership, rate limit) lives in
+// lib/purchases.ts, shared with POST /api/v1/wallet/purchases. A free
+// listing returns undefined, same as before the extraction.
 export async function purchaseMarketplaceListing(_prevState: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireVerifiedUser();
-  const listingId = String(formData.get("listingId") ?? "");
-
-  const listing = await db.marketplaceListing.findUnique({ where: { id: listingId } });
-  if (!listing || listing.status !== "active") return { error: "This listing isn't available for purchase." };
-
-  const existing = await db.marketplacePurchase.findUnique({ where: { listingId_buyerId: { listingId, buyerId: user.id } } });
-  if (existing) return { error: "You already own this listing." };
-
-  if (!checkPurchaseRateLimit(user.id)) return { error: "You're purchasing too fast. Please slow down." };
-
-  if (listing.price === null) {
-    await db.$transaction([
-      db.marketplacePurchase.create({ data: { listingId: listing.id, buyerId: user.id } }),
-      db.marketplaceListing.update({ where: { id: listing.id }, data: { purchaseCount: { increment: 1 } } }),
-    ]);
-    revalidatePath(`/m/${listing.id}`);
-    return undefined;
-  }
-
-  // addendum-wallet-only-payments.md §3.2: synchronous coin settlement,
-  // same shape as digital-products.ts — revenue lands in the seller's user
-  // wallet or, for a business listing, the business wallet (coin-wallet v2
-  // §6.5). No payout account required. The key is deterministic because a
-  // listing is bought at most once per buyer; a failed charge rolls the
-  // ledger back with it, so the key is only ever consumed by a success.
-  if (listing.sellerUserId === user.id) return { error: "You can't buy your own listing." };
-  const result = await settleCoinPurchase({
-    kind: "marketplace_purchase",
-    payerId: user.id,
-    payeeUserId: listing.sellerBusinessId ? null : listing.sellerUserId,
-    payeeBusinessId: listing.sellerBusinessId ?? null,
-    amountUsd: listing.price,
-    currency: listing.currency ?? "usd",
-    relatedObjectType: "marketplace_listing",
-    relatedObjectId: listing.id,
-    idempotencyKey: `marketplace:coin:${user.id}:${listing.id}`,
-    metadata: { listingId: listing.id },
-    createRows: createMarketplacePurchaseRows,
-  });
+  const result = await purchaseListingForUser(user.id, String(formData.get("listingId") ?? ""));
   if ("error" in result) return { error: result.error };
-  revalidatePath(`/m/${listing.id}`);
-  return { success: true };
-}
-
-// The purchase rows — one place, both rails (coin-wallet v2 §6.2).
-export async function createMarketplacePurchaseRows(tx: Prisma.TransactionClient, s: FeatureSettlement): Promise<void> {
-  const listingId = s.metadata.listingId;
-  await tx.marketplacePurchase.create({
-    data: { listingId, buyerId: s.payerId, paymentTransactionId: s.paymentTransactionId },
-  });
-  await tx.marketplaceListing.update({ where: { id: listingId }, data: { purchaseCount: { increment: 1 } } });
+  return result.free ? undefined : { success: true };
 }
 
 // spec §4.3: config is accepted as opaque JSON here — the app's own

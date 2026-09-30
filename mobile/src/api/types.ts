@@ -301,6 +301,28 @@ export type MarketplaceItem = {
 
 export type MarketplaceResponse = { items: MarketplaceItem[] };
 
+// GET /api/v1/marketplace/[category]/[id] — listings (theme/template/app)
+// and digital products. `price` is in coins; null means free.
+export type MarketplaceItemDetail = {
+  category: "theme" | "template" | "app" | "digital_product";
+  categoryLabel: string;
+  id: string;
+  title: string;
+  description: string;
+  descriptionFormat: "markdown" | "plain";
+  coverImageUrl: string | null;
+  price: number | null;
+  seller: { name: string; username: string | null; businessSlug: string | null };
+  averageRating: number | null;
+  reviewCount: number;
+  purchaseCount: number | null;
+  available: boolean;
+  owned: boolean;
+  isOwnItem: boolean;
+  downloadable: boolean;
+  webPath: string;
+};
+
 export type EventSummary = {
   slug: string;
   title: string;
@@ -400,11 +422,16 @@ export type WalletTransactionEntry = {
 
 export type WalletTransactionsResponse = { entries: WalletTransactionEntry[]; nextCursor: string | null };
 
+// Buy-once items share one shape: the server looks the price up itself,
+// so the client only ever names what it's buying.
+export type PurchasableItemTarget = "marketplace_listing" | "course" | "digital_product";
+
 export type WalletPurchaseTarget =
   | { target: "premium"; billingInterval: "monthly" | "yearly" }
-  | { target: "tip"; username: string; amount: number; message?: string };
+  | { target: "tip"; username: string; amount: number; message?: string }
+  | { target: PurchasableItemTarget; id: string };
 
-export type WalletPurchaseResponse = { ok: true; target: "premium" | "tip" };
+export type WalletPurchaseResponse = { ok: true; target: "premium" | "tip" | PurchasableItemTarget; free?: boolean };
 
 export type ReferralInfo = {
   code: string;

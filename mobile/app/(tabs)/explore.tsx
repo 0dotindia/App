@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
-import * as WebBrowser from "expo-web-browser";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
 import { useAuth } from "../../src/auth/AuthContext";
@@ -30,10 +29,10 @@ import { SegmentedControl } from "../../src/components/SegmentedControl";
 import { FeedRowSkeleton } from "../../src/components/Skeleton";
 import { animateNextLayout } from "../../src/utils/animateLayout";
 import { haptics } from "../../src/utils/haptics";
+import { openMarketplaceItem } from "../../src/links/openMarketplaceItem";
 import { useContentMaxWidth } from "../../src/utils/responsive";
 import { useTabBarContentPadding } from "../../src/utils/useTabBarInset";
 import { useTheme, type Theme } from "../../src/theme";
-import { API_BASE_URL } from "../../src/config";
 import type { Post, SearchUser, CommunitySummary, BusinessSummary, EventSearchResult, MarketplaceItem } from "../../src/api/types";
 
 type Tab = "users" | "posts" | "communities" | "businesses" | "events" | "marketplace";
@@ -206,9 +205,9 @@ export default function ExploreScreen() {
     }
   }
 
-  function onOpenMarketplaceItem(href: string) {
+  function onOpenMarketplaceItem(item: MarketplaceItem) {
     haptics.light();
-    WebBrowser.openBrowserAsync(`${API_BASE_URL}${href}`).catch(() => {});
+    openMarketplaceItem(item);
   }
 
   return (
@@ -334,7 +333,7 @@ export default function ExploreScreen() {
           keyExtractor={(item) => `${item.category}-${item.id}`}
           ListEmptyComponent={<EmptyState icon="bag-outline" title={error ?? `No marketplace results found for "${debouncedQuery}".`} />}
           renderItem={({ item }) => (
-            <ListRow accessibilityLabel={`Open ${item.title}`} onPress={() => onOpenMarketplaceItem(item.href)}>
+            <ListRow accessibilityLabel={`Open ${item.title}`} onPress={() => onOpenMarketplaceItem(item)}>
               <View style={styles.body}>
                 <Text style={styles.categoryLabel}>{item.categoryLabel}</Text>
                 <Text style={styles.name} numberOfLines={1}>

@@ -52,10 +52,11 @@ status line is authoritative. Summary:
 | Area | Mobile status |
 |---|---|
 | Feed, single post, compose, like/repost/bookmark | **Built** |
-| Search / Explore | **Built** — two tabs (People / Posts), not web's eight |
+| Search / Explore | **Built** — six tabs (People, Posts, Communities, Businesses, Events, Marketplace; M13); web's Projects and Articles & Docs tabs not yet |
 | Messages / DMs | **Built** — text + (M14) voice notes & file attachments; started REST-polling, now bearer-token SSE (M10) |
 | Communities | **Built** — browse/join/post; **live chat** (Phase C); **voice rooms** on LiveKit — web + mobile code complete (Phase D), pending a mobile dev-client rebuild + device audio pass |
-| Businesses, Marketplace | **Built, browse-only** |
+| Businesses | **Built, browse-only** |
+| Marketplace | **Built** — browse, native detail (`marketplace/[category]/[id]`) for themes/templates/apps/digital products, **buy with coins** (`PurchaseSheet` → `POST /api/v1/wallet/purchases`), digital-product download; courses buy from the course screen. App install, listing reviews, and freelance-service booking stay web hand-offs |
 | Events | **Built** |
 | Wallet | **Built (partial)** — balance + P2P coin transfer only; top-up / payout / VIP purchase deferred (don't fully exist on web either) |
 | Notifications | **Built** — with preferences (M12) |

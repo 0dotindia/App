@@ -78,7 +78,7 @@ export const OAUTH_SCOPES = [
   // mobile pro-upgrade addendum M6 (wallet): sending coins moves real
   // value between accounts — high sensitivity, same tier as payments:read,
   // not the low/medium tier most other :write scopes here get.
-  { key: "payments:write", description: "Send coin transfers on your behalf", sensitivity: "high" },
+  { key: "payments:write", description: "Spend your coins on your behalf (transfers, tips, and purchases)", sensitivity: "high" },
   // phase-15 build plan step 2: the one first-party-app action (push device
   // registration) that had no scope of its own yet — low sensitivity since
   // it only lets the app register a token to receive push, not read content.
