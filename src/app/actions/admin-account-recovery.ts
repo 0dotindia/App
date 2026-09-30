@@ -4,9 +4,19 @@ import { requirePlatformRole } from "@/lib/auth-guards";
 import { findUserForAdmin } from "@/lib/admin-user-lookup";
 import { issuePasswordRecoveryCodes } from "@/lib/password-recovery";
 import { isInternalSystemAccountEmail } from "@/lib/first-party-apps";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 
 export type AdminRecoveryState = { error?: string; handle?: string; codes?: string[] } | undefined;
+
+// Conservative cap — every other sensitive admin action is rate-limited and
+// this one wasn't; a compromised admin session could otherwise mass-issue
+// account-takeover codes with nothing to slow it down. 10/hour is well
+// above any legitimate single-admin support workload; revisit with whoever
+// owns this if that turns out to be too tight in practice.
+function checkRecoveryIssuanceRateLimit(adminId: string): Promise<boolean> {
+  return enforceRateLimit(`admin-recovery-codes:${adminId}`, { max: 10, windowMs: 60 * 60 * 1000 });
+}
 
 // The support fallback for someone who forgot their password *and* lost
 // their recovery codes — with no email or OTP on accounts there's no
@@ -21,6 +31,10 @@ export async function issueRecoveryCodesForUser(
   formData: FormData,
 ): Promise<AdminRecoveryState> {
   const { user: admin } = await requirePlatformRole("admin");
+
+  if (!(await checkRecoveryIssuanceRateLimit(admin.id))) {
+    return { error: "Too many recovery-code issuances. Please slow down." };
+  }
 
   const target = await findUserForAdmin(String(formData.get("identifier") ?? ""));
   if (!target || (target.email && isInternalSystemAccountEmail(target.email))) {

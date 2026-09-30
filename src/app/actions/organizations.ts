@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
-import { getOrganizationMember, isOrgAdmin, logOrgAudit, deactivateOrganizationMemberCascade } from "@/lib/organizations";
+import { getOrganizationMember, isOrgAdmin, logOrgAudit, deactivateOrganizationMemberCascade, wouldOrphanOrgAdmins } from "@/lib/organizations";
 import { notifyOrgMemberAdded, notifyOrgMemberDeactivated, notifyOrgSsoConfigured } from "@/lib/notifications";
 import type { ActionState } from "@/app/actions/auth";
 
@@ -152,18 +152,31 @@ export async function updateOrganizationMember(formData: FormData): Promise<void
   const target = await getOrganizationMember(organizationId, targetUserId);
   if (!target || target.status !== "active") return;
 
-  await db.organizationMember.update({
-    where: { organizationId_userId: { organizationId, userId: targetUserId } },
-    data: { role, department, title },
+  // Re-check the orphan guard *inside* the same transaction as the write
+  // (same pattern as platform-roles.ts's wouldOrphanSuperAdmins) — the
+  // self-action guard above stops a lone org_admin demoting themselves, but
+  // not two org_admins demoting each other at the same time, which could
+  // otherwise both pass a pre-check before either write commits and jointly
+  // orphan the org.
+  const changed = await db.$transaction(async (tx) => {
+    if (await wouldOrphanOrgAdmins(tx, organizationId, targetUserId, role === "org_admin")) return false;
+    await tx.organizationMember.update({
+      where: { organizationId_userId: { organizationId, userId: targetUserId } },
+      data: { role, department, title },
+    });
+    await tx.organizationAuditLog.create({
+      data: {
+        organizationId,
+        actorId: user.id,
+        action: "member_role_changed",
+        targetType: "user",
+        targetId: targetUserId,
+        metadataJson: JSON.stringify({ role }),
+      },
+    });
+    return true;
   });
-  await logOrgAudit({
-    organizationId,
-    actorId: user.id,
-    action: "member_role_changed",
-    targetType: "user",
-    targetId: targetUserId,
-    metadata: { role },
-  });
+  if (!changed) return;
 
   revalidatePath(`/org/${organizationId}/manage`);
 }
@@ -188,7 +201,8 @@ export async function deactivateOrganizationMember(formData: FormData): Promise<
   const target = await getOrganizationMember(organizationId, targetUserId);
   if (!target || target.status !== "active") return;
 
-  await deactivateOrganizationMemberCascade({ organizationId, userId: targetUserId, actorId: user.id });
+  const result = await deactivateOrganizationMemberCascade({ organizationId, userId: targetUserId, actorId: user.id });
+  if ("error" in result) return;
   await notifyOrgMemberDeactivated({ recipientId: targetUserId, actorId: user.id, organizationId });
 
   revalidatePath(`/org/${organizationId}/manage`);

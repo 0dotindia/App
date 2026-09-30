@@ -175,6 +175,7 @@ export async function issuePromoGrant(params: {
   coins: number;
   reason: string;
   expiresInDays?: number | null;
+  idempotencyKey?: string;
 }): Promise<GrantResult> {
   const guard = await guardIssuance(params.actorAdminId, params.coins, params.reason);
   if (guard) return { error: guard };
@@ -189,7 +190,7 @@ export async function issuePromoGrant(params: {
       : (await ensureUserAccounts(tx, params.targetUserId!)).promoId;
     await postTransaction(tx, {
       kind: "promo_grant",
-      idempotencyKey: `promo_grant:${randomUUID()}`,
+      idempotencyKey: params.idempotencyKey ?? `promo_grant:${randomUUID()}`,
       actorUserId: params.actorAdminId,
       memo: params.reason,
       expiresAt,
@@ -215,6 +216,7 @@ export async function adminAdjust(params: {
   targetBusinessId?: string;
   coins: number;
   reason: string;
+  idempotencyKey?: string;
 }): Promise<GrantResult> {
   const guard = await guardIssuance(params.actorAdminId, Math.abs(params.coins), params.reason);
   if (guard) return { error: guard };
@@ -229,7 +231,7 @@ export async function adminAdjust(params: {
         : (await ensureUserAccounts(tx, params.targetUserId!)).walletId;
       await postTransaction(tx, {
         kind: "admin_adjustment",
-        idempotencyKey: `admin_adjustment:${randomUUID()}`,
+        idempotencyKey: params.idempotencyKey ?? `admin_adjustment:${randomUUID()}`,
         actorUserId: params.actorAdminId,
         memo: params.reason,
         postings: [

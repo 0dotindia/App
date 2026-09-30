@@ -2,6 +2,7 @@ import { requirePlatformRole } from "@/lib/auth-guards";
 import { db } from "@/lib/db";
 import { PLATFORM_ROLE_RANK } from "@/lib/platform-roles";
 import { updatePlatformRole, revokePlatformRole } from "@/app/actions/platform-roles";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { GrantRoleForm } from "./GrantRoleForm";
 
 // super_admin-only. Lists/manages PlatformRole rows — the in-app
@@ -49,9 +50,14 @@ export default async function AdminPlatformRolesPage() {
                 </form>
                 <form action={revokePlatformRole}>
                   <input type="hidden" name="userId" value={r.userId} />
-                  <button type="submit" className="button buttonDanger buttonSmall">
+                  <ConfirmButton
+                    className="button buttonDanger buttonSmall"
+                    title="Revoke this platform role?"
+                    description={`This immediately removes ${r.user.username?.handle ? `@${r.user.username.handle}` : r.user.email}'s ${r.role} access.`}
+                    confirmLabel="Revoke"
+                  >
                     Revoke
-                  </button>
+                  </ConfirmButton>
                 </form>
               </span>
             )}

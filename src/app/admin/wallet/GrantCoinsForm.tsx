@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { grantCoinsAction } from "@/app/actions/admin-wallet";
+import { IdempotencyField } from "@/components/IdempotencyField";
 
 export function GrantCoinsForm() {
   const [state, formAction, pending] = useActionState(grantCoinsAction, undefined);
@@ -10,6 +11,7 @@ export function GrantCoinsForm() {
 
   return (
     <form action={formAction} style={{ display: "flex", flexDirection: "column", gap: "0.6rem", maxWidth: "34ch" }}>
+      <IdempotencyField />
       <label className="field">
         Type
         <select name="mode" value={mode} onChange={(e) => setMode(e.target.value)}>

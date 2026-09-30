@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 
 // Plain server-only lib, not a "use server" action file — same reasoning as
@@ -96,11 +97,34 @@ export function isGatedFromCommunityContent(
 // never touches Profile/posts/anything outside the organization's own
 // scope (§4.2's other acceptance criterion) — nothing here references
 // those tables.
+// True if deactivating/demoting targetUserId out of org_admin would leave
+// the organization with zero active org_admins. Must run *inside* the same
+// transaction as the write (same pattern as platform-roles.ts's
+// wouldOrphanSuperAdmins) — two org_admins deactivating/demoting each other
+// at the same time could otherwise both pass a pre-check taken outside a
+// transaction, before either write commits, and jointly orphan the org.
+export async function wouldOrphanOrgAdmins(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  targetUserId: string,
+  keepsAdmin = false,
+): Promise<boolean> {
+  if (keepsAdmin) return false;
+  const target = await tx.organizationMember.findUnique({
+    where: { organizationId_userId: { organizationId, userId: targetUserId } },
+  });
+  if (target?.role !== "org_admin" || target.status !== "active") return false;
+  const adminCount = await tx.organizationMember.count({
+    where: { organizationId, role: "org_admin", status: "active" },
+  });
+  return adminCount <= 1;
+}
+
 export async function deactivateOrganizationMemberCascade(args: {
   organizationId: string;
   userId: string;
   actorId: string;
-}): Promise<void> {
+}): Promise<{ ok: true } | { error: string }> {
   const restrictedMemberships = await db.communityMember.findMany({
     where: { userId: args.userId, community: { restrictedToOrganizationId: args.organizationId } },
     select: { communityId: true, status: true },
@@ -118,25 +142,25 @@ export async function deactivateOrganizationMemberCascade(args: {
     .filter((m) => m.status === "active" || m.status === "muted")
     .map((m) => m.communityId);
 
-  await db.$transaction([
-    db.organizationMember.update({
+  const deactivated = await db.$transaction(async (tx) => {
+    if (await wouldOrphanOrgAdmins(tx, args.organizationId, args.userId)) return false;
+
+    await tx.organizationMember.update({
       where: { organizationId_userId: { organizationId: args.organizationId, userId: args.userId } },
       data: { status: "deactivated" },
-    }),
-    ...(restrictedMemberships.length > 0
-      ? [
-          db.communityMember.deleteMany({
-            where: { userId: args.userId, community: { restrictedToOrganizationId: args.organizationId } },
-          }),
-        ]
-      : []),
-    ...countedCommunityIds.map((communityId) =>
-      db.community.update({ where: { id: communityId }, data: { memberCount: { decrement: 1 } } })
-    ),
-    ...(ssoConnection
-      ? [db.sSOIdentity.deleteMany({ where: { userId: args.userId, ssoConnectionId: ssoConnection.id } })]
-      : []),
-    db.organizationAuditLog.create({
+    });
+    if (restrictedMemberships.length > 0) {
+      await tx.communityMember.deleteMany({
+        where: { userId: args.userId, community: { restrictedToOrganizationId: args.organizationId } },
+      });
+    }
+    for (const communityId of countedCommunityIds) {
+      await tx.community.update({ where: { id: communityId }, data: { memberCount: { decrement: 1 } } });
+    }
+    if (ssoConnection) {
+      await tx.sSOIdentity.deleteMany({ where: { userId: args.userId, ssoConnectionId: ssoConnection.id } });
+    }
+    await tx.organizationAuditLog.create({
       data: {
         organizationId: args.organizationId,
         actorId: args.actorId,
@@ -144,6 +168,10 @@ export async function deactivateOrganizationMemberCascade(args: {
         targetType: "user",
         targetId: args.userId,
       },
-    }),
-  ]);
+    });
+    return true;
+  });
+
+  if (!deactivated) return { error: "That's the organization's last admin — deactivating them would leave no one to manage it." };
+  return { ok: true };
 }

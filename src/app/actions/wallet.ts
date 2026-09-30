@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { requireVerifiedUser, requireOwnProfile } from "@/lib/auth-guards";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { purchaseProfilePremiumWithCoins } from "@/lib/platform-billing";
-import { WALLET_LIMITS, coinActionKey } from "@/lib/wallet/limits";
+import { WALLET_LIMITS, transferIdempotencyKey } from "@/lib/wallet/limits";
 import { transferCoinsCore } from "@/lib/wallet/transfer";
 import type { ActionState } from "@/app/actions/auth";
 
@@ -45,13 +45,7 @@ export async function transferCoinsAction(_prevState: ActionState, formData: For
     fromUserId: user.id,
     toUserId: recipientUsername.userId,
     coins: coinAmount,
-    idempotencyKey: coinActionKey(
-      "transfer:coin",
-      formData.get("idempotencyKey"),
-      user.id,
-      recipientUsername.userId,
-      coinAmount
-    ),
+    idempotencyKey: transferIdempotencyKey(formData.get("idempotencyKey"), user.id, recipientUsername.userId, coinAmount),
   });
   if ("error" in result) return { error: result.error };
 

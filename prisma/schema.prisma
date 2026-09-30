@@ -1591,6 +1591,12 @@ model JobApplication {
   status      String   @default("submitted") // submitted | reviewed | rejected | hired
   createdAt   DateTime @default(now())
 
+  // P0 review finding #4: the check-then-create in applyToJob was not
+  // atomic, so a true race could still double-apply. The constraint makes
+  // that impossible at the DB layer; applyToJob catches the resulting
+  // P2002 the same way createOrUpdateReview does for its own unique
+  // constraint, instead of relying solely on the pre-check.
+  @@unique([jobId, applicantId])
   @@index([jobId])
   @@index([applicantId])
 }

@@ -89,9 +89,15 @@ export default async function DeveloperAppDetailPage({
         </p>
         <form action={rotateClientSecret} style={{ marginTop: "0.4rem" }}>
           <input type="hidden" name="appId" value={app.id} />
-          <button type="submit" className="button buttonSecondary buttonSmall">
+          <ConfirmButton
+            className="button buttonSecondary buttonSmall"
+            title="Rotate the client secret?"
+            description="The old secret stops working immediately — any live integration using it breaks until it's updated with the new one."
+            confirmLabel="Rotate"
+            icon={null}
+          >
             Rotate client secret
-          </button>
+          </ConfirmButton>
         </form>
       </div>
 

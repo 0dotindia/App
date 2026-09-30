@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { requireVerifiedUser } from "@/lib/auth-guards";
 import { canManageCatalog, isBusinessStaff, getBusinessMember } from "@/lib/businesses";
@@ -112,9 +113,11 @@ export async function applyToJob(_prevState: ActionState, formData: FormData): P
     return { error: "You're applying too fast. Please slow down." };
   }
 
-  // JobApplication has no unique constraint on (jobId, applicantId) — check
-  // explicitly rather than letting a double-submit or retry create repeat
-  // applications (and repeat notifications to the business's staff).
+  // Pre-check for the common case (fast, friendly error before touching
+  // uploads); the @@unique([jobId, applicantId]) constraint is what
+  // actually prevents a double-submit or retry racing past this into a
+  // repeat application (and repeat notifications to the business's staff)
+  // — see the P2002 catch below.
   const existingApplication = await db.jobApplication.findFirst({
     where: { jobId: job.id, applicantId: user.id },
     select: { id: true },
@@ -132,9 +135,16 @@ export async function applyToJob(_prevState: ActionState, formData: FormData): P
     resumeUrl = result.url;
   }
 
-  await db.jobApplication.create({
-    data: { jobId: job.id, applicantId: user.id, coverNote, resumeUrl },
-  });
+  try {
+    await db.jobApplication.create({
+      data: { jobId: job.id, applicantId: user.id, coverNote, resumeUrl },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { error: "You've already applied to this job." };
+    }
+    throw err;
+  }
 
   const staff = await db.businessMember.findMany({
     where: { businessId: job.business.id, role: { in: ["owner", "admin"] } },

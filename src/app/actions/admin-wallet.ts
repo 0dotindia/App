@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requirePlatformRole } from "@/lib/auth-guards";
 import { issuePromoGrant, adminAdjust } from "@/lib/wallet/grants";
+import { coinActionKey } from "@/lib/wallet/limits";
 import { refundToWallet } from "@/lib/wallet/charge";
 import type { ActionState } from "@/app/actions/auth";
 
@@ -33,10 +34,23 @@ export async function grantCoinsAction(_prevState: ActionState, formData: FormDa
     targetUserId = username.userId;
   }
 
+  // Deterministic per-submission key (review finding P0 #1): a fresh
+  // randomUUID() on every call meant a double-click issued the same grant
+  // twice. IdempotencyField gives a real per-submission token on the JS
+  // path; coinActionKey falls back to a short time bucket otherwise, same
+  // as every other coin action.
+  const idempotencyKey = coinActionKey(
+    mode === "admin_adjustment" ? "admin_adjustment" : "promo_grant",
+    formData.get("idempotencyKey"),
+    admin.id,
+    targetUserId ?? targetBusinessId ?? "",
+    coins
+  );
+
   const result =
     mode === "admin_adjustment"
-      ? await adminAdjust({ actorAdminId: admin.id, targetUserId, targetBusinessId, coins, reason })
-      : await issuePromoGrant({ actorAdminId: admin.id, targetUserId, targetBusinessId, coins, reason, expiresInDays });
+      ? await adminAdjust({ actorAdminId: admin.id, targetUserId, targetBusinessId, coins, reason, idempotencyKey })
+      : await issuePromoGrant({ actorAdminId: admin.id, targetUserId, targetBusinessId, coins, reason, expiresInDays, idempotencyKey });
 
   if ("error" in result) return { error: result.error };
 

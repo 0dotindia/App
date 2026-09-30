@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "crypto";
 
 // addendum-coin-wallet-v2.md §5.1 — the single source of truth for every
 // wallet limit, imported by both the web actions and the API routes so the
@@ -113,6 +114,22 @@ export function coinActionKey(
     return [scope, ...parts, token.trim()].join(":");
   }
   return coinIdempotencyKey(scope, ...parts);
+}
+
+// Same client-token preference as coinActionKey, but a peer-to-peer
+// transfer's tokenless fallback is a fresh key per call instead of
+// coinIdempotencyKey's short time bucket. Two people can legitimately send
+// the same amount to the same recipient twice within 12s (splitting a
+// payment, resending after a typo) — collapsing the second call onto the
+// first would silently move zero coins for it while still reporting
+// success, which is worse here than for a one-shot purchase/tip/donation.
+// A JS client still sends a real token via <IdempotencyField>, so a genuine
+// double-click is deduped exactly as it is for every other coin action.
+export function transferIdempotencyKey(token: unknown, ...parts: Array<string | number>): string {
+  if (typeof token === "string" && CLIENT_TOKEN.test(token.trim())) {
+    return ["transfer:coin", ...parts, token.trim()].join(":");
+  }
+  return `transfer:coin:${randomUUID()}`;
 }
 
 // Ledger balances are always whole coins in Phase 1 (fractional pricing
