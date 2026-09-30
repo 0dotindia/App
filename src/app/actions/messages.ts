@@ -171,16 +171,23 @@ export async function loadOlderMessages(formData: FormData): Promise<LoadOlderMe
 // (true tombstone, not just a flag) rather than deferring to a retention
 // window — spec §7 leaves that policy open, so this sidesteps guessing at
 // one rather than silently building partial support for it.
-export async function deleteMessage(formData: FormData): Promise<void> {
+// FIX_PLAN P2: used to return void and silently no-op on any failure — the
+// client never checked the result, so an optimistic tombstone (see
+// ConversationView.tsx's handleDelete) stayed applied even when the delete
+// itself never happened (a race where the message got deleted/moderated
+// between the optimistic update and this running, or any other silent
+// no-op below), and the message could reappear on the next real refresh
+// with no explanation.
+export async function deleteMessage(formData: FormData): Promise<{ ok: true } | { error: string }> {
   const user = await requireVerifiedUser();
   const messageId = String(formData.get("messageId") ?? "");
-  if (!messageId) return;
+  if (!messageId) return { error: "Message not found." };
 
   const message = await db.message.findUnique({ where: { id: messageId } });
-  if (!message || message.senderId !== user.id || message.deletedAt !== null) return;
+  if (!message || message.senderId !== user.id || message.deletedAt !== null) return { error: "Message not found." };
 
   const participant = await getParticipant(message.conversationId, user.id);
-  if (!participant) return; // spec §5.7 query-layer check
+  if (!participant) return { error: "Message not found." }; // spec §5.7 query-layer check
 
   // Same tie-break ordering as every other "latest message" lookup in this
   // codebase (markConversationRead, getMessagesForConversation) — deciding
@@ -231,6 +238,7 @@ export async function deleteMessage(formData: FormData): Promise<void> {
 
   revalidatePath("/messages");
   revalidatePath(`/messages/${message.conversationId}`);
+  return { ok: true };
 }
 
 // spec §5.2/§5.8: only the recipient (not the initiator) can accept/decline,

@@ -18,6 +18,7 @@ export async function createCalendarEntry(_prevState: ActionState, formData: For
   const endsAtRaw = String(formData.get("endsAt") ?? "").trim();
   const endsAt = endsAtRaw ? new Date(endsAtRaw) : null;
   if (endsAt && Number.isNaN(endsAt.getTime())) return { error: "Invalid end date/time." };
+  if (endsAt && endsAt <= startsAt) return { error: "End time must be after the start time." };
 
   await db.calendarEntry.create({
     data: { profileId: user.profile!.id, title, startsAt, endsAt },

@@ -59,17 +59,38 @@ export function ConversationView({
   const [isPending, startTransition] = useTransition();
   const [isLoadingOlder, startLoadOlderTransition] = useTransition();
   const listRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   // Set right before an older-messages prepend, read (and cleared) by the
   // scroll effect below — lets that one effect tell "history was prepended
   // above the fold" apart from "a message arrived/was sent", which need
   // opposite scroll behavior (restore position vs. jump to bottom).
   const pendingScrollRestoreRef = useRef<{ height: number; top: number } | null>(null);
+  // FIX_PLAN P2: auto-scroll used to fire on every messages update
+  // regardless of where the viewer was — a message arriving while someone
+  // had scrolled up to read history yanked them back to the bottom.
+  // Updated by the scroll listener below; starts true so the initial load
+  // still lands at the bottom, and handleSubmit forces it true so sending
+  // your own message always jumps to it even mid-scrollback.
+  const isNearBottomRef = useRef(true);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const NEAR_BOTTOM_THRESHOLD_PX = 80;
+
+  useEffect(() => {
+    const container = listRef.current;
+    if (!container) return;
+    function handleScroll() {
+      isNearBottomRef.current =
+        container!.scrollHeight - container!.scrollTop - container!.clientHeight < NEAR_BOTTOM_THRESHOLD_PX;
+    }
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     const container = listRef.current;
@@ -80,7 +101,9 @@ export function ConversationView({
       container.scrollTop = container.scrollHeight - restore.height + restore.top;
       return;
     }
-    container.scrollTo({ top: container.scrollHeight });
+    if (isNearBottomRef.current) {
+      container.scrollTo({ top: container.scrollHeight });
+    }
   }, [messages]);
 
   // Stop any in-progress recording/timer if the user navigates away mid-recording.
@@ -90,6 +113,19 @@ export function ConversationView({
       mediaRecorderRef.current?.stream.getTracks().forEach((t) => t.stop());
     };
   }, []);
+
+  // FIX_PLAN P2: the composer was fixed at rows={1}, so a multi-line
+  // message (Shift+Enter) scrolled its later lines out of view while
+  // typing instead of growing the box. Runs on every `body` change (typing
+  // and the setBody("") reset after a send both need it), not just
+  // onChange, so a programmatic reset also shrinks it back down.
+  const MAX_COMPOSER_HEIGHT_PX = 160;
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_COMPOSER_HEIGHT_PX)}px`;
+  }, [body]);
 
   function stopRecordingTimer() {
     if (recordingTimerRef.current) {
@@ -172,6 +208,7 @@ export function ConversationView({
     // handleSubmit already uses for a just-sent message; other participants'
     // open tabs pick up the real change via deleteMessage's SSE publish +
     // router.refresh() (MessagingProvider), same as any other live update.
+    const previous = messages.find((m) => m.id === messageId);
     setMessages((prev) =>
       prev.map((m) =>
         m.id === messageId
@@ -191,7 +228,18 @@ export function ConversationView({
     startTransition(async () => {
       const formData = new FormData();
       formData.set("messageId", messageId);
-      await deleteMessage(formData);
+      const result = await deleteMessage(formData);
+      // FIX_PLAN P2: deleteMessage used to be fire-and-forget — a failed
+      // delete (a race with the message already being gone, moderated,
+      // etc.) left the optimistic tombstone applied with nothing telling
+      // the viewer it hadn't actually happened, until it silently
+      // reappeared on the next unrelated refresh. Revert immediately
+      // instead.
+      if ("error" in result && previous) {
+        setMessages((prev) => prev.map((m) => (m.id === messageId ? previous : m)));
+        setError(result.error);
+        return;
+      }
     });
   }
 
@@ -227,6 +275,7 @@ export function ConversationView({
       setError(null);
       setBody("");
       setPendingAttachment(null);
+      isNearBottomRef.current = true;
       setMessages((prev) => [...prev, result.message]);
     });
   }
@@ -310,6 +359,7 @@ export function ConversationView({
             </label>
             <textarea
               id="message-composer-input"
+              ref={composerRef}
               className="textInput"
               rows={1}
               placeholder="Write a message…"
@@ -322,6 +372,7 @@ export function ConversationView({
                 }
               }}
               maxLength={4000}
+              style={{ resize: "none", overflowY: "auto", maxHeight: MAX_COMPOSER_HEIGHT_PX }}
             />
             <button type="submit" className="button" disabled={isPending || (body.trim().length === 0 && !pendingAttachment)}>
               {isPending ? "Sending…" : "Send"}

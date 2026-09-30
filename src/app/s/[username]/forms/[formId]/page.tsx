@@ -31,7 +31,7 @@ export default async function FormDetailPage({ params }: { params: Promise<{ use
   const { formId } = await params;
   const form = await db.form.findUnique({
     where: { id: formId },
-    include: { responses: { orderBy: { submittedAt: "desc" }, take: 100 } },
+    include: { responses: { orderBy: { submittedAt: "desc" }, take: 100 }, _count: { select: { responses: true } } },
   });
   if (!form || form.ownerProfileId !== currentUser.profile?.id) notFound();
 
@@ -74,7 +74,12 @@ export default async function FormDetailPage({ params }: { params: Promise<{ use
       </details>
 
       <div style={{ marginTop: "1.5rem" }}>
-        <p className="sectionHeading">Responses ({form.responses.length})</p>
+        <p className="sectionHeading">
+          Responses ({form._count.responses})
+          {form._count.responses > form.responses.length && (
+            <span className="mutedText" style={{ fontWeight: 400 }}> — showing the latest {form.responses.length}</span>
+          )}
+        </p>
         {form.responses.length === 0 && <EmptyState title="No responses yet." />}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {form.responses.map((response) => {

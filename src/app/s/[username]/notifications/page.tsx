@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import {
   AtSign,
+  Bell,
   CalendarClock,
   CalendarX,
   Coins,
@@ -66,6 +67,17 @@ const NOTIFICATION_ICONS: Record<(typeof PUSH_NOTIFICATION_TYPES)[number], Lucid
   appointment_request: CalendarClock,
 };
 
+// FIX_PLAN P2: EMAIL_NOTIFICATION_TYPES is currently empty, but the render
+// loop below force-cast its (plain `string`) element type to
+// PUSH_NOTIFICATION_TYPES's literal union to index NOTIFICATION_ICONS — the
+// moment it's populated with an email-only type not in that union, the
+// icon silently goes missing at runtime with no type error. A lookup
+// function with a generic fallback is correct for any string, no cast
+// needed.
+function notificationIcon(type: string): LucideIcon {
+  return (NOTIFICATION_ICONS as Record<string, LucideIcon>)[type] ?? Bell;
+}
+
 export default async function NotificationSettingsPage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
   const currentUser = await getCurrentUser();
@@ -93,7 +105,7 @@ export default async function NotificationSettingsPage({ params }: { params: Pro
         {PUSH_NOTIFICATION_TYPES.map((type) => (
           <SettingsRow
             key={type}
-            icon={NOTIFICATION_ICONS[type]}
+            icon={notificationIcon(type)}
             label={getNotificationVerb(type) || type}
             trailing={
               <DeliveryToggle
@@ -116,7 +128,7 @@ export default async function NotificationSettingsPage({ params }: { params: Pro
             {EMAIL_NOTIFICATION_TYPES.map((type) => (
               <SettingsRow
                 key={type}
-                icon={NOTIFICATION_ICONS[type as (typeof PUSH_NOTIFICATION_TYPES)[number]]}
+                icon={notificationIcon(type)}
                 label={getNotificationVerb(type) || type}
                 trailing={
                   <DeliveryToggle

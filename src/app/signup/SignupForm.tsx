@@ -40,7 +40,7 @@ export function SignupForm() {
           <ThemeToggleLogo size={48} />
           <p>Welcome</p>
         </div>
-        <h1>Create your account</h1>
+        <h2>Create your account</h2>
 
         <input
           type="text"

@@ -46,7 +46,7 @@ export function LoginForm() {
             <ThemeToggleLogo size={48} />
             <p>Welcome</p>
           </div>
-          <h1>Log in</h1>
+          <h2>Log in</h2>
 
           <div className="field">
             <label htmlFor="identifier">Username, email, or mobile number</label>

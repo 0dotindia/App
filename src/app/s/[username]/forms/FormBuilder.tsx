@@ -30,6 +30,18 @@ export function FormBuilder() {
     });
   }
 
+  // FIX_PLAN P2: responses are keyed by label, so two identically-named
+  // fields silently collide server-side (see parseFields, forms.ts) — this
+  // surfaces that before submit instead of the generic "Add at least one
+  // valid field" rejection being the only signal something's wrong.
+  const labelCounts = new Map<string, number>();
+  for (const f of fields) {
+    const key = f.label.trim().toLowerCase();
+    if (!key) continue;
+    labelCounts.set(key, (labelCounts.get(key) ?? 0) + 1);
+  }
+  const hasDuplicateLabels = [...labelCounts.values()].some((count) => count > 1);
+
   const fieldsJson = JSON.stringify(
     fields
       .filter((f) => f.label.trim().length > 0)
@@ -150,7 +162,12 @@ export function FormBuilder() {
       </button>
 
       <input type="hidden" name="fieldsJson" value={fieldsJson} />
-      <button type="submit" className="button" disabled={pending} style={{ alignSelf: "flex-start" }}>
+      {hasDuplicateLabels && (
+        <p className="errorText" role="alert">
+          Two fields have the same label — give each field a unique label before creating.
+        </p>
+      )}
+      <button type="submit" className="button" disabled={pending || hasDuplicateLabels} style={{ alignSelf: "flex-start" }}>
         {pending ? "Creating…" : "Create"}
       </button>
       {state?.error && (

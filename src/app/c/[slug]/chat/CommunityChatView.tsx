@@ -48,7 +48,26 @@ export function CommunityChatView({
   const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const MAX_COMPOSER_HEIGHT_PX = 160;
+  // FIX_PLAN P2: same fix as ConversationView.tsx — the composer was fixed
+  // at rows={1}, so a multi-line message (Shift+Enter) scrolled out of
+  // view while typing. Uncontrolled (name="body", no React state), so this
+  // grows on the input event rather than a value-change effect.
+  function autoGrowComposer() {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_COMPOSER_HEIGHT_PX)}px`;
+  }
   const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // FIX_PLAN P2: same fix as ConversationView.tsx — auto-scroll used to
+  // fire on every messages update regardless of where the viewer was,
+  // yanking someone back to the bottom while they'd scrolled up to read
+  // history. Starts true so the initial load still lands at the bottom;
+  // handleSubmit forces it true so sending your own message always scrolls
+  // to it once the SSE roundtrip brings the new `messages` prop in.
+  const isNearBottomRef = useRef(true);
 
   useEffect(() => {
     const source = new EventSource(`/api/c/${communitySlug}/chat/stream`);
@@ -65,8 +84,23 @@ export function CommunityChatView({
     };
   }, [communitySlug, router]);
 
+  const NEAR_BOTTOM_THRESHOLD_PX = 80;
+
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
+    const container = listRef.current;
+    if (!container) return;
+    function handleScroll() {
+      isNearBottomRef.current =
+        container!.scrollHeight - container!.scrollTop - container!.clientHeight < NEAR_BOTTOM_THRESHOLD_PX;
+    }
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    if (isNearBottomRef.current) {
+      listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
+    }
   }, [messages]);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -84,6 +118,8 @@ export function CommunityChatView({
       }
       setError(null);
       formRef.current?.reset();
+      if (composerRef.current) composerRef.current.style.height = "auto";
+      isNearBottomRef.current = true;
     });
   }
 
@@ -129,7 +165,17 @@ export function CommunityChatView({
           <label htmlFor="chat-composer-input" className="srOnly">
             Message
           </label>
-          <textarea id="chat-composer-input" name="body" rows={1} maxLength={500} placeholder="Send a message…" className="textInput" />
+          <textarea
+            id="chat-composer-input"
+            name="body"
+            ref={composerRef}
+            rows={1}
+            maxLength={500}
+            placeholder="Send a message…"
+            className="textInput"
+            onInput={autoGrowComposer}
+            style={{ resize: "none", overflowY: "auto", maxHeight: MAX_COMPOSER_HEIGHT_PX }}
+          />
           <button type="submit" className="button" disabled={isPending}>
             {isPending ? "Sending…" : "Send"}
           </button>

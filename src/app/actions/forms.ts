@@ -35,6 +35,19 @@ function parseFields(raw: string): FormFieldDef[] | null {
       description: typeof description === "string" && description.trim().length > 0 ? description.trim().slice(0, 300) : undefined,
     });
   }
+
+  // FIX_PLAN P2: responses are keyed by label (see the response-rendering
+  // side), so two identically-named fields would silently collide — one
+  // answer lost with no indication anything was wrong. Case-insensitive
+  // since a viewer can't tell "Email" and "email" apart as distinct fields
+  // either.
+  const seenLabels = new Set<string>();
+  for (const field of fields) {
+    const key = field.label.toLowerCase();
+    if (seenLabels.has(key)) return null;
+    seenLabels.add(key);
+  }
+
   return fields;
 }
 
