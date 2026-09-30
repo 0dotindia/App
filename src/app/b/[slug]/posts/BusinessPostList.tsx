@@ -14,6 +14,7 @@ export function BusinessPostList({
   currentUser,
   likedPostIds,
   bookmarkedPostIds,
+  repostedPostIds,
   votedOptionIds,
   nextCursor,
 }: {
@@ -22,6 +23,7 @@ export function BusinessPostList({
   currentUser: Awaited<ReturnType<typeof getCurrentUser>>;
   likedPostIds: Set<string>;
   bookmarkedPostIds: Set<string>;
+  repostedPostIds: Set<string>;
   votedOptionIds: Set<string>;
   nextCursor: string | null;
 }) {
@@ -35,6 +37,7 @@ export function BusinessPostList({
             post={post}
             isLiked={likedPostIds.has(post.id)}
             isBookmarked={bookmarkedPostIds.has(post.id)}
+            isReposted={repostedPostIds.has(post.id)}
             isOwner={currentUser?.id === post.authorId}
             currentUserId={currentUser?.id}
             votedOptionIds={votedOptionIds}

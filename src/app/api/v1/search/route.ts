@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { resolveApiRequest, requireScope, apiError } from "@/lib/api-auth";
 import { checkApiRateLimit } from "@/lib/api-rate-limit";
 import { getPostVisibilityConditions } from "@/lib/post-visibility";
+import { getRepostedPostIds } from "@/lib/feed-query";
 import { cursorWhere, paginate, parseCursor } from "@/lib/pagination";
 import { searchCommunities, searchBusinesses, searchEvents } from "@/lib/search";
 import { fetchAllMarketplaceCategories } from "@/lib/marketplace-browse";
@@ -162,13 +163,14 @@ export async function GET(request: Request) {
   });
   const { items, nextCursor } = paginate(rows);
 
-  const [likedPostIds, bookmarkedPostIds] = await Promise.all([
+  const [likedPostIds, bookmarkedPostIds, repostedPostIds] = await Promise.all([
     db.postLike
       .findMany({ where: { userId: ctx.userId, postId: { in: items.map((p) => p.id) } }, select: { postId: true } })
       .then((found) => new Set(found.map((r) => r.postId))),
     db.bookmark
       .findMany({ where: { userId: ctx.userId, postId: { in: items.map((p) => p.id) } }, select: { postId: true } })
       .then((found) => new Set(found.map((r) => r.postId))),
+    getRepostedPostIds(ctx.userId, items.map((p) => p.id)),
   ]);
 
   return Response.json(
@@ -185,6 +187,7 @@ export async function GET(request: Request) {
         repostCount: post.repostCount,
         isLiked: likedPostIds.has(post.id),
         isBookmarked: bookmarkedPostIds.has(post.id),
+        isReposted: repostedPostIds.has(post.id),
         media: post.media.map((m) => ({ url: m.url, position: m.position })),
         createdAt: post.createdAt,
       })),

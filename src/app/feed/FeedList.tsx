@@ -15,6 +15,7 @@ export function FeedList({
   currentUser,
   likedPostIds,
   bookmarkedPostIds,
+  repostedPostIds,
   votedOptionIds,
   nextCursor,
   basePath,
@@ -27,6 +28,11 @@ export function FeedList({
   currentUser: Awaited<ReturnType<typeof getCurrentUser>>;
   likedPostIds: Set<string>;
   bookmarkedPostIds: Set<string>;
+  // FIX_PLAN P3 #2: optional/defaults empty, same posture as votedOptionIds
+  // below — a caller that hasn't been updated to fetch this (getRepostedPostIds,
+  // feed-query.ts) yet still renders correctly, just with the repost button
+  // never showing pressed.
+  repostedPostIds?: Set<string>;
   votedOptionIds?: Set<string>;
   nextCursor: string | null;
   basePath: string;
@@ -78,6 +84,7 @@ export function FeedList({
               post={post}
               isLiked={likedPostIds.has(post.id)}
               isBookmarked={bookmarkedPostIds.has(post.id)}
+              isReposted={repostedPostIds?.has(post.id) ?? false}
               isOwner={currentUser?.id === post.authorId}
               currentUserId={currentUser?.id}
               votedOptionIds={votedOptionIds}

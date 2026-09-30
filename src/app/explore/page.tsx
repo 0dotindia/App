@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { parseCursor } from "@/lib/pagination";
-import { getFeedPosts, getVotedPollOptionIds } from "@/lib/feed-query";
+import { getFeedPosts, getVotedPollOptionIds, getRepostedPostIds } from "@/lib/feed-query";
 import { getPostableBusinesses } from "@/lib/businesses";
 import { FeedList } from "@/app/feed/FeedList";
 import { PageHeader } from "@/components/PageHeader";
@@ -29,7 +29,7 @@ export default async function ExplorePage({
   // All five independent of each other — one batch instead of two halves
   // the round trips this stage pays against the network DB.
   const postIds = posts.map((p) => p.id);
-  const [likedPostIds, bookmarkedPostIds, votedOptionIds, postableBusinesses, ownTiers] = await Promise.all([
+  const [likedPostIds, bookmarkedPostIds, repostedPostIds, votedOptionIds, postableBusinesses, ownTiers] = await Promise.all([
     currentUser
       ? db.postLike
           .findMany({ where: { userId: currentUser.id, postId: { in: postIds } }, select: { postId: true } })
@@ -40,6 +40,7 @@ export default async function ExplorePage({
           .findMany({ where: { userId: currentUser.id, postId: { in: postIds } }, select: { postId: true } })
           .then((rows) => new Set(rows.map((r) => r.postId)))
       : Promise.resolve(new Set<string>()),
+    getRepostedPostIds(currentUser?.id, postIds),
     getVotedPollOptionIds(currentUser?.id, posts),
     currentUser ? getPostableBusinesses(currentUser.id) : Promise.resolve([]),
     currentUser
@@ -57,6 +58,7 @@ export default async function ExplorePage({
       currentUser={currentUser}
       likedPostIds={likedPostIds}
       bookmarkedPostIds={bookmarkedPostIds}
+      repostedPostIds={repostedPostIds}
       votedOptionIds={votedOptionIds}
       nextCursor={nextCursor}
       basePath="/explore"

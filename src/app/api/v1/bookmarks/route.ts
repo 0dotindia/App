@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { resolveApiRequest, requireScope, apiError } from "@/lib/api-auth";
 import { checkApiRateLimit } from "@/lib/api-rate-limit";
 import { parseCursor, encodeCursor, POST_PAGE_SIZE } from "@/lib/pagination";
+import { getRepostedPostIds } from "@/lib/feed-query";
 
 // Bookmark's primary key is the composite (postId, userId) — no scalar `id`
 // field for pagination.ts's cursorWhere/paginate to key off, so cursoring
@@ -38,9 +39,12 @@ export async function GET(request: Request) {
   const nextCursor = hasMore ? encodeCursor({ createdAt: page[page.length - 1].createdAt, id: page[page.length - 1].postId }) : null;
 
   const postIds = page.map((row) => row.postId);
-  const likedPostIds = await db.postLike
-    .findMany({ where: { userId: ctx.userId, postId: { in: postIds } }, select: { postId: true } })
-    .then((found) => new Set(found.map((row) => row.postId)));
+  const [likedPostIds, repostedPostIds] = await Promise.all([
+    db.postLike
+      .findMany({ where: { userId: ctx.userId, postId: { in: postIds } }, select: { postId: true } })
+      .then((found) => new Set(found.map((row) => row.postId))),
+    getRepostedPostIds(ctx.userId, postIds),
+  ]);
 
   return Response.json(
     {
@@ -56,6 +60,7 @@ export async function GET(request: Request) {
         repostCount: row.post.repostCount,
         isLiked: likedPostIds.has(row.post.id),
         isBookmarked: true,
+        isReposted: repostedPostIds.has(row.post.id),
         media: row.post.media.map((m) => ({ url: m.url, position: m.position })),
         createdAt: row.post.createdAt,
       })),

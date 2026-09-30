@@ -16,7 +16,7 @@ import { isProfilePremium } from "@/lib/platform-billing";
 import { getWalletBalance } from "@/lib/wallet/ledger";
 import { getPrimaryLiveDomain } from "@/lib/custom-domains";
 import { SITE_DESCRIPTION } from "@/lib/site-metadata";
-import { getFeedPosts, getVotedPollOptionIds } from "@/lib/feed-query";
+import { getFeedPosts, getVotedPollOptionIds, getRepostedPostIds } from "@/lib/feed-query";
 import { parseCursor } from "@/lib/pagination";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
@@ -1098,13 +1098,14 @@ async function ProfilePosts({
     : { items: [], nextCursor: null };
 
   const postIds = posts.map((p) => p.id);
-  const [likedPostIds, bookmarkedPostIds, votedOptionIds] = await Promise.all([
+  const [likedPostIds, bookmarkedPostIds, repostedPostIds, votedOptionIds] = await Promise.all([
     currentUser
       ? db.postLike.findMany({ where: { userId: currentUser.id, postId: { in: postIds } }, select: { postId: true } }).then((rows) => new Set(rows.map((r) => r.postId)))
       : Promise.resolve(new Set<string>()),
     currentUser
       ? db.bookmark.findMany({ where: { userId: currentUser.id, postId: { in: postIds } }, select: { postId: true } }).then((rows) => new Set(rows.map((r) => r.postId)))
       : Promise.resolve(new Set<string>()),
+    getRepostedPostIds(currentUser?.id, postIds),
     getVotedPollOptionIds(currentUser?.id, posts),
   ]);
 
@@ -1130,6 +1131,7 @@ async function ProfilePosts({
             post={post}
             isLiked={likedPostIds.has(post.id)}
             isBookmarked={bookmarkedPostIds.has(post.id)}
+            isReposted={repostedPostIds.has(post.id)}
             isOwner={currentUser?.id === post.authorId}
             currentUserId={currentUser?.id}
             votedOptionIds={votedOptionIds}

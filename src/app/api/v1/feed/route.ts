@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { resolveApiRequest, requireScope, apiError } from "@/lib/api-auth";
 import { checkApiRateLimit } from "@/lib/api-rate-limit";
-import { getFeedPosts } from "@/lib/feed-query";
+import { getFeedPosts, getRepostedPostIds } from "@/lib/feed-query";
 import { parseCursor } from "@/lib/pagination";
 
 export async function GET(request: Request) {
@@ -21,13 +21,14 @@ export async function GET(request: Request) {
   // (one findMany + a Set, not N per-post lookups) so a like toggle
   // rendered on mobile reflects the viewer's real state, not always "not
   // liked" until the app re-derives it from a local toggle.
-  const [likedPostIds, bookmarkedPostIds] = await Promise.all([
+  const [likedPostIds, bookmarkedPostIds, repostedPostIds] = await Promise.all([
     db.postLike
       .findMany({ where: { userId: ctx.userId, postId: { in: items.map((p) => p.id) } }, select: { postId: true } })
       .then((rows) => new Set(rows.map((r) => r.postId))),
     db.bookmark
       .findMany({ where: { userId: ctx.userId, postId: { in: items.map((p) => p.id) } }, select: { postId: true } })
       .then((rows) => new Set(rows.map((r) => r.postId))),
+    getRepostedPostIds(ctx.userId, items.map((p) => p.id)),
   ]);
 
   return Response.json(
@@ -44,6 +45,7 @@ export async function GET(request: Request) {
         repostCount: post.repostCount,
         isLiked: likedPostIds.has(post.id),
         isBookmarked: bookmarkedPostIds.has(post.id),
+        isReposted: repostedPostIds.has(post.id),
         media: post.media.map((m) => ({ url: m.url, position: m.position })),
         createdAt: post.createdAt,
       })),

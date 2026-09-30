@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { parseCursor, paginate, POST_PAGE_SIZE } from "@/lib/pagination";
 import { getTierGatingCondition } from "@/lib/post-visibility";
-import { pollInclude, getVotedPollOptionIds } from "@/lib/feed-query";
+import { pollInclude, getVotedPollOptionIds, getRepostedPostIds } from "@/lib/feed-query";
 import { PostCard } from "@/components/PostCard";
 import { EmptyState } from "@/components/EmptyState";
 
@@ -77,10 +77,11 @@ export default async function BookmarksPage({
   const { items, nextCursor } = paginate(bookmarkRows.map((b) => ({ ...b, id: b.postId })));
   const posts = items.map((b) => b.post);
   const postIds = posts.map((p) => p.id);
-  const [likedPostIds, votedOptionIds] = await Promise.all([
+  const [likedPostIds, repostedPostIds, votedOptionIds] = await Promise.all([
     db.postLike
       .findMany({ where: { userId: currentUser.id, postId: { in: postIds } }, select: { postId: true } })
       .then((rows) => new Set(rows.map((l) => l.postId))),
+    getRepostedPostIds(currentUser.id, postIds),
     getVotedPollOptionIds(currentUser.id, posts),
   ]);
 
@@ -95,6 +96,7 @@ export default async function BookmarksPage({
             post={post}
             isLiked={likedPostIds.has(post.id)}
             isBookmarked
+            isReposted={repostedPostIds.has(post.id)}
             isOwner={currentUser.id === post.authorId}
             currentUserId={currentUser.id}
             votedOptionIds={votedOptionIds}

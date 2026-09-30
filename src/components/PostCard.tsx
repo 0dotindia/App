@@ -14,7 +14,7 @@ import {
   ShieldX,
   X,
 } from "lucide-react";
-import { toggleBookmark, toggleRepost, deletePost } from "@/app/actions/posts";
+import { toggleBookmark, deletePost } from "@/app/actions/posts";
 import { pinPost, unpinPost, removeCommunityPost } from "@/app/actions/communities";
 import { acceptAnswer, unacceptAnswer } from "@/app/actions/qa";
 import { linkifyPostBody, splitPostBody } from "@/lib/linkify";
@@ -26,6 +26,7 @@ import { ReportButton } from "@/components/ReportButton";
 import { PostOwnerMenu } from "@/app/feed/PostOwnerMenuLazy";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { LikeButton } from "@/components/LikeButton";
+import { RepostButton } from "@/components/RepostButton";
 import { PollBlock } from "@/components/PollBlock";
 import { Avatar } from "@/components/Avatar";
 import { RelativeTime } from "@/components/RelativeTime";
@@ -375,6 +376,7 @@ export function PostCard({
   post,
   isLiked,
   isBookmarked,
+  isReposted = false,
   isOwner,
   currentUserId,
   isPinned,
@@ -385,6 +387,11 @@ export function PostCard({
   post: FeedPost;
   isLiked: boolean;
   isBookmarked: boolean;
+  // FIX_PLAN P3 #2: optional/defaults-false, same posture as votedOptionIds
+  // below — every existing caller (there were ~10) keeps rendering exactly
+  // as before (repost button never shows pressed) until it's updated to
+  // pass the real set from getRepostedPostIds (feed-query.ts).
+  isReposted?: boolean;
   isOwner: boolean;
   currentUserId?: string | null;
   // Community-feed-only (src/app/c/[slug]/CommunityFeedList.tsx) — both
@@ -561,13 +568,7 @@ export function PostCard({
             })()}
           </details>
 
-          <form action={toggleRepost}>
-            <input type="hidden" name="postId" value={post.id} />
-            <button type="submit" className="postAction" aria-label="Repost">
-              <Repeat2 size={16} aria-hidden="true" />
-              {post.repostCount > 0 ? formatCount(post.repostCount) : "Repost"}
-            </button>
-          </form>
+          <RepostButton postId={post.id} reposted={isReposted} count={post.repostCount} />
 
           <details className="postActionToggle">
             <summary className="postAction">

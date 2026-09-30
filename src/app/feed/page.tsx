@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { parseCursor } from "@/lib/pagination";
-import { getFeedPosts, getVotedPollOptionIds } from "@/lib/feed-query";
+import { getFeedPosts, getVotedPollOptionIds, getRepostedPostIds } from "@/lib/feed-query";
 import { getFolloweeIds } from "@/lib/follow-graph";
 import { getPostableBusinesses } from "@/lib/businesses";
 import { getWalletBalance } from "@/lib/wallet/ledger";
@@ -42,13 +42,14 @@ export default async function FeedPage({
   // resolved above) — one batch instead of two halves the round trips this
   // stage pays, each one a network hop to the libsql backend.
   const postIds = posts.map((p) => p.id);
-  const [likedPostIds, bookmarkedPostIds, votedOptionIds, postableBusinesses, ownTiers] = await Promise.all([
+  const [likedPostIds, bookmarkedPostIds, repostedPostIds, votedOptionIds, postableBusinesses, ownTiers] = await Promise.all([
     db.postLike
       .findMany({ where: { userId: currentUser.id, postId: { in: postIds } }, select: { postId: true } })
       .then((rows) => new Set(rows.map((r) => r.postId))),
     db.bookmark
       .findMany({ where: { userId: currentUser.id, postId: { in: postIds } }, select: { postId: true } })
       .then((rows) => new Set(rows.map((r) => r.postId))),
+    getRepostedPostIds(currentUser.id, postIds),
     getVotedPollOptionIds(currentUser.id, posts),
     getPostableBusinesses(currentUser.id),
     db.membershipTier.findMany({
@@ -68,6 +69,7 @@ export default async function FeedPage({
         currentUser={currentUser}
         likedPostIds={likedPostIds}
         bookmarkedPostIds={bookmarkedPostIds}
+        repostedPostIds={repostedPostIds}
         votedOptionIds={votedOptionIds}
         nextCursor={nextCursor}
         basePath="/feed"

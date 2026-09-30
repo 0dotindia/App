@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { resolveApiRequest, requireScope, apiError } from "@/lib/api-auth";
 import { checkApiRateLimit } from "@/lib/api-rate-limit";
 import { isBlockedEitherWay } from "@/lib/blocks";
-import { getFeedPosts } from "@/lib/feed-query";
+import { getFeedPosts, getRepostedPostIds } from "@/lib/feed-query";
 import { parseCursor } from "@/lib/pagination";
 
 // Mobile Phase C's "Posts" profile tab — same getFeedPosts helper the main
@@ -32,13 +32,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ user
     viewerId: ctx.userId,
   });
 
-  const [likedPostIds, bookmarkedPostIds] = await Promise.all([
+  const [likedPostIds, bookmarkedPostIds, repostedPostIds] = await Promise.all([
     db.postLike
       .findMany({ where: { userId: ctx.userId, postId: { in: items.map((p) => p.id) } }, select: { postId: true } })
       .then((rows) => new Set(rows.map((r) => r.postId))),
     db.bookmark
       .findMany({ where: { userId: ctx.userId, postId: { in: items.map((p) => p.id) } }, select: { postId: true } })
       .then((rows) => new Set(rows.map((r) => r.postId))),
+    getRepostedPostIds(ctx.userId, items.map((p) => p.id)),
   ]);
 
   return Response.json(
@@ -55,6 +56,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ user
         repostCount: post.repostCount,
         isLiked: likedPostIds.has(post.id),
         isBookmarked: bookmarkedPostIds.has(post.id),
+        isReposted: repostedPostIds.has(post.id),
         media: post.media.map((m) => ({ url: m.url, position: m.position })),
         createdAt: post.createdAt,
       })),

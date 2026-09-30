@@ -56,6 +56,22 @@ export async function getVotedPollOptionIds(
   return new Set(rows.map((r) => r.pollOptionId));
 }
 
+// FIX_PLAN P3 #2: "which of these posts has the viewer reposted" — the
+// read-side counterpart to toggleRepost's own existence check
+// (actions/posts.ts), which already handles the toggle correctly. The CSS
+// for a pressed repost button existed, but nothing ever computed this set,
+// so the button never showed as toggled and had no optimistic UI, unlike
+// Like/Bookmark/Poll-vote. Scoped to body:"" specifically so a quote-repost
+// (an independent, deliberate post — see createQuoteRepost) never counts.
+export async function getRepostedPostIds(userId: string | undefined | null, postIds: string[]): Promise<Set<string>> {
+  if (!userId || postIds.length === 0) return new Set();
+  const rows = await db.post.findMany({
+    where: { authorId: userId, repostOfId: { in: postIds }, body: "", deletedAt: null },
+    select: { repostOfId: true },
+  });
+  return new Set(rows.map((r) => r.repostOfId).filter((id): id is string => id !== null));
+}
+
 // Shared by /feed (Home, filtered to the follow graph) and /explore (the
 // old Phase 1 global-chronological behavior, unfiltered) — see phase-2
 // spec §6.1. Only top-level posts are listed here — replies render inline

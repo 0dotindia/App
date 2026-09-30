@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { getBusinessMember } from "@/lib/businesses";
 import { getBusinessFeedPosts } from "@/lib/business-feed";
-import { getVotedPollOptionIds } from "@/lib/feed-query";
+import { getVotedPollOptionIds, getRepostedPostIds } from "@/lib/feed-query";
 import { parseCursor } from "@/lib/pagination";
 import { BusinessPostList } from "./BusinessPostList";
 
@@ -49,6 +49,7 @@ export default async function BusinessPostsPage({
           .then((rows) => new Set(rows.map((r) => r.postId))),
       ])
     : [new Set<string>(), new Set<string>()];
+  const repostedPostIds = await getRepostedPostIds(currentUser?.id, postIds);
   const votedOptionIds = await getVotedPollOptionIds(currentUser?.id, posts);
 
   return (
@@ -67,6 +68,7 @@ export default async function BusinessPostsPage({
         currentUser={currentUser}
         likedPostIds={likedPostIds}
         bookmarkedPostIds={bookmarkedPostIds}
+        repostedPostIds={repostedPostIds}
         votedOptionIds={votedOptionIds}
         nextCursor={nextCursor}
       />

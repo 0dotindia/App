@@ -8,7 +8,7 @@ import { getCommunityMember } from "@/lib/communities";
 import { isGatedFromCommunityContent } from "@/lib/organizations";
 import { joinCommunity, leaveCommunity } from "@/app/actions/communities";
 import { getCommunityFeedPosts } from "@/lib/community-feed";
-import { getVotedPollOptionIds } from "@/lib/feed-query";
+import { getVotedPollOptionIds, getRepostedPostIds } from "@/lib/feed-query";
 import { parseCursor } from "@/lib/pagination";
 import { communityTagLabel } from "@/lib/community-tags";
 import { Logo } from "@/components/Logo";
@@ -273,6 +273,7 @@ async function CommunityFeedContent({
           .then((rows) => new Set(rows.map((r) => r.postId))),
       ])
     : [new Set<string>(), new Set<string>()];
+  const repostedPostIds = await getRepostedPostIds(currentUser?.id, postIds);
   const votedOptionIds = await getVotedPollOptionIds(currentUser?.id, [...pinned, ...posts]);
   const ownTiers = currentUser
     ? await db.membershipTier.findMany({
@@ -291,6 +292,7 @@ async function CommunityFeedContent({
       currentUser={currentUser}
       likedPostIds={likedPostIds}
       bookmarkedPostIds={bookmarkedPostIds}
+      repostedPostIds={repostedPostIds}
       votedOptionIds={votedOptionIds}
       nextCursor={nextCursor}
       canPost={canPost}

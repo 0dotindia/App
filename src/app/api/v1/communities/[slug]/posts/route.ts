@@ -8,6 +8,7 @@ import { getCommunityFeedPosts } from "@/lib/community-feed";
 import { notifyMentionsInBody } from "@/lib/notifications";
 import { checkDuplicatePostPattern } from "@/lib/account-risk";
 import { parseCursor } from "@/lib/pagination";
+import { getRepostedPostIds } from "@/lib/feed-query";
 import { revalidatePath } from "next/cache";
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -39,9 +40,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   const allPosts = [...pinned, ...items];
 
   const postIds = allPosts.map((p) => p.id);
-  const [likedPostIds, bookmarkedPostIds] = await Promise.all([
+  const [likedPostIds, bookmarkedPostIds, repostedPostIds] = await Promise.all([
     db.postLike.findMany({ where: { userId: ctx.userId, postId: { in: postIds } }, select: { postId: true } }).then((r) => new Set(r.map((x) => x.postId))),
     db.bookmark.findMany({ where: { userId: ctx.userId, postId: { in: postIds } }, select: { postId: true } }).then((r) => new Set(r.map((x) => x.postId))),
+    getRepostedPostIds(ctx.userId, postIds),
   ]);
 
   return Response.json(
@@ -58,6 +60,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
         repostCount: post.repostCount,
         isLiked: likedPostIds.has(post.id),
         isBookmarked: bookmarkedPostIds.has(post.id),
+        isReposted: repostedPostIds.has(post.id),
         media: post.media.map((m) => ({ url: m.url, position: m.position })),
         createdAt: post.createdAt,
       })),
@@ -134,6 +137,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
       repostCount: 0,
       isLiked: false,
       isBookmarked: false,
+      isReposted: false,
       media: [],
       createdAt: newPost.createdAt,
     },

@@ -16,6 +16,7 @@ export function CommunityFeedList({
   currentUser,
   likedPostIds,
   bookmarkedPostIds,
+  repostedPostIds,
   votedOptionIds,
   nextCursor,
   canPost,
@@ -31,6 +32,7 @@ export function CommunityFeedList({
   currentUser: Awaited<ReturnType<typeof getCurrentUser>>;
   likedPostIds: Set<string>;
   bookmarkedPostIds: Set<string>;
+  repostedPostIds: Set<string>;
   votedOptionIds: Set<string>;
   nextCursor: string | null;
   canPost: boolean;
@@ -80,6 +82,7 @@ export function CommunityFeedList({
             post={post}
             isLiked={likedPostIds.has(post.id)}
             isBookmarked={bookmarkedPostIds.has(post.id)}
+            isReposted={repostedPostIds.has(post.id)}
             isOwner={currentUser?.id === post.authorId}
             currentUserId={currentUser?.id}
             votedOptionIds={votedOptionIds}
@@ -94,6 +97,7 @@ export function CommunityFeedList({
             post={post}
             isLiked={likedPostIds.has(post.id)}
             isBookmarked={bookmarkedPostIds.has(post.id)}
+            isReposted={repostedPostIds.has(post.id)}
             isOwner={currentUser?.id === post.authorId}
             currentUserId={currentUser?.id}
             votedOptionIds={votedOptionIds}

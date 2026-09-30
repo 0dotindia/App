@@ -84,9 +84,12 @@ export default async function PostPermalinkPage({ params }: { params: Promise<{ 
     if (followRow?.status !== "accepted") notFound();
   }
 
-  const [likeRow, bookmarkRow, votedOptionIds] = await Promise.all([
+  const [likeRow, bookmarkRow, repostRow, votedOptionIds] = await Promise.all([
     currentUser ? db.postLike.findFirst({ where: { userId: currentUser.id, postId: post.id } }) : Promise.resolve(null),
     currentUser ? db.bookmark.findFirst({ where: { userId: currentUser.id, postId: post.id } }) : Promise.resolve(null),
+    currentUser
+      ? db.post.findFirst({ where: { authorId: currentUser.id, repostOfId: post.id, body: "", deletedAt: null } })
+      : Promise.resolve(null),
     getVotedPollOptionIds(currentUser?.id, [post]),
   ]);
 
@@ -102,6 +105,7 @@ export default async function PostPermalinkPage({ params }: { params: Promise<{ 
         post={post}
         isLiked={Boolean(likeRow)}
         isBookmarked={Boolean(bookmarkRow)}
+        isReposted={Boolean(repostRow)}
         isOwner={isOwner}
         currentUserId={currentUser?.id}
         votedOptionIds={votedOptionIds}

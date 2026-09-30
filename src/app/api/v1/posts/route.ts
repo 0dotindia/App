@@ -125,6 +125,7 @@ export async function POST(request: Request) {
       repostCount: 0,
       isLiked: false,
       isBookmarked: false,
+      isReposted: false,
       media: mediaCreates,
       createdAt: newPost.createdAt,
     },
