@@ -26,7 +26,7 @@ export default async function CoursesSettingsPage() {
   return (
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Courses</h2>
-      {myCourses.length === 0 && <EmptyState message="No courses yet." />}
+      {myCourses.length === 0 && <EmptyState title="No courses yet." />}
       {myCourses.map((course) => (
         <div key={course.id} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow

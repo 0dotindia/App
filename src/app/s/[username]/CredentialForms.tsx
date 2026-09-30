@@ -55,7 +55,11 @@ export function ResearchPaperForm({ ownProjects }: { ownProjects: { id: string; 
           </select>
         </div>
       )}
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSecondary buttonSmall" disabled={pending}>
         {pending ? "Adding…" : "Add paper"}
       </button>
@@ -102,7 +106,11 @@ export function CertificateForm() {
         <label htmlFor="certCredentialUrl">Verification link</label>
         <input id="certCredentialUrl" name="credentialUrl" type="url" placeholder="e.g. a Credly badge page" className="textInput" />
       </div>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSecondary buttonSmall" disabled={pending}>
         {pending ? "Adding…" : "Add certificate"}
       </button>
@@ -143,7 +151,11 @@ export function AwardForm() {
         <label htmlFor="awardLink">Link</label>
         <input id="awardLink" name="link" type="url" className="textInput" />
       </div>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSecondary buttonSmall" disabled={pending}>
         {pending ? "Adding…" : "Add award"}
       </button>

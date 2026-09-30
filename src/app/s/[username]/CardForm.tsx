@@ -55,7 +55,11 @@ export function CardForm({
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Saving…" : "Save"}
       </button>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

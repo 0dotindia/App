@@ -130,7 +130,7 @@ export default async function DeveloperAppDetailPage({
 
       <div style={{ marginBottom: "1.5rem" }}>
         <p className="sectionHeading">Webhooks</p>
-        {webhookSubscriptions.length === 0 && <EmptyState message="No webhook subscriptions yet." />}
+        {webhookSubscriptions.length === 0 && <EmptyState title="No webhook subscriptions yet." />}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "0.75rem" }}>
           {webhookSubscriptions.map((sub) => (
             <div key={sub.id} className="profileLinkItem" style={{ justifyContent: "space-between", alignItems: "center" }}>
@@ -156,7 +156,7 @@ export default async function DeveloperAppDetailPage({
 
       <div style={{ marginBottom: "1.5rem" }}>
         <p className="sectionHeading">API usage (last 24 hourly windows)</p>
-        {recentUsage.length === 0 && <EmptyState message="No API requests yet." />}
+        {recentUsage.length === 0 && <EmptyState title="No API requests yet." />}
         {recentUsage.length > 0 && (
           <p className="mutedText" style={{ fontSize: "0.85rem" }}>
             {recentUsage.reduce((sum, row) => sum + row.requestCount, 0)} requests total

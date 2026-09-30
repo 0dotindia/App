@@ -24,7 +24,11 @@ export function AddMemberForm({ organizationId }: { organizationId: string }) {
           <input id="department" name="department" type="text" maxLength={100} />
         </div>
       </div>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button buttonSecondary buttonSmall" disabled={pending}>
         {pending ? "Adding…" : "Add member"}
       </button>

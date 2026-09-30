@@ -13,7 +13,7 @@ export function ResumePdfForm({ resumePdfUrl }: { resumePdfUrl: string | null })
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "32ch" }}>
       {resumePdfUrl && (
-        <p className="mutedText" style={{ fontSize: "0.85rem" }}>
+        <p className="mutedText" style={{ fontSize: "var(--text-xs-plus)" }}>
           Current: <a href={resumePdfUrl} target="_blank" rel="noopener noreferrer">resume.pdf</a>
         </p>
       )}
@@ -23,7 +23,11 @@ export function ResumePdfForm({ resumePdfUrl }: { resumePdfUrl: string | null })
           {pending ? "Uploading…" : resumePdfUrl ? "Replace" : "Upload"}
         </button>
       </form>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       {resumePdfUrl && (
         <form action={removeResumePdf}>
           <ConfirmButton

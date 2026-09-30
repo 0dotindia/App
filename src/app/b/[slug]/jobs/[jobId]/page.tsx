@@ -144,7 +144,7 @@ export default async function JobDetailPage({
       {!closed && <JsonLd data={jobPostingJsonLd(job, business)} />}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{job.title}</h1>
-        <Link href={`/b/${business.slug}/jobs`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+        <Link href={`/b/${business.slug}/jobs`} className="button buttonSecondary buttonSmall">
           Back to jobs
         </Link>
       </div>

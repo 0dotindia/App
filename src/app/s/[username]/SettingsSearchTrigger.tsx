@@ -17,7 +17,7 @@ export function SettingsSearchTrigger() {
     <button type="button" className="settingsSearchTrigger" onClick={openPalette}>
       <Search size={14} aria-hidden="true" />
       Search settings
-      <kbd className="kbd">⌘K</kbd>
+      <kbd className="kbd">⌘/Ctrl K</kbd>
     </button>
   );
 }

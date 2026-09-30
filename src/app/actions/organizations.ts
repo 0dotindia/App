@@ -141,6 +141,11 @@ export async function updateOrganizationMember(formData: FormData): Promise<void
   const department = String(formData.get("department") ?? "").trim() || null;
   const title = String(formData.get("title") ?? "").trim() || null;
   if (!organizationId || !targetUserId) return;
+  // The manage UI already hides these controls on your own row
+  // (org/[orgId]/manage/page.tsx's `m.userId !== user.id`) — enforced here
+  // too, not just hidden, since a role change is how the last org_admin
+  // could otherwise demote themselves with no one left to reverse it.
+  if (targetUserId === user.id) return;
   if (!(await isOrgAdmin(organizationId, user.id))) return;
 
   const role = ROLE_VALUES.has(roleRaw) ? roleRaw : "member";
@@ -150,6 +155,14 @@ export async function updateOrganizationMember(formData: FormData): Promise<void
   await db.organizationMember.update({
     where: { organizationId_userId: { organizationId, userId: targetUserId } },
     data: { role, department, title },
+  });
+  await logOrgAudit({
+    organizationId,
+    actorId: user.id,
+    action: "member_role_changed",
+    targetType: "user",
+    targetId: targetUserId,
+    metadata: { role },
   });
 
   revalidatePath(`/org/${organizationId}/manage`);
@@ -165,6 +178,11 @@ export async function deactivateOrganizationMember(formData: FormData): Promise<
   const organizationId = String(formData.get("organizationId") ?? "");
   const targetUserId = String(formData.get("userId") ?? "");
   if (!organizationId || !targetUserId) return;
+  // Same self-action guard as updateOrganizationMember above — without it,
+  // the sole org_admin deactivating themselves permanently locks the
+  // organization out of management with no recovery path short of direct
+  // DB access.
+  if (targetUserId === user.id) return;
   if (!(await isOrgAdmin(organizationId, user.id))) return;
 
   const target = await getOrganizationMember(organizationId, targetUserId);

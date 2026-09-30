@@ -69,16 +69,20 @@ export function LoginForm() {
             required
           />
 
-          {state?.error && <p className="errorText">{state.error}</p>}
+          {state?.error && (
+            <p className="errorText" role="alert">
+              {state.error}
+            </p>
+          )}
 
           <button type="submit" className="button" disabled={pending}>
             {pending ? "Logging in…" : "Log in"}
           </button>
 
           {/* prefetch={false}: this form mounts alongside DigitalHomeVisual's
-              4 nodes, ExploreLiveLink, and MarketingNav — without it, this
-              page view adds two more concurrent RSC prefetches to that same
-              burst. Same DB-connection-burst-503 fix as those. */}
+              4 nodes and ExploreLiveLink — without it, this page view adds
+              two more concurrent RSC prefetches to that same burst. Same
+              DB-connection-burst-503 fix as those. */}
           <p className="authFooter">
             <Link href="/forgot-password" prefetch={false}>Forgot password?</Link>
           </p>
@@ -101,7 +105,11 @@ export function LoginForm() {
             <label htmlFor="ssoEmail">Sign in with your work email</label>
             <input id="ssoEmail" name="email" type="email" autoComplete="email" placeholder="you@company.com" />
           </div>
-          {ssoState?.error && <p className="errorText">{ssoState.error}</p>}
+          {ssoState?.error && (
+            <p className="errorText" role="alert">
+              {ssoState.error}
+            </p>
+          )}
           <button type="submit" className="button buttonSecondary" disabled={ssoPending}>
             {ssoPending ? "Looking up organization…" : "Continue with SSO"}
           </button>

@@ -68,7 +68,7 @@ export default async function PodcastSettingsPage() {
 
           <p className="settingsGroupLabel">Episodes</p>
           {podcast.episodes.length === 0 ? (
-            <EmptyState message="No episodes yet." />
+            <EmptyState title="No episodes yet." />
           ) : (
             <div className="settingsGroup">
               {podcast.episodes.map((episode) => (

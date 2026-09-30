@@ -69,7 +69,7 @@ export default async function AdminIapBatchesPage() {
       </form>
 
       {batches.length === 0 ? (
-        <EmptyState message="No batches recorded yet." />
+        <EmptyState title="No batches recorded yet." />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {batches.map((batch) => {

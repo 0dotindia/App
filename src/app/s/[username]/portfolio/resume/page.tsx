@@ -31,7 +31,7 @@ export default async function ResumeSettingsPage() {
   return (
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Resume</h2>
-      <p className="mutedText" style={{ fontSize: "0.85rem" }}>
+      <p className="mutedText" style={{ fontSize: "var(--text-xs-plus)" }}>
         <Link href={`/${handle}/resume`}>View generated resume</Link> — assembled from Work experience,
         Education, Skills, and projects marked &ldquo;Feature on resume&rdquo; elsewhere in Portfolio.
       </p>

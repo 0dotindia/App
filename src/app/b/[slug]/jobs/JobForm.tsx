@@ -36,7 +36,11 @@ export function JobForm({ businessId }: { businessId: string }) {
       </label>
       <input type="date" name="closesAt" className="textInput" />
 
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
 
       <button type="submit" className="button buttonSmall" style={{ alignSelf: "flex-start" }} disabled={pending}>
         {pending ? "Posting…" : "Post job"}

@@ -46,13 +46,17 @@ export function PurchaseVipForm({
               {pending ? "Renewing…" : `Renew now (${renewPrice} coin${renewPrice === 1 ? "" : "s"})`}
             </button>
             {cantAfford && (
-              <p className="mutedText" style={{ fontSize: "0.8rem" }}>
+              <p className="mutedText" style={{ fontSize: "var(--text-xs)" }}>
                 You need at least {renewPrice} coin{renewPrice === 1 ? "" : "s"}.
               </p>
             )}
           </form>
         )}
-        {state?.error && <p className="errorText">{state.error}</p>}
+        {state?.error && (
+          <p className="errorText" role="alert">
+            {state.error}
+          </p>
+        )}
       </div>
     );
   }
@@ -91,11 +95,15 @@ export function PurchaseVipForm({
         {pending ? "Unlocking…" : `Unlock VIP — ${price} coin${price === 1 ? "" : "s"}`}
       </button>
       {cantAfford && (
-        <p className="mutedText" style={{ fontSize: "0.8rem" }}>
+        <p className="mutedText" style={{ fontSize: "var(--text-xs)" }}>
           You need at least {price} coin{price === 1 ? "" : "s"}.
         </p>
       )}
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

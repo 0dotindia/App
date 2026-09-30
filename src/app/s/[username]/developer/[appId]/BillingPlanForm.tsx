@@ -32,7 +32,11 @@ export function BillingPlanForm({
       <button type="submit" className="button buttonSecondary buttonSmall" disabled={pending} style={{ alignSelf: "flex-start" }}>
         {pending ? "Saving…" : "Save billing plan"}
       </button>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       {state?.success && <p className="mutedText" style={{ fontSize: "0.85rem" }}>Billing plan saved.</p>}
     </form>
   );

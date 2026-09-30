@@ -75,7 +75,7 @@ export default async function BusinessWalletPage({ params }: { params: Promise<{
 
       <p className="sectionHeading" style={{ marginTop: "1.25rem" }}>Recent activity</p>
       <div className="settingsGroup" style={{ padding: activity.entries.length ? "0.4rem" : "0.9rem 1rem" }}>
-        {activity.entries.length === 0 && <EmptyState message="No wallet activity yet." />}
+        {activity.entries.length === 0 && <EmptyState title="No wallet activity yet." />}
         {activity.entries.map((e) => (
           <div key={e.id} className="navLink" style={{ justifyContent: "space-between" }}>
             <span>{walletActivityLabel(e)}{e.memo ? ` — ${e.memo}` : ""}</span>

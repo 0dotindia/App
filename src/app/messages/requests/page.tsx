@@ -41,13 +41,13 @@ export default async function MessageRequestsPage({
     <div className="profileCard">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Message requests</h1>
-        <Link href="/messages" className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+        <Link href="/messages" className="button buttonSecondary buttonSmall">
           Back to messages
         </Link>
       </div>
 
       <div className="conversationList">
-        {requests.length === 0 && <EmptyState message="No pending requests." />}
+        {requests.length === 0 && <EmptyState title="No pending requests." />}
         {requests.map((conversation, i) => {
           const display = displays[i];
           return (
@@ -94,17 +94,13 @@ export default async function MessageRequestsPage({
               <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
                 <form action={acceptMessageRequest}>
                   <input type="hidden" name="conversationId" value={conversation.id} />
-                  <button type="submit" className="button" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+                  <button type="submit" className="button buttonSmall">
                     Accept
                   </button>
                 </form>
                 <form action={declineMessageRequest}>
                   <input type="hidden" name="conversationId" value={conversation.id} />
-                  <button
-                    type="submit"
-                    className="button buttonSecondary"
-                    style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}
-                  >
+                  <button type="submit" className="button buttonSecondary buttonSmall">
                     Decline
                   </button>
                 </form>

@@ -1157,6 +1157,14 @@ body.fixedViewport .landingWrap {
     gap: 4rem;
     padding: clamp(0.75rem, 4vh, 2rem) clamp(2rem, 5vw, 6rem);
   }
+
+  /* /login/2fa's only child is .authStack — no hero section to balance
+     against — so the shared space-between above pins it to the left edge
+     instead of centering it. Modifier (not a change to .landingWrap itself)
+     since /login and /signup both rely on space-between's two-child push. */
+  .landingWrap.landingWrapSingle {
+    justify-content: center;
+  }
 }
 
 /* .landingLogo (a standalone top-left-pinned brand mark, previously shared
@@ -3656,6 +3664,18 @@ a.profileMetaItem:hover {
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
 
+/* Same 44px touch-target fix as the .button.buttonSmall/.iconButton pass
+   above (globals.css's `@media (pointer: coarse)` block) — these utility-row
+   triggers (Share, Send a tip, Block, Skills, Projects, …) are styled to the
+   same ~28px compact size but use their own selector, so they were missed
+   by that pass and never picked up the enlarged hit area on touch. */
+@media (pointer: coarse) {
+  .profileUtilityRow .profileEditToggle > summary,
+  .profileUtilityRow a.profileEditToggle {
+    min-height: 44px;
+  }
+}
+
 .profileUtilityRow .profileEditToggle[open] > summary {
   border-color: var(--accent);
   color: var(--accent);
@@ -5264,6 +5284,17 @@ body.hasBottomNav .mobileNavPanel {
   opacity: 1;
 }
 
+/* Hover never fires on a touch device, and unlike
+   .conversationRowMenuTriggerCompact (which has a [data-state="open"]
+   fallback once its own popover is opened) this trigger has no other state
+   to key off — so without this, it's invisible AND undiscoverable on
+   mobile, not just harder to reach. */
+@media (pointer: coarse) {
+  .messageDeleteTrigger {
+    opacity: 1;
+  }
+}
+
 .messageComposer {
   display: flex;
   align-items: flex-end;
@@ -5947,6 +5978,14 @@ details:not([open]) > .settingsAddTrigger {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
+}
+
+/* .button has no base text-align, so the "Log in"/"Create your 0dot" <a>
+   tags — stretched to the panel's full width by the flex column's default
+   align-items: stretch above — read left-aligned inside a wide pill instead
+   of centered like every other .button in the app (mobile QA pass). */
+.marketingNavMobilePanel .button {
+  text-align: center;
 }
 
 /* Auth pages' (login/signup) small top bar — logo + "Back to 0dot", not the

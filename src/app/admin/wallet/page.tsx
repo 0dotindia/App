@@ -64,7 +64,7 @@ export default async function AdminWalletPage() {
 
       <p className="sectionHeading" style={{ marginTop: "1.5rem" }}>Issuance audit</p>
       <div className="settingsGroup" style={{ padding: issuance.length ? "0.4rem" : "0.9rem 1rem" }}>
-        {issuance.length === 0 && <EmptyState message="No grants yet." />}
+        {issuance.length === 0 && <EmptyState title="No grants yet." />}
         {issuance.map((t) => {
           // The issuance posting on system_promo_issuance carries the true
           // amount moved: negative = coins issued, positive = clawed back.

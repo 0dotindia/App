@@ -24,7 +24,7 @@ export default async function RepositoriesSettingsPage() {
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Git repositories</h2>
       {myGitRepositories.length === 0 ? (
-        <EmptyState message="No repositories yet." />
+        <EmptyState title="No repositories yet." />
       ) : (
         <div className="settingsGroup">
           {myGitRepositories.map((repo) => (

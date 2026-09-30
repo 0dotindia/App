@@ -22,7 +22,7 @@ export default async function PortfolioLayoutSettingsPage() {
   return (
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Portfolio layout</h2>
-      <p className="mutedText" style={{ fontSize: "0.85rem" }}>
+      <p className="mutedText" style={{ fontSize: "var(--text-xs-plus)" }}>
         Reorder or hide the Projects, Skills, Resume, Repositories, and Credentials sections on your
         public profile. A hidden section&rsquo;s entries still exist, they just don&rsquo;t render.
       </p>

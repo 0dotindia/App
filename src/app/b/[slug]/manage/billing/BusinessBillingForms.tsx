@@ -38,7 +38,11 @@ export function BusinessClaimDomainForm({ businessId }: { businessId: string }) 
           {pending ? "Claiming…" : "Claim domain"}
         </button>
       </div>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

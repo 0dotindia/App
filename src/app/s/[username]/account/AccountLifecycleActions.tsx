@@ -32,8 +32,18 @@ function ConfirmDangerForm({
 
   return (
     <form action={formAction} className="settingsDangerRowFull" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      <PasswordField id={`${confirmLabel}-password`} name="currentPassword" label="Confirm your password" autoComplete="current-password" required />
-      {state?.error && <p className="errorText">{state.error}</p>}
+      <PasswordField
+        id={`${confirmLabel.toLowerCase().replace(/\s+/g, "-")}-password`}
+        name="currentPassword"
+        label="Confirm your password"
+        autoComplete="current-password"
+        required
+      />
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <div style={{ display: "flex", gap: "0.5rem" }}>
         <button type="submit" className="button buttonDanger" disabled={pending}>
           {pending ? pendingLabel : confirmLabel}

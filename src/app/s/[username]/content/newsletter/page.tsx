@@ -26,7 +26,7 @@ export default async function NewsletterSettingsPage() {
       <h2 className="settingsSectionHeading">Newsletter</h2>
       <p className="mutedText" style={{ marginBottom: "1rem" }}>{subscriberCount} active subscriber{subscriberCount === 1 ? "" : "s"}</p>
 
-      {issues.length === 0 && <EmptyState message="No issues yet." />}
+      {issues.length === 0 && <EmptyState title="No issues yet." />}
       {issues.map((issue) => (
         <div key={issue.id} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow

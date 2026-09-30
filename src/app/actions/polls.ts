@@ -118,14 +118,21 @@ export async function castVote(formData: FormData): Promise<void> {
   if (option.poll.closesAt.getTime() <= Date.now()) return;
 
   if (option.poll.allowsMultipleChoice) {
-    const existing = await db.pollVote.findUnique({
-      where: { pollOptionId_userId: { pollOptionId, userId: user.id } },
+    // Read + write in one transaction (not just the write) — same TOCTOU fix
+    // as toggleLike/toggleBookmark/toggleRepost in posts.ts: two concurrent
+    // calls could otherwise both read "not voted yet" before either write
+    // commits, and the second create() would throw on the unique constraint
+    // instead of un-voting.
+    await db.$transaction(async (tx) => {
+      const existing = await tx.pollVote.findUnique({
+        where: { pollOptionId_userId: { pollOptionId, userId: user.id } },
+      });
+      if (existing) {
+        await tx.pollVote.delete({ where: { pollOptionId_userId: { pollOptionId, userId: user.id } } });
+      } else {
+        await tx.pollVote.create({ data: { pollOptionId, userId: user.id } });
+      }
     });
-    if (existing) {
-      await db.pollVote.delete({ where: { pollOptionId_userId: { pollOptionId, userId: user.id } } });
-    } else {
-      await db.pollVote.create({ data: { pollOptionId, userId: user.id } });
-    }
   } else {
     const siblingOptions = await db.pollOption.findMany({
       where: { pollId: option.poll.id },

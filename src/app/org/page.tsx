@@ -22,7 +22,7 @@ export default async function OrganizationsPage() {
     <div className="profileCard">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Organizations</h1>
-        <Link href="/org/new" className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+        <Link href="/org/new" className="button buttonSecondary buttonSmall">
           New organization
         </Link>
       </div>

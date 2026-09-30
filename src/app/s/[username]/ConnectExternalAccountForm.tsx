@@ -36,10 +36,14 @@ export function ConnectExternalAccountForm() {
           {pending ? "Connecting…" : "Connect"}
         </button>
       </div>
-      <p className="mutedText" style={{ fontSize: "0.8rem" }}>
+      <p className="mutedText" style={{ fontSize: "var(--text-xs)" }}>
         Demo connection — no live platform API is wired up yet, so this doesn&apos;t redirect to the real site.
       </p>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

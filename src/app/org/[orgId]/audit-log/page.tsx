@@ -43,7 +43,7 @@ export default async function OrganizationAuditLogPage({ params }: { params: Pro
       <h1 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1.25rem" }}>Audit log — {organization.name}</h1>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        {entries.length === 0 && <EmptyState message="No activity recorded yet." />}
+        {entries.length === 0 && <EmptyState title="No activity recorded yet." />}
         {entries.map((e) => (
           <div key={e.id} className="profileLinkItem" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
             <span>{ACTION_LABEL[e.action] ?? e.action}</span>

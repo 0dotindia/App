@@ -24,7 +24,7 @@ export default async function LivestreamsSettingsPage() {
   return (
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Livestreams</h2>
-      {livestreams.length === 0 && <EmptyState message="No livestreams yet." />}
+      {livestreams.length === 0 && <EmptyState title="No livestreams yet." />}
       {livestreams.length > 0 && (
         <div className="settingsGroup">
           {livestreams.map((live) => (

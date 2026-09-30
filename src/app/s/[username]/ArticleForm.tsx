@@ -100,7 +100,11 @@ export function ArticleForm({ article }: { article?: ArticleFormArticle }) {
         </div>
       </div>
 
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Saving…" : article ? "Save changes" : "Create article"}
       </button>

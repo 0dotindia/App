@@ -28,7 +28,11 @@ export function BusinessSubscribeWithCoinsForm({ businessId, prices }: { busines
       <button type="submit" className="button buttonSecondary" disabled={pending} style={{ alignSelf: "flex-start" }}>
         {pending ? "Paying…" : "Pay subscription with coins"}
       </button>
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       {state?.success && <p className="mutedText" style={{ fontSize: "0.85rem" }}>Subscription paid from the business wallet.</p>}
     </form>
   );

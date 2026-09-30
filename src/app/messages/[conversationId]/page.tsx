@@ -62,7 +62,7 @@ export default async function ConversationPage({
   }
 
   return (
-    <div className="profileCard" style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 8rem)" }}>
+    <div className="profileCard" style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 8rem)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
           <Link href="/messages" className="button buttonSecondary iconButton" aria-label="Back to messages">
@@ -88,7 +88,7 @@ export default async function ConversationPage({
             </span>
           )}
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ fontSize: "1.05rem", fontWeight: 700, margin: 0 }}>
+            <h1 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0 }}>
               {display.handle ? <Link href={`/${display.handle}`}>{display.title}</Link> : display.title}
               {display.handle && (
                 <Link href={`/${display.handle}`} className="verifiedBadge" aria-label="View public profile" title="View public profile">
@@ -139,17 +139,13 @@ export default async function ConversationPage({
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <form action={acceptMessageRequest}>
               <input type="hidden" name="conversationId" value={conversationId} />
-              <button type="submit" className="button" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+              <button type="submit" className="button buttonSmall">
                 Accept
               </button>
             </form>
             <form action={declineMessageRequest}>
               <input type="hidden" name="conversationId" value={conversationId} />
-              <button
-                type="submit"
-                className="button buttonSecondary"
-                style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}
-              >
+              <button type="submit" className="button buttonSecondary buttonSmall">
                 Decline
               </button>
             </form>

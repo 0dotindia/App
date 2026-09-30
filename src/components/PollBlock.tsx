@@ -95,6 +95,7 @@ export function PollBlock({ poll, votedOptionIds }: { poll: Poll; votedOptionIds
             <button
               type="submit"
               disabled={isClosed}
+              aria-pressed={voted}
               className="button buttonSecondary"
               style={{
                 width: "100%",

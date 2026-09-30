@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { parseCursor, paginate, POST_PAGE_SIZE } from "@/lib/pagination";
 import { getTierGatingCondition } from "@/lib/post-visibility";
+import { pollInclude, getVotedPollOptionIds } from "@/lib/feed-query";
 import { PostCard } from "@/components/PostCard";
 import { EmptyState } from "@/components/EmptyState";
 
@@ -54,6 +55,12 @@ export default async function BookmarksPage({
         include: {
           author: { include: authorInclude },
           media: mediaInclude,
+          // Was missing entirely — posts with polls never carried poll data
+          // on /bookmarks (unlike /feed and /explore, which both include
+          // this), so PollBlock never rendered here and a bookmarked poll's
+          // options always looked unvoted. Mirrors feed-query.ts's
+          // getFeedPosts include exactly.
+          poll: pollInclude,
           repostOf: { include: { author: { include: authorInclude }, media: mediaInclude } },
           replies: {
             where: { deletedAt: null },
@@ -70,20 +77,18 @@ export default async function BookmarksPage({
   const { items, nextCursor } = paginate(bookmarkRows.map((b) => ({ ...b, id: b.postId })));
   const posts = items.map((b) => b.post);
   const postIds = posts.map((p) => p.id);
-  const likedPostIds = new Set(
-    (
-      await db.postLike.findMany({
-        where: { userId: currentUser.id, postId: { in: postIds } },
-        select: { postId: true },
-      })
-    ).map((l) => l.postId)
-  );
+  const [likedPostIds, votedOptionIds] = await Promise.all([
+    db.postLike
+      .findMany({ where: { userId: currentUser.id, postId: { in: postIds } }, select: { postId: true } })
+      .then((rows) => new Set(rows.map((l) => l.postId))),
+    getVotedPollOptionIds(currentUser.id, posts),
+  ]);
 
   return (
     <div className="profileCard">
       <h1 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "1rem" }}>Bookmarks</h1>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-        {posts.length === 0 && <EmptyState message="No bookmarks yet." />}
+        {posts.length === 0 && <EmptyState title="No bookmarks yet." />}
         {posts.map((post, index) => (
           <PostCard
             key={post.id}
@@ -92,6 +97,7 @@ export default async function BookmarksPage({
             isBookmarked
             isOwner={currentUser.id === post.authorId}
             currentUserId={currentUser.id}
+            votedOptionIds={votedOptionIds}
             priority={index === 0}
           />
         ))}

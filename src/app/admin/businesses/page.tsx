@@ -36,7 +36,7 @@ export default async function AdminBusinessesPage() {
       </p>
 
       {pending.length === 0 ? (
-        <EmptyState message="Nothing pending." />
+        <EmptyState title="Nothing pending." />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           {pending.map((business, i) => {

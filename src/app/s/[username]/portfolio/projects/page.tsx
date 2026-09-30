@@ -33,7 +33,7 @@ export default async function ProjectsSettingsPage() {
   return (
     <div className="settingsSection">
       <h2 className="settingsSectionHeading">Projects</h2>
-      {myProjects.length === 0 && <EmptyState message="No projects yet." />}
+      {myProjects.length === 0 && <EmptyState title="No projects yet." />}
       {myProjects.map((project, index) => (
         <div key={project.id} id={`project-${project.id}`} className="settingsGroup" style={{ marginBottom: "var(--space-3)" }}>
           <SettingsRow
@@ -71,7 +71,7 @@ export default async function ProjectsSettingsPage() {
           {project.collaborators.length > 0 && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", padding: "0 var(--space-4) var(--space-3)" }}>
               {project.collaborators.map((c) => (
-                <span key={c.id} className="mutedText" style={{ fontSize: "0.8rem" }}>
+                <span key={c.id} className="mutedText" style={{ fontSize: "var(--text-xs)" }}>
                   {c.user?.username?.handle ?? c.displayName}
                   {c.role && ` (${c.role})`}
                   <form action={removeCollaborator} style={{ display: "inline" }}>

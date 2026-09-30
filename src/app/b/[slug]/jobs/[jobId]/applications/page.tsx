@@ -46,12 +46,12 @@ export default async function JobApplicationsPage({
     <div className="profileCard">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Applications — {job.title}</h1>
-        <Link href={`/b/${business.slug}/jobs/${job.id}`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+        <Link href={`/b/${business.slug}/jobs/${job.id}`} className="button buttonSecondary buttonSmall">
           Back to job
         </Link>
       </div>
 
-      {applications.length === 0 && <EmptyState message="No applications yet." />}
+      {applications.length === 0 && <EmptyState title="No applications yet." />}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
         {applications.map((application) => {

@@ -38,7 +38,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ slug
     <div className="profileCard">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{business.name} — Documents</h1>
-        <Link href={`/b/${business.slug}`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+        <Link href={`/b/${business.slug}`} className="button buttonSecondary buttonSmall">
           Back to business page
         </Link>
       </div>
@@ -54,7 +54,7 @@ export default async function DocumentsPage({ params }: { params: Promise<{ slug
         </details>
       )}
 
-      {documents.length === 0 && <EmptyState message="Nothing here yet." />}
+      {documents.length === 0 && <EmptyState title="Nothing here yet." />}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {documents.map((doc) => (

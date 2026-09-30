@@ -34,7 +34,7 @@ export default async function DeveloperAppsPage() {
       </p>
 
       {ownApps.length === 0 ? (
-        <EmptyState message="No apps registered yet." />
+        <EmptyState title="No apps registered yet." />
       ) : (
         <div className="settingsGroup">
           {ownApps.map((app) => (

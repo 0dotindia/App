@@ -36,10 +36,10 @@ export default async function OrganizationPage({ params }: { params: Promise<{ o
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{organization.name}</h1>
         {viewerMembership?.role === "org_admin" && (
           <span style={{ display: "flex", gap: "0.5rem" }}>
-            <Link href={`/org/${orgId}/manage`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+            <Link href={`/org/${orgId}/manage`} className="button buttonSecondary buttonSmall">
               Manage
             </Link>
-            <Link href={`/org/${orgId}/audit-log`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+            <Link href={`/org/${orgId}/audit-log`} className="button buttonSecondary buttonSmall">
               Audit log
             </Link>
           </span>

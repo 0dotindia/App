@@ -47,7 +47,11 @@ export function PodcastForm({
         mode="single"
         initialUrls={podcast?.coverUrl ? [podcast.coverUrl] : []}
       />
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Saving…" : podcast ? "Save changes" : "Create podcast"}
       </button>

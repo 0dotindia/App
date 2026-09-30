@@ -410,18 +410,24 @@ export async function followBusiness(formData: FormData): Promise<void> {
   if (!businessId) return;
   if (!checkFollowBusinessRateLimit(user.id)) return;
 
-  const existing = await db.businessFollow.findUnique({
-    where: { followerId_businessId: { followerId: user.id, businessId } },
-  });
-  if (existing) return; // idempotent — double-follow is a no-op, same as followUser
-
   const business = await db.business.findUnique({ where: { id: businessId }, select: { id: true, slug: true } });
   if (!business) return;
 
-  await db.$transaction([
-    db.businessFollow.create({ data: { followerId: user.id, businessId: business.id } }),
-    db.business.update({ where: { id: business.id }, data: { followerCount: { increment: 1 } } }),
-  ]);
+  // Read + write in one transaction (not just the write) — same TOCTOU fix
+  // as joinCommunity/leaveCommunity in communities.ts: two concurrent follow
+  // calls could otherwise both pass the `existing` check before either write
+  // commits, and the second create() would throw unhandled on the
+  // [followerId, businessId] unique key instead of quietly no-opping.
+  const followed = await db.$transaction(async (tx) => {
+    const existing = await tx.businessFollow.findUnique({
+      where: { followerId_businessId: { followerId: user.id, businessId } },
+    });
+    if (existing) return false; // idempotent — double-follow is a no-op, same as followUser
+    await tx.businessFollow.create({ data: { followerId: user.id, businessId: business.id } });
+    await tx.business.update({ where: { id: business.id }, data: { followerCount: { increment: 1 } } });
+    return true;
+  });
+  if (!followed) return;
 
   const staff = await db.businessMember.findMany({
     where: { businessId: business.id, role: { in: ["owner", "admin"] } },
@@ -439,17 +445,19 @@ export async function unfollowBusiness(formData: FormData): Promise<void> {
   const businessId = String(formData.get("businessId") ?? "");
   if (!businessId) return;
 
-  const existing = await db.businessFollow.findUnique({
-    where: { followerId_businessId: { followerId: user.id, businessId } },
-  });
-  if (!existing) return;
-
   const business = await db.business.findUnique({ where: { id: businessId }, select: { slug: true } });
 
-  await db.$transaction([
-    db.businessFollow.delete({ where: { followerId_businessId: { followerId: user.id, businessId } } }),
-    db.business.update({ where: { id: businessId }, data: { followerCount: { decrement: 1 } } }),
-  ]);
+  // Same TOCTOU fix as followBusiness above — a double-unfollow would
+  // otherwise let the second delete() throw once the row is already gone.
+  const unfollowed = await db.$transaction(async (tx) => {
+    const existing = await tx.businessFollow.findUnique({
+      where: { followerId_businessId: { followerId: user.id, businessId } },
+    });
+    if (!existing) return false;
+    await tx.businessFollow.delete({ where: { followerId_businessId: { followerId: user.id, businessId } } });
+    await tx.business.update({ where: { id: businessId }, data: { followerCount: { decrement: 1 } } });
+    return true;
+  });
 
-  if (business) revalidatePath(`/b/${business.slug}`);
+  if (unfollowed && business) revalidatePath(`/b/${business.slug}`);
 }

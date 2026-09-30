@@ -73,7 +73,11 @@ export function PublishedFileForm({ file }: { file?: PublishedFileFormFile }) {
         </select>
       </div>
 
-      {state?.error && <p className="errorText">{state.error}</p>}
+      {state?.error && (
+        <p className="errorText" role="alert">
+          {state.error}
+        </p>
+      )}
       <button type="submit" className="button" disabled={pending}>
         {pending ? "Saving…" : file ? "Save changes" : "Publish file"}
       </button>

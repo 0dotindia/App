@@ -128,10 +128,10 @@ export default async function ManageCommunityPage({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Manage {community.name}</h1>
         <span className="row">
-          <Link href={`/c/${community.slug}/analytics`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+          <Link href={`/c/${community.slug}/analytics`} className="button buttonSecondary buttonSmall">
             Analytics
           </Link>
-          <Link href={`/c/${community.slug}`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+          <Link href={`/c/${community.slug}`} className="button buttonSecondary buttonSmall">
             View community
           </Link>
         </span>

@@ -11,7 +11,7 @@ export default async function LoginTwoFactorPage() {
   if (!challenge) redirect("/login");
 
   return (
-    <div className="landingWrap">
+    <div className="landingWrap landingWrapSingle">
       <AuthTopBar />
       <div className="authStack">
         <Login2faForm />

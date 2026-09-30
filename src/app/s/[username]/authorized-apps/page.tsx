@@ -31,7 +31,7 @@ export default async function AuthorizedAppsPage() {
       </p>
 
       {authorizations.length === 0 ? (
-        <EmptyState message="No apps authorized." />
+        <EmptyState title="No apps authorized." />
       ) : (
         <div className="settingsGroup">
           {authorizations.map((authorization) => (

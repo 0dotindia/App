@@ -44,7 +44,7 @@ export default async function LinksSettingsPage() {
 
       <p className="settingsGroupLabel">Social links</p>
       {profileRow.socialLinks.length === 0 ? (
-        <EmptyState message="No social links yet." />
+        <EmptyState title="No social links yet." />
       ) : (
         <div className="settingsGroup">
           {profileRow.socialLinks.map((social) => (
@@ -86,7 +86,7 @@ export default async function LinksSettingsPage() {
       </div>
 
       <p className="settingsGroupLabel">Links</p>
-      {links.length === 0 && <EmptyState message="No links yet." />}
+      {links.length === 0 && <EmptyState title="No links yet." />}
       {links.map((link, index) => {
         const isScheduledHidden =
           (link.startsAt && link.startsAt > now) || (link.endsAt && link.endsAt < now);
@@ -163,7 +163,7 @@ export default async function LinksSettingsPage() {
                   </span>
                 </span>
               </summary>
-              <div className="mutedText settingsAddPanelBody" style={{ fontSize: "0.85rem", paddingTop: 0 }}>
+              <div className="mutedText settingsAddPanelBody" style={{ fontSize: "var(--text-xs-plus)", paddingTop: 0 }}>
                 <p>{stats.last7d} in last 7 days · {stats.last30d} in last 30 days</p>
                 {stats.topReferrers.length > 0 ? (
                   <p>Top referrers: {stats.topReferrers.map((r) => `${r.host} (${r.count})`).join(", ")}</p>

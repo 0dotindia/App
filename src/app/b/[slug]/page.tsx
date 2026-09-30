@@ -189,7 +189,7 @@ export default async function BusinessPage({ params }: { params: Promise<{ slug:
           2026-08-25). Messaging a business is also arguably a more
           prominent action than "Documents"/"Catalog", not an equal peer. */}
       <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
-        {currentUser && (
+        {currentUser && !membership && (
           <form action={isFollowing ? unfollowBusiness : followBusiness}>
             <input type="hidden" name="businessId" value={business.id} />
             <button

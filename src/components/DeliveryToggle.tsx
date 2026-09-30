@@ -8,7 +8,17 @@ import { Switch } from "@/components/Switch";
 // (type, channel) row so toggling one preference never affects another.
 // Renamed from PushDeliveryToggle (addendum §8): channel is now either
 // "push" or "email", not push-only.
-export function DeliveryToggle({ notificationType, channel, enabled }: { notificationType: string; channel: string; enabled: boolean }) {
+export function DeliveryToggle({
+  notificationType,
+  channel,
+  enabled,
+  label,
+}: {
+  notificationType: string;
+  channel: string;
+  enabled: boolean;
+  label: string;
+}) {
   return (
     <form action={setNotificationDeliveryPreferenceAction}>
       <input type="hidden" name="notificationType" value={notificationType} />
@@ -18,7 +28,7 @@ export function DeliveryToggle({ notificationType, channel, enabled }: { notific
         value="on"
         defaultChecked={enabled}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        aria-label={`${channel === "email" ? "Email" : "Push"} notifications for ${notificationType}`}
+        aria-label={`${channel === "email" ? "Email" : "Push"} notifications for ${label}`}
       />
     </form>
   );

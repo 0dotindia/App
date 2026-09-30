@@ -88,9 +88,9 @@ export function CommunityChatView({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 10rem)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 10rem)" }}>
       <div ref={listRef} role="log" aria-live="polite" aria-label="Chat messages" className="messageList">
-        {messages.length === 0 && <EmptyState message="No messages yet — say hello." />}
+        {messages.length === 0 && <EmptyState title="No messages yet — say hello." />}
         {messages.map((m) => {
           const displayName = m.sender.profile?.displayName ?? m.sender.username?.handle ?? "Unknown";
           return (
@@ -133,7 +133,11 @@ export function CommunityChatView({
           <button type="submit" className="button" disabled={isPending}>
             {isPending ? "Sending…" : "Send"}
           </button>
-          {error && <p className="errorText">{error}</p>}
+          {error && (
+            <p className="errorText" role="alert">
+              {error}
+            </p>
+          )}
         </form>
       ) : (
         <p className="mutedText" style={{ padding: "0.75rem 0" }}>

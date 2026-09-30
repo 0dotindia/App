@@ -81,7 +81,7 @@ export default async function ReviewsPage({ params }: { params: Promise<{ slug: 
       {business.reviewCount > 0 && <JsonLd data={businessRatingJsonLd(business, `https://0dot.in/b/${business.slug}/reviews`)} />}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{business.name} — Reviews</h1>
-        <Link href={`/b/${business.slug}`} className="button buttonSecondary" style={{ fontSize: "0.85rem", padding: "0.4rem 0.7rem" }}>
+        <Link href={`/b/${business.slug}`} className="button buttonSecondary buttonSmall">
           Back to business page
         </Link>
       </div>
@@ -106,7 +106,7 @@ export default async function ReviewsPage({ params }: { params: Promise<{ slug: 
         </details>
       )}
 
-      {reviews.length === 0 && <EmptyState message="Nothing here yet." />}
+      {reviews.length === 0 && <EmptyState title="Nothing here yet." />}
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         {reviews.map((review) => {
