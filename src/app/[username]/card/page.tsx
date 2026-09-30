@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
 import { getBusinessCard } from "@/lib/business-card";
 import { getSocialPlatformLabel, type SocialPlatform } from "@/lib/theme-presets";
 
@@ -10,7 +11,8 @@ export default async function BusinessCardPage({ params }: { params: Promise<{ u
   const { username: rawParam } = await params;
   const handle = decodeURIComponent(rawParam).toLowerCase();
 
-  const card = await getBusinessCard(handle);
+  const currentUser = await getCurrentUser();
+  const card = await getBusinessCard(handle, currentUser?.id ?? null);
   if (!card) {
     // getBusinessCard returns null both when the handle doesn't exist at all
     // and when it exists but hasn't enabled a card — a real 404 is only

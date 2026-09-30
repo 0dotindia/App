@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/session";
 import { getBusinessCard } from "@/lib/business-card";
 
 // spec §6.1: the vCard export resolves to the same card data (and
@@ -8,7 +9,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { handle: rawHandle } = await params;
   const handle = decodeURIComponent(rawHandle).toLowerCase();
 
-  const card = await getBusinessCard(handle);
+  const currentUser = await getCurrentUser();
+  const card = await getBusinessCard(handle, currentUser?.id ?? null);
   if (!card) return new NextResponse("Not found", { status: 404 });
 
   const lines = [

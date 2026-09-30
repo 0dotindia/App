@@ -15,7 +15,15 @@ export type BusinessCardData = {
 // Shared by the public card page and the vCard export route — both need
 // the identical enabled-check + field-filter, spec §6.1's "same canonical
 // profile" posture applied to the read side too.
-export async function getBusinessCard(handle: string): Promise<BusinessCardData | null> {
+//
+// FIX_PLAN P3 #1 (privacy-policy call, resolved: respect the same gate):
+// socialLinks/email are opt-in, owner-enabled card fields, but they used to
+// bypass the private-follower gate the main profile enforces for its own
+// socialLinks entirely — an enabled card leaked them to anyone, private
+// account or not. bio/workTitle stay ungated, matching the app's own
+// documented spec: isPrivate only ever gates posts/links/portfolio, never
+// the bio (or, by the same reasoning, the work title).
+export async function getBusinessCard(handle: string, viewerId: string | null): Promise<BusinessCardData | null> {
   const username = await db.username.findUnique({
     where: { handle },
     include: {
@@ -40,15 +48,26 @@ export async function getBusinessCard(handle: string): Promise<BusinessCardData 
   const profile = username.user.profile;
   const latestWork = profile.workExperiences[0];
 
+  const isOwner = viewerId === username.userId;
+  const canViewGatedFields =
+    isOwner ||
+    !profile.isPrivate ||
+    (viewerId
+      ? (await db.follow.findUnique({
+          where: { followerId_followeeId: { followerId: viewerId, followeeId: username.userId } },
+        }))?.status === "accepted"
+      : false);
+
   return {
     handle,
     displayName: profile.displayName,
     avatarUrl: profile.avatarUrl,
     bio: fields.includes("bio") ? profile.bio : null,
     workTitle: fields.includes("workTitle") && latestWork ? `${latestWork.title} — ${latestWork.company}` : null,
-    email: fields.includes("email") ? username.user.email : null,
-    socialLinks: fields.includes("socialLinks")
-      ? profile.socialLinks.map((s) => ({ platform: s.platform, url: s.url }))
-      : [],
+    email: fields.includes("email") && canViewGatedFields ? username.user.email : null,
+    socialLinks:
+      fields.includes("socialLinks") && canViewGatedFields
+        ? profile.socialLinks.map((s) => ({ platform: s.platform, url: s.url }))
+        : [],
   };
 }
