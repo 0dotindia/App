@@ -100,18 +100,36 @@ export function persistTheme(theme: Theme): void {
   window.localStorage.setItem(THEME_STORAGE_KEY, theme);
 }
 
+// The <link rel="icon"> pair layout.tsx's `icons` metadata renders (light/
+// dark media-query variants) is a React-owned host node — React keeps its
+// own fiber->DOM reference to it and expects it to still be attached
+// whenever it next reconciles the root layout's <head>. An earlier version
+// of this function cloned and `replaceWith`-swapped those exact nodes on
+// every favicon update; detaching React's node left that stored reference
+// dangling, and the next time React touched it (e.g. reconciling <head>
+// around a route change) it crashed the committer with "Cannot read
+// properties of null (reading 'removeChild')" — same failure class as the
+// ThemeToggleLogo race documented on BrowserTabProvider's theme-resync
+// effect. Fixed by never touching React's node at all: we append and own a
+// single extra <link rel="icon">, which nothing but this function ever
+// references, and only ever add/remove *that* node.
+let ownedFaviconLink: HTMLLinkElement | null = null;
+
 export function setFaviconHref(href: string): void {
-  document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]').forEach((link) => {
-    // Recreate the node rather than mutate .href in place: some WebKit/
-    // Safari versions don't repaint the tab favicon on a plain attribute
-    // mutation of an already-attached <link>, only on a genuinely new node.
-    // Cloning first preserves the tag's other attributes (media, sizes,
-    // type) — only href changes. No downside on browsers where mutating
-    // in place already worked.
-    const fresh = link.cloneNode(false) as HTMLLinkElement;
-    fresh.href = href;
-    link.replaceWith(fresh);
-  });
+  // A genuinely new node is required, not just a new href: some WebKit/
+  // Safari versions don't repaint the tab favicon on a plain attribute
+  // mutation of an already-attached <link>.
+  const fresh = document.createElement("link");
+  fresh.rel = "icon";
+  fresh.type = "image/png";
+  fresh.href = href;
+  // Browsers use the last matching <link rel="icon"> in document order, so
+  // appending at the end of <head> overrides layout.tsx's static pair
+  // without needing to touch them. Append before removing the previous
+  // owned node so there's never a moment with zero icon link present.
+  document.head.appendChild(fresh);
+  ownedFaviconLink?.remove();
+  ownedFaviconLink = fresh;
 }
 
 const imageCache = new Map<string, HTMLImageElement>();
