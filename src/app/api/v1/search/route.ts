@@ -1,11 +1,9 @@
 import { db } from "@/lib/db";
 import { resolveApiRequest, requireScope, apiError } from "@/lib/api-auth";
 import { checkApiRateLimit } from "@/lib/api-rate-limit";
-import { getPostVisibilityConditions } from "@/lib/post-visibility";
 import { getRepostedPostIds } from "@/lib/feed-query";
-import { cursorWhere, paginate, parseCursor } from "@/lib/pagination";
-import { searchCommunities, searchBusinesses, searchEvents } from "@/lib/search";
-import { fetchAllMarketplaceCategories } from "@/lib/marketplace-browse";
+import { parseCursor } from "@/lib/pagination";
+import { searchCommunities, searchBusinesses, searchEvents, searchUsers, searchPosts, searchMarketplace } from "@/lib/search";
 
 const TYPES = ["users", "posts", "communities", "businesses", "events", "marketplace"] as const;
 type SearchType = (typeof TYPES)[number];
@@ -47,7 +45,7 @@ export async function GET(request: Request) {
   const rateLimitHeaders = { "X-RateLimit-Limit": String(limit), "X-RateLimit-Remaining": String(remaining) };
 
   if (type === "communities") {
-    const rows = await searchCommunities(q);
+    const { items: rows } = await searchCommunities(q);
     return Response.json(
       {
         items: rows.map((c) => ({
@@ -64,7 +62,7 @@ export async function GET(request: Request) {
   }
 
   if (type === "businesses") {
-    const rows = await searchBusinesses(q);
+    const { items: rows } = await searchBusinesses(q);
     return Response.json(
       {
         items: rows.map((b) => ({
@@ -88,7 +86,7 @@ export async function GET(request: Request) {
     // adding it here would mean the search route diverging from what the
     // web search page itself actually selects. Tapping a result still
     // opens the real event detail screen, which shows the rest.
-    const rows = await searchEvents(q, "upcoming");
+    const { items: rows } = await searchEvents(q, "upcoming");
     return Response.json(
       { items: rows.map((e) => ({ slug: e.slug, title: e.title, startsAt: e.startsAt })) },
       { headers: rateLimitHeaders }
@@ -96,7 +94,7 @@ export async function GET(request: Request) {
   }
 
   if (type === "marketplace") {
-    const items = await fetchAllMarketplaceCategories(q);
+    const { items } = await searchMarketplace(q, null);
     return Response.json(
       {
         items: items.map((item) => ({
@@ -114,31 +112,10 @@ export async function GET(request: Request) {
   }
 
   if (type === "users") {
-    const lowerQ = q.toLowerCase();
-    const rows = await db.username.findMany({
-      where: {
-        AND: [
-          { OR: [{ handle: { contains: lowerQ } }, { user: { profile: { displayName: { contains: q } } } }] },
-          { user: { profile: { discoverableInSearch: true } } },
-        ],
-      },
-      include: { user: { include: { profile: true } } },
-      take: 20,
-    });
-    const ranked = rows.slice().sort((a, b) => {
-      const rank = (row: (typeof rows)[number]) => {
-        if (row.handle === lowerQ) return 0;
-        if (row.handle.startsWith(lowerQ)) return 1;
-        return 2;
-      };
-      const rankDiff = rank(a) - rank(b);
-      if (rankDiff !== 0) return rankDiff;
-      return Number(!a.user.profile?.isVerified) - Number(!b.user.profile?.isVerified);
-    });
-
+    const { items: rows } = await searchUsers(q);
     return Response.json(
       {
-        items: ranked.map((row) => ({
+        items: rows.map((row) => ({
           username: row.handle,
           displayName: row.user.profile?.displayName ?? row.handle,
           avatarUrl: row.user.profile?.avatarUrl ?? null,
@@ -154,14 +131,7 @@ export async function GET(request: Request) {
     return Response.json({ items: [], nextCursor: null }, { headers: { "X-RateLimit-Limit": String(limit), "X-RateLimit-Remaining": String(remaining) } });
   }
   const cursor = parseCursor(url.searchParams.get("cursor") ?? undefined);
-  const visibilityConditions = await getPostVisibilityConditions(ctx.userId);
-  const rows = await db.post.findMany({
-    where: { AND: [{ deletedAt: null, replyToId: null, body: { contains: query } }, ...visibilityConditions, cursorWhere(cursor)] },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: 21,
-    include: { author: { include: { profile: true, username: true } }, media: { orderBy: { position: "asc" } } },
-  });
-  const { items, nextCursor } = paginate(rows);
+  const { items, nextCursor } = await searchPosts(q, ctx.userId, cursor);
 
   const [likedPostIds, bookmarkedPostIds, repostedPostIds] = await Promise.all([
     db.postLike

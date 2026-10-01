@@ -48,15 +48,25 @@ function priceLabel(price: number | null): string {
 // available proxy to "engagement" for a paid-access entity — same
 // engagement-tie-break shape every search rank* function already uses,
 // applied via a relation-count orderBy instead of a post-fetch sort.
-export async function fetchCourses(q: string): Promise<MarketplaceBrowseItem[]> {
+export async function fetchCourses(
+  q: string,
+  take = 20,
+  skip = 0,
+  orderBy: NonNullable<Parameters<typeof db.course.findMany>[0]>["orderBy"] = [
+    { accessGrants: { _count: "desc" } },
+    { createdAt: "desc" },
+    { id: "asc" },
+  ]
+): Promise<MarketplaceBrowseItem[]> {
   const rows = await db.course.findMany({
     where: {
       status: "active",
       ...(q ? { OR: [{ title: { contains: q } }, { description: { contains: q } }] } : {}),
     },
     include: { creator: { include: { username: true } }, _count: { select: { accessGrants: true } } },
-    orderBy: [{ accessGrants: { _count: "desc" } }, { createdAt: "desc" }],
-    take: 20,
+    orderBy,
+    take,
+    skip,
   });
   return rows.flatMap((course) => {
     const handle = course.creator.username?.handle;
@@ -78,15 +88,25 @@ export async function fetchCourses(q: string): Promise<MarketplaceBrowseItem[]> 
 
 // spec §6.2: digital products rank by sales volume (purchase count) — same
 // reasoning as courses above.
-export async function fetchDigitalProducts(q: string): Promise<MarketplaceBrowseItem[]> {
+export async function fetchDigitalProducts(
+  q: string,
+  take = 20,
+  skip = 0,
+  orderBy: NonNullable<Parameters<typeof db.digitalProduct.findMany>[0]>["orderBy"] = [
+    { purchases: { _count: "desc" } },
+    { createdAt: "desc" },
+    { id: "asc" },
+  ]
+): Promise<MarketplaceBrowseItem[]> {
   const rows = await db.digitalProduct.findMany({
     where: {
       status: "active",
       ...(q ? { OR: [{ title: { contains: q } }, { description: { contains: q } }] } : {}),
     },
     include: { creator: { include: { username: true } }, _count: { select: { purchases: true } } },
-    orderBy: [{ purchases: { _count: "desc" } }, { createdAt: "desc" }],
-    take: 20,
+    orderBy,
+    take,
+    skip,
   });
   return rows.flatMap((product) => {
     const handle = product.creator.username?.handle;
@@ -115,7 +135,16 @@ export async function fetchDigitalProducts(q: string): Promise<MarketplaceBrowse
 // catalog Offerings are Phase 4's Store, not a Marketplace roadmap
 // category (spec §5's six-category list names "Freelance services", not
 // general business commerce).
-export async function fetchFreelanceServices(q: string): Promise<MarketplaceBrowseItem[]> {
+export async function fetchFreelanceServices(
+  q: string,
+  take = 20,
+  skip = 0,
+  orderBy: NonNullable<Parameters<typeof db.offering.findMany>[0]>["orderBy"] = [
+    { purchases: { _count: "desc" } },
+    { createdAt: "desc" },
+    { id: "asc" },
+  ]
+): Promise<MarketplaceBrowseItem[]> {
   const rows = await db.offering.findMany({
     where: {
       sellerUserId: { not: null },
@@ -123,8 +152,9 @@ export async function fetchFreelanceServices(q: string): Promise<MarketplaceBrow
       ...(q ? { OR: [{ name: { contains: q } }, { description: { contains: q } }] } : {}),
     },
     include: { seller: { include: { username: true } }, _count: { select: { purchases: true } } },
-    orderBy: [{ purchases: { _count: "desc" } }, { createdAt: "desc" }],
-    take: 20,
+    orderBy,
+    take,
+    skip,
   });
   return rows.flatMap((offering) => {
     const handle = offering.seller?.username?.handle;
@@ -149,7 +179,10 @@ export async function fetchFreelanceServices(q: string): Promise<MarketplaceBrow
 // explicit departure from one global formula this section calls for.
 export async function fetchListings(
   category: "theme" | "template" | "app",
-  q: string
+  q: string,
+  take = 20,
+  skip = 0,
+  orderBy?: NonNullable<Parameters<typeof db.marketplaceListing.findMany>[0]>["orderBy"]
 ): Promise<MarketplaceBrowseItem[]> {
   const rows = await db.marketplaceListing.findMany({
     where: {
@@ -163,10 +196,12 @@ export async function fetchListings(
       _count: { select: { installs: true } },
     },
     orderBy:
-      category === "app"
-        ? [{ installs: { _count: "desc" } }, { createdAt: "desc" }]
-        : [{ averageRating: "desc" }, { purchaseCount: "desc" }, { createdAt: "desc" }],
-    take: 20,
+      orderBy ??
+      (category === "app"
+        ? [{ installs: { _count: "desc" } }, { createdAt: "desc" }, { id: "asc" }]
+        : [{ averageRating: "desc" }, { purchaseCount: "desc" }, { createdAt: "desc" }, { id: "asc" }]),
+    take,
+    skip,
   });
   return rows.map((listing) => {
     const sellerName = listing.sellerBusiness?.name ?? listing.seller?.username?.handle ?? "Unknown seller";
@@ -196,16 +231,16 @@ export async function fetchMarketplaceCategory(category: MarketplaceBrowseCatego
 // categories — a neutral default for mixing genuinely incomparable
 // per-category scores (an app's install count and a course's sale count
 // aren't on the same scale), not a seventh global formula.
-export async function fetchAllMarketplaceCategories(q: string): Promise<MarketplaceBrowseItem[]> {
+export async function fetchAllMarketplaceCategories(q: string, take = 20): Promise<MarketplaceBrowseItem[]> {
   const [courses, digitalProducts, freelanceServices, themes, templates, apps] = await Promise.all([
-    fetchCourses(q),
-    fetchDigitalProducts(q),
-    fetchFreelanceServices(q),
-    fetchListings("theme", q),
-    fetchListings("template", q),
-    fetchListings("app", q),
+    fetchCourses(q, take),
+    fetchDigitalProducts(q, take),
+    fetchFreelanceServices(q, take),
+    fetchListings("theme", q, take),
+    fetchListings("template", q, take),
+    fetchListings("app", q, take),
   ]);
   return [...courses, ...digitalProducts, ...freelanceServices, ...themes, ...templates, ...apps].sort(
-    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || a.id.localeCompare(b.id)
   );
 }
