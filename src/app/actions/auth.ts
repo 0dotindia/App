@@ -9,6 +9,7 @@ import { createSession, destroySession, getCurrentUser, createTwoFactorChallenge
 import { revokeAllOtherSessions } from "@/app/actions/session-management";
 import { validateUsernameFormat } from "@/lib/reserved-usernames";
 import { checkRateLimit, enforceRateLimit, getClientIp } from "@/lib/rate-limit";
+import { toE164 } from "@/lib/country-codes";
 import { isInternalSystemAccountEmail } from "@/lib/first-party-apps";
 import { ensureUserAccounts } from "@/lib/wallet/accounts";
 import { issueSignupGrant, issueLaunchPromoIfEligible } from "@/lib/wallet/grants";
@@ -24,6 +25,7 @@ import {
 export type ActionState = { error?: string; success?: boolean } | undefined;
 
 const RATE_LIMIT_ERROR = "Too many attempts. Please try again in a few minutes.";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Precomputed bcrypt hash of an arbitrary fixed string, compared against
 // on a login attempt for an email that doesn't exist — so bcrypt.compare
 // always runs one way or another, and response time can't be used to
@@ -60,17 +62,19 @@ async function findUserByIdentifier(identifier: string, identifierRaw: string) {
         );
 }
 
-// Signup collects only what an account can't exist without — a name, a
-// permanent username, and a password — and logs the user straight in. There
-// is deliberately no email or OTP verification step: the platform doesn't
-// send mail or SMS for onboarding. Email, phone and date of birth are all
-// optional and can be added later from settings (date of birth is prompted
-// for by AgeGatePrompt, since an unknown DOB gets the protective default
-// restriction set — phase-12 spec §8.2). Abuse resistance comes from the
-// rate limits and honeypot below, plus account-age gates on anything
-// farmable (coin transfers, referral rewards — see wallet/eligibility.ts and
-// wallet/referral.ts). Password recovery uses the one-time recovery codes
-// issued here (see lib/password-recovery.ts).
+// Signup requires only what an account can't exist without — a name, a
+// permanent username, and a password — and logs the user straight in. Email,
+// phone, and date of birth are all collected on the same form but optional
+// (can also be added later from settings; date of birth is otherwise
+// prompted for by AgeGatePrompt, since an unknown DOB gets the protective
+// default restriction set — phase-12 spec §8.2). There is deliberately no
+// verification step on any of them: the platform doesn't send mail or SMS,
+// so gating on a confirmation link/code would strand every real signup the
+// way the old flow did (see CHANGELOG around 534696e). Abuse resistance
+// comes from the rate limits and honeypot below, plus account-age gates on
+// anything farmable (coin transfers, referral rewards — see
+// wallet/eligibility.ts and wallet/referral.ts). Password recovery uses the
+// one-time recovery codes issued here (see lib/password-recovery.ts).
 export async function signup(
   _prevState: ActionState,
   formData: FormData
@@ -92,6 +96,10 @@ export async function signup(
   const displayName = String(formData.get("displayName") ?? "").trim();
   const handle = String(formData.get("username") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const phoneDialCode = String(formData.get("phoneDialCode") ?? "");
+  const phoneNumber = String(formData.get("phoneNumber") ?? "").trim();
+  const dateOfBirthRaw = String(formData.get("dateOfBirth") ?? "").trim();
 
   // Mass account creation is primarily an IP-scoped abuse pattern; the
   // per-handle limit also catches repeated retries against one username.
@@ -123,9 +131,46 @@ export async function signup(
     return { error: "Password must be at least 8 characters." };
   }
 
-  const existingHandle = await db.username.findUnique({ where: { handle } });
+  // All three below are optional — blank is fine — but a value that was
+  // typed in gets the same format check a required field would, so a typo
+  // surfaces now instead of silently creating an account with a garbage
+  // email/phone/DOB.
+  if (email && !EMAIL_PATTERN.test(email)) {
+    return { error: "Enter a valid email address." };
+  }
+  let phone: string | null = null;
+  if (phoneNumber) {
+    phone = toE164(phoneDialCode, phoneNumber);
+    if (!phone) {
+      return { error: "Enter a valid mobile number." };
+    }
+  }
+  let dateOfBirth: Date | null = null;
+  if (dateOfBirthRaw) {
+    const parsed = new Date(dateOfBirthRaw);
+    const now = new Date();
+    // Same bounds as the existing-account backfill path (setDateOfBirth,
+    // age.ts): not in the future, not implausibly old.
+    const earliestPlausible = new Date(now.getFullYear() - 130, now.getMonth(), now.getDate());
+    if (Number.isNaN(parsed.getTime()) || parsed > now || parsed < earliestPlausible) {
+      return { error: "Enter a valid date of birth." };
+    }
+    dateOfBirth = parsed;
+  }
+
+  const [existingHandle, existingEmail, existingPhone] = await Promise.all([
+    db.username.findUnique({ where: { handle } }),
+    email ? db.user.findUnique({ where: { email } }) : null,
+    phone ? db.user.findUnique({ where: { phone } }) : null,
+  ]);
   if (existingHandle) {
     return { error: "That username is already taken." };
+  }
+  if (existingEmail) {
+    return { error: "That email is already in use." };
+  }
+  if (existingPhone) {
+    return { error: "That mobile number is already in use." };
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
@@ -139,6 +184,9 @@ export async function signup(
       const user = await tx.user.create({
         data: {
           passwordHash,
+          email: email || null,
+          phone,
+          dateOfBirth,
           username: { create: { handle } },
           profile: { create: { displayName } },
         },
@@ -151,11 +199,19 @@ export async function signup(
       return { user, recoveryCodes };
     });
   } catch (err) {
-    // The findUnique check above is check-then-act, not atomic — two
-    // concurrent signups for the same handle can both pass it before either
-    // insert commits. Catch the resulting unique-constraint violation here
-    // rather than letting it surface as an unhandled 500.
+    // The findUnique checks above are check-then-act, not atomic — two
+    // concurrent signups for the same handle/email/phone can both pass
+    // before either insert commits. Catch the resulting unique-constraint
+    // violation here rather than letting it surface as an unhandled 500.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      const target = err.meta?.target;
+      const targets = Array.isArray(target) ? target : typeof target === "string" ? [target] : [];
+      if (targets.some((t) => t.includes("email"))) {
+        return { error: "That email is already in use." };
+      }
+      if (targets.some((t) => t.includes("phone"))) {
+        return { error: "That mobile number is already in use." };
+      }
       return { error: "That username is already taken." };
     }
     throw err;
