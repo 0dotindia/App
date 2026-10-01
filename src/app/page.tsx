@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
-import { getOfficialDesk, getWirePage, initialWireCursor, type WirePage } from "@/lib/front-page";
+import { getOfficialDesk, getPlatformStats, getWirePage, initialWireCursor, type PlatformStats, type WirePage } from "@/lib/front-page";
 import { logger } from "@/lib/logger";
 import { SITE_DESCRIPTION } from "@/lib/site-metadata";
 import { FRONT_PAGE, validVideos } from "@/lib/landing-content";
@@ -60,12 +60,16 @@ export default async function Home({
   // visitors). On failure, start empty but keep the cursor, so the client
   // simply retries it.
   const firstCursor = initialWireCursor(desk);
-  const [wire, channelVideos]: [WirePage, Awaited<ReturnType<typeof getChannelVideos>>] = await Promise.all([
+  const [wire, channelVideos, stats]: [WirePage, Awaited<ReturnType<typeof getChannelVideos>>, PlatformStats | null] = await Promise.all([
     getWirePage(firstCursor).catch((err) => {
       logger.error("front page: first wire page failed", err);
       return { items: [], next: firstCursor };
     }),
     getChannelVideos(FRONT_PAGE.youtubeChannelId),
+    getPlatformStats().catch((err) => {
+      logger.error("front page: platform stats unavailable", err);
+      return null;
+    }),
   ]);
   const videos = mergeVideos(validVideos(), channelVideos);
 
@@ -77,6 +81,7 @@ export default async function Home({
       desk={desk}
       wire={wire}
       videos={videos}
+      stats={stats}
       notice={
         link === "unavailable" && (
           <div className="landingNotice">

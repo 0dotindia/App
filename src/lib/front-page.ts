@@ -74,6 +74,26 @@ export async function getOfficialDesk(handle: string = FRONT_PAGE.officialHandle
   });
 }
 
+export type PlatformStats = { totalUsers: number; postsToday: number; liveCommunities: number };
+
+// The masthead's "proof of scale" strip (FrontPage.tsx only renders it once
+// totalUsers crosses FRONT_PAGE.statsMinUsers — see that constant's comment).
+// Cached like the rest of this file's queries: a minute-old count is fine
+// for a number that only needs to look roughly right, not exact.
+export async function getPlatformStats(): Promise<PlatformStats> {
+  return cached("front-page:stats", 60, async () => {
+    const todayIST = new Date(`${new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })}T00:00:00+05:30`);
+    const [totalUsers, postsToday, liveRooms] = await Promise.all([
+      db.user.count({ where: { status: "active" } }),
+      db.post.count({ where: { deletedAt: null, createdAt: { gte: todayIST } } }),
+      // Rooms, not communities — distinct so a community running 2+ live
+      // rooms at once doesn't get counted twice.
+      db.voiceRoom.findMany({ where: { status: "live" }, select: { communityId: true }, distinct: ["communityId"] }),
+    ]);
+    return { totalUsers, postsToday, liveCommunities: liveRooms.length };
+  });
+}
+
 // ── The Wire ─────────────────────────────────────────────────────────
 // The landing page's endless stream below the fixed sections. It runs in
 // two phases behind one opaque cursor: the official account's older posts

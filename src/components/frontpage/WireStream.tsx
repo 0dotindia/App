@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { BadgeCheck, Heart, Loader2, MessageCircle } from "lucide-react";
 import { formatAgo } from "@/lib/landing-content";
@@ -99,8 +100,15 @@ export function WireStream({
                 <li key={item.id} className={item.imageUrl ? "fpWireCard fpWireCardImage" : "fpWireCard"}>
                   <Link href={`/${item.author.handle}/status/${item.id}`} prefetch={false}>
                     {item.imageUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.imageUrl} alt="" loading="lazy" decoding="async" />
+                      <div className="fpWireCardMedia">
+                        <Image
+                          src={item.imageUrl}
+                          alt=""
+                          fill
+                          sizes="(max-width: 760px) 100vw, (min-width: 1100px) 560px, 340px"
+                          style={{ objectFit: "cover" }}
+                        />
+                      </div>
                     )}
                     <span className="fpWireKicker">
                       {item.official ? (

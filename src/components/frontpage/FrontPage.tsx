@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import localFont from "next/font/local";
 import {
   ArrowRight,
@@ -21,10 +22,12 @@ import { LiteYouTube } from "@/components/frontpage/LiteYouTube";
 import { BrandIcon } from "@/components/frontpage/BrandIcon";
 import { FrontPageNav } from "@/components/frontpage/FrontPageNav";
 import { OAUTH_SCOPES } from "@/lib/oauth";
-import type { OfficialDesk, WirePage } from "@/lib/front-page";
+import type { OfficialDesk, PlatformStats, WirePage } from "@/lib/front-page";
 import { WireStream } from "@/components/frontpage/WireStream";
+import { DEV_SAMPLE_HTML } from "@/lib/dev-sample-highlight";
 import {
   FRONT_PAGE,
+  LEAD_STORY,
   LEGAL_LINKS,
   formatAgo,
   SOCIAL_LABELS,
@@ -58,23 +61,6 @@ const IST_DATE = new Intl.DateTimeFormat("en-IN", {
 });
 const IST_TIME = new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" });
 
-
-const DEV_SAMPLE = `// 1. Send people to the consent screen
-GET https://0dot.in/oauth/authorize
-    ?response_type=code
-    &client_id=YOUR_CLIENT_ID
-    &redirect_uri=https://yourapp.com/callback
-    &scope=profile:read posts:read
-    &state=…
-    &code_challenge=…&code_challenge_method=S256
-
-// 2. Exchange the code, then call the API
-const me = await fetch("https://0dot.in/api/v1/users/me", {
-  headers: { Authorization: \`Bearer \${accessToken}\` },
-}).then((r) => r.json());
-
-me.username; // "dot"`;
-
 // Newsreader's zero is an oval that reads as a capital O at display sizes
 // ("The Odot Dispatch"), so every "0" in serif brand text is set in the
 // app's sans instead, where it's unmistakably a zero.
@@ -99,12 +85,14 @@ export function FrontPage({
   desk,
   wire,
   videos,
+  stats,
   notice,
 }: {
   desk: OfficialDesk | null;
   wire: WirePage;
   // Pinned videos then channel uploads (page.tsx); [0] is the lead.
   videos: FrontPageVideo[];
+  stats: PlatformStats | null;
   notice?: React.ReactNode;
 }) {
   const now = new Date();
@@ -210,8 +198,30 @@ export function FrontPage({
         </nav>
       </header>
 
+      {/* ── Stats: proof of scale ─────────────────────────────────── */}
+      {/* Gated on FRONT_PAGE.statsMinUsers (src/lib/landing-content.ts) — a
+          newspaper masthead implies an established institution, and the
+          site is only days old, so a thin real count would undercut that
+          more than no strip at all. Turns on by itself once it's real. */}
+      {stats && stats.totalUsers >= FRONT_PAGE.statsMinUsers && (
+        <div className="fpStats" aria-label="0dot at a glance">
+          <span className="fpStat">
+            <Icon as={Users} size="sm" /> <strong>{stats.totalUsers.toLocaleString("en-IN")}</strong> profiles
+          </span>
+          <span className="fpStat">
+            <Icon as={MessageCircle} size="sm" /> <strong>{stats.postsToday.toLocaleString("en-IN")}</strong> posts today
+          </span>
+          <span className="fpStat">
+            <Icon as={Radio} size="sm" /> <strong>{stats.liveCommunities.toLocaleString("en-IN")}</strong> communities live now
+          </span>
+        </div>
+      )}
+
       {/* ── Ticker: latest dispatch headlines ────────────────────── */}
-      {dispatches.length > 0 && (
+      {/* Below 3 dispatches the marquee just loops the same 1-2 headlines
+          already visible in the sidebar, so it only earns its place once
+          there's enough content to make a genuinely different pass. */}
+      {dispatches.length > 2 && (
         <div className="fpTicker" role="region" aria-label="Latest headlines">
           <span className="fpTickerLabel">
             <Icon as={Radio} size="sm" /> Latest
@@ -233,37 +243,32 @@ export function FrontPage({
       {/* ── Front page: lead story + dispatches column ───────────── */}
       <section id="front" className="fpFront">
         <article className="fpLead">
-          <span className="fpKicker">Cover story</span>
-          <h2 className="fpLeadHeadline">Your permanent home on the internet</h2>
-          <p className="fpDeck">
-            One username that never changes, one profile that carries your work, links, posts and
-            reputation — and an identity other apps can build on.
-          </p>
+          <span className="fpKicker">{LEAD_STORY.kicker}</span>
+          <h2 className="fpLeadHeadline">{LEAD_STORY.headline}</h2>
+          <p className="fpDeck">{LEAD_STORY.deck}</p>
           <p className="fpByline">
-            By the 0dot newsroom · {IST_TIME.format(now)} IST
+            {LEAD_STORY.byline} · {IST_TIME.format(now)} IST
           </p>
 
           <figure className="fpLeadFigure">
-            {leadVideo ? (
-              <LiteYouTube id={leadVideo.id} title={leadVideo.title} priority />
-            ) : (
-              <div className="fpLeadVisual">
-                <DigitalHomeVisual />
-              </div>
-            )}
+            <div className="fpLeadFrame">
+              {leadVideo ? (
+                <LiteYouTube id={leadVideo.id} title={leadVideo.title} priority />
+              ) : (
+                <div className="fpLeadVisual">
+                  <DigitalHomeVisual />
+                </div>
+              )}
+            </div>
+            {!leadVideo && <span className="fpKicker">Illustration</span>}
             <figcaption>{leadVideo?.caption ?? leadVideo?.title ?? "One identity, connected to everything you do."}</figcaption>
           </figure>
 
           <div className="fpLeadBody">
             <p className="fpDropCap">
-              Most of us are scattered across a dozen apps, each holding a sliver of who we are. <ZeroSafe text="0dot" />{" "}
-              gathers it into one address: a profile you own, a feed that proves you&apos;re real,
-              and communities, storefronts and events that all hang off the same name.
+              <ZeroSafe text={LEAD_STORY.bodyIntro} />
             </p>
-            <p>
-              Claim a handle once and it&apos;s yours for good. Put it in every bio, signature and
-              business card — it never breaks and it grows with you.
-            </p>
+            <p>{LEAD_STORY.bodyRest}</p>
           </div>
 
           <div className="fpActions">
@@ -299,8 +304,9 @@ export function FrontPage({
                   <li key={d.id} className={i === 0 ? "fpDispatch fpDispatchTop" : "fpDispatch"}>
                     <Link href={`/${desk!.handle}/status/${d.id}`} prefetch={false}>
                       {i === 0 && d.imageUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img className="fpDispatchImage" src={d.imageUrl} alt="" loading="lazy" decoding="async" />
+                        <div className="fpDispatchImage" style={{ position: "relative" }}>
+                          <Image src={d.imageUrl} alt="" fill sizes="(max-width: 760px) 100vw, 400px" style={{ objectFit: "cover" }} />
+                        </div>
                       )}
                       <time dateTime={d.createdAt.toISOString()}>{formatAgo(d.createdAt, now)}</time>
                       <h3>{headline}</h3>
@@ -371,6 +377,9 @@ export function FrontPage({
             },
           ].map((c) => (
             <article key={c.kicker} className="fpColumn">
+              <span className="fpColumnArt" aria-hidden="true">
+                <Icon as={c.icon} size="lg" />
+              </span>
               <span className="fpKicker">
                 <Icon as={c.icon} size="sm" /> {c.kicker}
               </span>
@@ -417,9 +426,14 @@ export function FrontPage({
               Register your app <Icon as={ArrowRight} size="sm" />
             </TrackedLink>
           </div>
-          <pre className="fpCode" aria-label="Example: signing in with 0dot and calling the API">
-            <code>{DEV_SAMPLE}</code>
-          </pre>
+          {/* Shiki-rendered HTML of a fixed constant (src/lib/dev-sample-highlight.ts),
+              not user input, so this is safe despite dangerouslySetInnerHTML. */}
+          <div
+            className="fpCode"
+            role="img"
+            aria-label="Example: signing in with 0dot and calling the API"
+            dangerouslySetInnerHTML={{ __html: DEV_SAMPLE_HTML }}
+          />
         </div>
       </section>
 

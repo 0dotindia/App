@@ -27,6 +27,16 @@ export function LiteYouTube({ id, title, priority = false }: { id: string; title
     );
   }
 
+  const maxresUrl = `https://i.ytimg.com/vi/${id}/maxresdefault.jpg`;
+  const hqUrl = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+  // The priority (lead) instance is "/"'s LCP element — a live maxresdefault
+  // fetch runs ~170KB+ from a third-party CDN, slow enough under throttling
+  // to cost real Lighthouse points. scripts/generate-video-poster.mjs
+  // pre-shrinks it to a ~40KB local WebP; this is the only poster that uses
+  // it. If a video's pinned as the lead before its poster's been generated,
+  // onError below falls through to the live fetch chain exactly as before.
+  const localPosterUrl = priority ? `/video-posters/${id}.webp` : null;
+
   return (
     <button type="button" className="fpVideo fpVideoPoster" onClick={() => setPlaying(true)} aria-label={`Play video: ${title}`}>
       {/* Plain <img>, not next/image: the optimizer would proxy YouTube's
@@ -34,15 +44,20 @@ export function LiteYouTube({ id, title, priority = false }: { id: string; title
           correctly sized JPEG. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={`https://i.ytimg.com/vi/${id}/maxresdefault.jpg`}
+        src={localPosterUrl ?? maxresUrl}
         // maxresdefault (1280x720, true 16:9) only exists for videos
         // uploaded in HD; YouTube serves a 120x90 grey placeholder, or a
         // 404, otherwise. Fall back to hqdefault, which always exists.
         onLoad={(e) => {
-          if (e.currentTarget.naturalWidth <= 120) e.currentTarget.src = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+          if (e.currentTarget.src.endsWith(".webp")) return; // local poster loaded fine
+          if (e.currentTarget.naturalWidth <= 120) e.currentTarget.src = hqUrl;
         }}
         onError={(e) => {
-          if (!e.currentTarget.src.endsWith("/hqdefault.jpg")) e.currentTarget.src = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+          if (localPosterUrl && e.currentTarget.src.endsWith(".webp")) {
+            e.currentTarget.src = maxresUrl;
+            return;
+          }
+          if (!e.currentTarget.src.endsWith("/hqdefault.jpg")) e.currentTarget.src = hqUrl;
         }}
         alt=""
         loading={priority ? "eager" : "lazy"}

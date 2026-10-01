@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { FRONT_PAGE } from "@/lib/landing-content";
 
 // Site-wide default OG/Twitter card — Next.js uses this for any route that
 // doesn't colocate its own opengraph-image (every marketing/auth page,
@@ -36,7 +37,7 @@ export default async function Image() {
         <img src={iconSrc} alt="" width={140} height={140} style={{ borderRadius: 28 }} />
         <div style={{ marginTop: 36, fontSize: 72, fontWeight: 700, display: "flex" }}>0dot</div>
         <div style={{ marginTop: 16, fontSize: 32, color: "#a3a3a3", display: "flex" }}>
-          One identity. One profile. One permanent home.
+          {FRONT_PAGE.tagline}
         </div>
       </div>
     ),

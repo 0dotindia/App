@@ -19,7 +19,36 @@ export const FRONT_PAGE = {
   // youtube.com/@0dotindia. The Watch section adds this channel's latest
   // uploads after the pinned VIDEOS below (src/lib/youtube-channel.ts).
   youtubeChannelId: "UC1tbu6WlF_JvqApB4Opdoow",
+  // The "proof of scale" stats strip (src/lib/front-page.ts's
+  // getPlatformStats, rendered in FrontPage.tsx) only shows once totalUsers
+  // crosses this floor — the site launched 2026-09-23, so early real counts
+  // would read as evidence of failure rather than scale on a page styled
+  // like an established daily. Raise this if it still looks thin once hit.
+  statsMinUsers: 500,
 } as const;
+
+// The cover story's own copy. Kept separate from the inline JSX so an
+// editorial change is a one-file edit like everything else here, and so a
+// future rotating lead story is a non-breaking addition (LEAD_STORY ->
+// LEAD_STORIES[n]) instead of a JSX rewrite.
+export type LeadStory = {
+  kicker: string;
+  headline: string;
+  deck: string;
+  byline: string;
+  bodyIntro: string;
+  bodyRest: string;
+};
+export const LEAD_STORY: LeadStory = {
+  kicker: "Cover story",
+  headline: "Your permanent home on the internet",
+  deck: "One username that never changes, one profile that carries your work, links, posts and reputation — and an identity other apps can build on.",
+  byline: "By the 0dot newsroom",
+  bodyIntro:
+    "Most of us are scattered across a dozen apps, each holding a sliver of who we are. 0dot gathers it into one address: a profile you own, a feed that proves you're real, and communities, storefronts and events that all hang off the same name.",
+  bodyRest:
+    "Claim a handle once and it's yours for good. Put it in every bio, signature and business card — it never breaks and it grows with you.",
+};
 
 // YouTube videos. The first one is the lead story's video; the rest fill
 // the "Watch" section. `id` is the 11-character video id — the part after
