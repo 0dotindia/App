@@ -40,6 +40,10 @@ describe("monthly allowance", () => {
     const now = new Date();
     await runMonthlyAllowanceSweepOnce(now);
     const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 2));
+    // The ~30-day jump to nextMonth can outrun MONTHLY_ALLOWANCE_ACTIVE_WITHIN_DAYS
+    // on its own — a real user's session refreshes over that time, so simulate
+    // that here rather than letting the fixture go stale and fail eligibility.
+    await db.session.updateMany({ where: { userId: user.id }, data: { lastSeenAt: nextMonth } });
     await runMonthlyAllowanceSweepOnce(nextMonth);
     expect(await restricted(user.id)).toBe(2 * ALLOWANCE);
   });
