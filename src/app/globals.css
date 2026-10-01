@@ -1874,6 +1874,32 @@ input[type="file"].textInput::-webkit-file-upload-button:hover {
   animation: searchSpin 0.8s linear infinite;
 }
 
+/* SearchForm.tsx's live-suggest panel — unlike .previewMenuList's other
+   callers (NotificationBell/MessagesBadge), this one isn't wrapped in a
+   Radix PopoverContent (a text input, not a button, drives it open/closed
+   here), so it needs its own panel chrome rather than inheriting
+   PopoverContent's. z-index above the sticky header (20) it sits under,
+   below the toast/modal tier (1000). */
+.searchSuggestDropdown {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  right: 0;
+  z-index: 25;
+  padding: var(--space-2);
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.25));
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.searchSuggestEmpty {
+  padding: var(--space-2);
+  margin: 0;
+}
+
 input[type="search"]::-webkit-search-cancel-button {
   -webkit-appearance: none;
   appearance: none;
@@ -3015,6 +3041,12 @@ body.hasBottomNav .iosInstallBanner {
   font-weight: 700;
   line-height: var(--leading-heading);
   letter-spacing: var(--tracking-tight);
+  /* A display name with no spaces (one long unbroken token) has nothing for
+     normal word-wrap to break on and overflows straight out of .profileCard,
+     running under the right rail instead of wrapping — overflow-wrap still
+     breaks on spaces first when they exist, only falling back to a mid-word
+     break for the unbroken case. */
+  overflow-wrap: anywhere;
 }
 
 .profileActions {
@@ -3602,6 +3634,40 @@ a.profileMetaItem:hover {
   box-shadow: 0 0 0 var(--focus-ring-width) var(--accent-soft), var(--shadow);
 }
 
+/* Ordinary (non-featured) links: same auto-fill grid shape as
+   .profileActionsGrid, bounded by .profileCard's own max-width rather than
+   the viewport — a profile with 8+ plain links was giving each one its own
+   full-width row for no reason, a short label doesn't need that much
+   horizontal space. Featured links stay outside this grid (see the JSX) and
+   keep their own full-width row, since they're deliberately meant to stand
+   out rather than pack in tight. */
+.profileLinksGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+.profileLinkItemCompact {
+  padding: 0.65rem 0.85rem;
+  font-size: var(--text-sm-plus);
+  font-weight: 600;
+  text-align: center;
+  justify-content: center;
+}
+
+/* Profile content tabs (Posts / Portfolio / Shop & Learning) — query-param
+   driven like /m's marketplace category tabs, reusing .button/.buttonSmall/
+   .buttonSecondary rather than inventing a new tab-button style. flex-wrap
+   matches .profileActions/.row-lg's existing narrow-viewport handling; only
+   3 tabs ever render so that's sufficient without a scroll affordance. */
+.profileTabBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-5) 0;
+}
+
 .profileEditToggle summary {
   cursor: pointer;
   font-weight: 600;
@@ -3647,6 +3713,7 @@ a.profileMetaItem:hover {
 .profileUtilityRow a.profileEditToggle {
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem;
   opacity: 1;
   color: var(--foreground);
   font-weight: 600;
@@ -3658,6 +3725,30 @@ a.profileMetaItem:hover {
   cursor: pointer;
   list-style: none;
   transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.profileUtilityRow .profileEditToggle > summary svg,
+.profileUtilityRow a.profileEditToggle svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* Block sits in the same row as Share/Projects/etc. but it's a step more
+   consequential than anything else here — a faint danger tint (no louder
+   than that, since it's still collapsed/unconfirmed at this point) keeps it
+   from blending into the browse-the-profile chips next to it. */
+.profileEditToggleDanger > summary {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+
+.profileEditToggleDanger > summary svg {
+  color: var(--danger);
+  opacity: 1;
+}
+
+.profileEditToggleDanger > summary:hover {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
 }
 
 .profileUtilityRow .profileEditToggle > summary::before {
@@ -3774,6 +3865,55 @@ a.profileMetaItem:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-3);
+}
+
+/* Profile tab content card — same shape as .postCard, used for every
+   Portfolio/Shop & Learning section (Projects, Research papers, Memberships,
+   etc.) in place of the old <details> disclosure. No hover elevation: unlike
+   a post, these aren't themselves a single click target. */
+.contentCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow);
+}
+
+/* A repeatable item stacked inside a .contentCard (a digital product, a
+   membership tier) — same relationship .postCardNested has to .postCard. */
+.contentCardNested {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+/* Replaces <summary> as a .contentCard's title row — same type scale as
+   .sectionHeading but full-strength (not dimmed): a card's own heading is
+   the primary label for its content, not a secondary eyebrow above it. */
+.contentCardHeading {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* .disclosureBody/.disclosureBodyWrap were sized for a bare <details> body
+   (hence the 32ch cap); inside a .contentCard the card itself owns the
+   width, so neither the top margin nor the column cap should apply. */
+.contentCard .disclosureBody,
+.contentCard .disclosureBodyWrap {
+  margin-top: 0;
+  max-width: none;
 }
 
 /* Redesign Phase 1b (D4): every post row leads with an author avatar column.
@@ -4798,9 +4938,12 @@ body.hasBottomNav .appMain {
   font-size: var(--text-sm-plus);
 }
 
-/* NavLinks' copy of the search form is now redundant on >=1024px screens —
-   .desktopTopHeaderSearchCenter puts a real search box in the header itself
-   (see SiteHeader.tsx), so the sidebar doesn't need its own. */
+/* NavLinks' copy of the search form is redundant everywhere the sidebar
+   itself shows (>=768px, see .desktopSidebar below) — .desktopTopHeaderSearchCenter
+   puts a real search box in the header itself at that same breakpoint (see
+   SiteHeader.tsx), so the sidebar never needs its own. Unconditional (no
+   media query) rather than re-stating >=768px here, since that's exactly
+   the condition under which .desktopSidebar is visible at all. */
 .desktopSidebar .siteHeaderSearch {
   display: none;
 }

@@ -1,16 +1,47 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Bell, Bot, Globe, Link2, LogIn, PenLine, Sparkles, TrendingUp, Palette, Users, BadgeCheck } from "lucide-react";
+import { Bell, Bot, Flame, Globe, Link2, LogIn, PenLine, Sparkles, TrendingUp, Palette, Users, BadgeCheck } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { getRecentNotificationsPreview, getNotificationVerb, getNotificationHref } from "@/lib/notifications";
 import { getSuggestedUsers, getPublicSuggestedUsers } from "@/lib/suggested-users";
 import { getFolloweeIds } from "@/lib/follow-graph";
+import { getTrendingPosts } from "@/lib/trending";
 import { UserListItem } from "@/components/UserListItem";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/Skeleton";
 
 const PREVIEW_COUNT = 5;
 const SUGGESTED_COUNT = 5;
+const TRENDING_PREVIEW_COUNT = 3;
+const TRENDING_SNIPPET_LENGTH = 80;
+
+// Routes whose own content already *is* the rail's default "Notifications"
+// section — showing it again next to the page it duplicates read as a
+// layout bug in review (world-class-pro-level pass, 2026-10-01). Scoped to
+// an exact-prefix check since /notifications itself has no further
+// sub-routes worth distinguishing.
+function isNotificationsPage(pathname: string): boolean {
+  return pathname === "/notifications";
+}
+
+// /explore's own ExploreDiscovery section already renders "People to
+// follow" from the same getSuggestedUsers() call this rail's "Suggested for
+// you" makes — same viewer in, same ranked list out, so the two sections
+// showed the identical 5 people twice on screen. Same self-duplication bug
+// class as isNotificationsPage above, just missed in that pass.
+function isExplorePage(pathname: string): boolean {
+  return pathname === "/explore";
+}
+
+// /explore is a general discovery surface (people/communities/businesses +
+// an all-posts feed) where a "what's hot right now" widget adds content the
+// page doesn't already show. /trending is NOT that surface — its own content
+// already *is* the trending list, so showing this widget there duplicated
+// the page's own top post, same self-duplication bug isNotificationsPage
+// already exists to prevent.
+function wantsTrendingWidget(pathname: string): boolean {
+  return pathname === "/explore";
+}
 
 // Right-side contextual panel, a fixed global element on every route with
 // site chrome (see RootLayout) — including for anonymous visitors now: the
@@ -20,54 +51,40 @@ const SUGGESTED_COUNT = 5;
 // actionable control in either branch (Follow, notification links, etc.)
 // already redirects an anonymous visitor to /login via the underlying
 // server action's requireVerifiedUser() guard — nothing extra to wire here.
-export async function ContextualRail() {
+export async function ContextualRail({ pathname }: { pathname: string }) {
   const currentUser = await getCurrentUser();
   if (!currentUser) return <AnonymousContextualRail />;
 
-  const notifications = await getRecentNotificationsPreview(currentUser.id, PREVIEW_COUNT);
   const recipientHandle = currentUser.username?.handle ?? null;
+  const showNotifications = !isNotificationsPage(pathname);
+  const showTrending = wantsTrendingWidget(pathname);
+  const showSuggestedForYou = !isExplorePage(pathname);
 
   return (
     <div className="contextualRail">
-      <section className="railSection">
-        <div className="railSectionHeader">
-          <h2>
-            <Bell size={16} aria-hidden="true" /> Notifications
-          </h2>
-          {/* prefetch={false}: this rail is persistent chrome on every route
-              (see the component comment above) — eagerly prefetching these
-              fixed nav-style destinations on every single page view was
-              contributing to the DB-connection-burst 503s NavLinks.tsx's
-              own comment documents (same root cause, same fix). */}
-          <Link href="/notifications" prefetch={false}>See all</Link>
-        </div>
-        {notifications.length === 0 && <EmptyState message="Nothing yet." />}
-        <div className="stack">
-          {/* prefetch={false}: up to PREVIEW_COUNT (5) of these render at
-              once, each pointing at a different post/profile/message
-              thread — same DB-connection-burst-503 fix as the "See all"
-              link above and every Link elsewhere in this file. */}
-          {notifications.map((n) => (
-            <Link key={n.id} href={getNotificationHref(n, recipientHandle)} prefetch={false} className="railNotificationItem">
-              <strong>{n.actor?.profile?.displayName ?? "Someone"}</strong>
-              {n.actor?.profile?.isVerified && (
-                <span className="verifiedBadge" title="Verified" aria-label="Verified">
-                  <BadgeCheck size={14} aria-hidden="true" />
-                </span>
-              )}{" "}
-              {getNotificationVerb(n.type, n.subjectType)}
-            </Link>
-          ))}
-        </div>
-      </section>
+      {showNotifications && (
+        <Suspense fallback={<NotificationsPreviewFallback />}>
+          <NotificationsPreviewSection userId={currentUser.id} recipientHandle={recipientHandle} />
+        </Suspense>
+      )}
+
+      {showTrending && (
+        <Suspense fallback={<TrendingNowFallback />}>
+          <TrendingNowSection viewerId={currentUser.id} />
+        </Suspense>
+      )}
 
       {/* getSuggestedUsers is the rail's heaviest call — ~6 reads plus a
           logAIGeneration write — so it streams in on its own boundary
-          instead of holding back the Notifications section above and the
-          static cards below. */}
-      <Suspense fallback={<SuggestedForYouFallback />}>
-        <SuggestedForYouSection userId={currentUser.id} />
-      </Suspense>
+          instead of holding back the sections above and the static cards
+          below. Suppressed on /explore itself (see isExplorePage) — that
+          page's own ExploreDiscovery section already renders the identical
+          ranked list under "People to follow". */}
+      {showSuggestedForYou && (
+        <Suspense fallback={<SuggestedForYouFallback />}>
+          <SuggestedForYouSection userId={currentUser.id} />
+        </Suspense>
+      )}
 
       <section className="railAiCard">
         <div className="railSectionHeader">
@@ -166,6 +183,125 @@ function SuggestedForYouFallback() {
       </div>
       <div className="stack">
         {[0, 1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} height="2.25rem" style={{ display: "block" }} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// Extracted out of ContextualRail's own body (unchanged markup/behavior)
+// so it can stream in on its own <Suspense> boundary like the other
+// sections, and be skipped entirely on /notifications where it would just
+// repeat that page's own content.
+async function NotificationsPreviewSection({ userId, recipientHandle }: { userId: string; recipientHandle: string | null }) {
+  const notifications = await getRecentNotificationsPreview(userId, PREVIEW_COUNT);
+
+  return (
+    <section className="railSection">
+      <div className="railSectionHeader">
+        <h2>
+          <Bell size={16} aria-hidden="true" /> Notifications
+        </h2>
+        {/* prefetch={false}: this rail is persistent chrome on every route
+            (see the component comment above) — eagerly prefetching these
+            fixed nav-style destinations on every single page view was
+            contributing to the DB-connection-burst 503s NavLinks.tsx's
+            own comment documents (same root cause, same fix). */}
+        <Link href="/notifications" prefetch={false}>See all</Link>
+      </div>
+      {notifications.length === 0 && <EmptyState title="Nothing yet." />}
+      <div className="stack">
+        {/* prefetch={false}: up to PREVIEW_COUNT (5) of these render at
+            once, each pointing at a different post/profile/message
+            thread — same DB-connection-burst-503 fix as the "See all"
+            link above and every Link elsewhere in this file. */}
+        {notifications.map((n) => (
+          <Link key={n.id} href={getNotificationHref(n, recipientHandle)} prefetch={false} className="railNotificationItem">
+            <strong>{n.actor?.profile?.displayName ?? "Someone"}</strong>
+            {n.actor?.profile?.isVerified && (
+              <span className="verifiedBadge" title="Verified" aria-label="Verified">
+                <BadgeCheck size={14} aria-hidden="true" />
+              </span>
+            )}{" "}
+            {getNotificationVerb(n.type, n.subjectType)}
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function NotificationsPreviewFallback() {
+  return (
+    <section className="railSection" aria-busy="true">
+      <div className="railSectionHeader">
+        <h2>
+          <Bell size={16} aria-hidden="true" /> Notifications
+        </h2>
+      </div>
+      <div className="stack">
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} height="2.25rem" style={{ display: "block" }} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// /explore and /trending's contextual replacement for the generic AI tools
+// promo (see wantsTrendingWidget above) — the top few globally trending
+// posts right now, each linking straight to the post on its author's
+// profile (same `#post-{id}` anchor pattern notifications.ts uses). Reuses
+// getTrendingPosts with no cursor rather than a dedicated query: it's
+// already cached for anonymous-shaped results and recomputed on the same
+// schedule /trending itself reads from.
+async function TrendingNowSection({ viewerId }: { viewerId: string }) {
+  const { items } = await getTrendingPosts({ cursor: null, viewerId });
+  const preview = items.slice(0, TRENDING_PREVIEW_COUNT);
+  if (preview.length === 0) return null;
+
+  return (
+    <section className="railSection">
+      <div className="railSectionHeader">
+        <h2>
+          <Flame size={16} aria-hidden="true" /> Trending now
+        </h2>
+        <Link href="/trending" prefetch={false}>See all</Link>
+      </div>
+      <div className="stack">
+        {preview.map((post) => {
+          const handle = post.author.username?.handle;
+          if (!handle) return null;
+          const snippet =
+            post.body.length > TRENDING_SNIPPET_LENGTH ? `${post.body.slice(0, TRENDING_SNIPPET_LENGTH).trimEnd()}…` : post.body;
+          return (
+            <Link key={post.id} href={`/${handle}#post-${post.id}`} prefetch={false} className="railNotificationItem">
+              <strong>{post.author.profile?.displayName ?? handle}</strong>
+              {post.author.profile?.isVerified && (
+                <span className="verifiedBadge" title="Verified" aria-label="Verified">
+                  <BadgeCheck size={14} aria-hidden="true" />
+                </span>
+              )}
+              {snippet.trim().length > 0 ? `: ${snippet}` : " posted"}
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function TrendingNowFallback() {
+  return (
+    <section className="railSection" aria-busy="true">
+      <div className="railSectionHeader">
+        <h2>
+          <Flame size={16} aria-hidden="true" /> Trending now
+        </h2>
+      </div>
+      <div className="stack">
+        {[0, 1, 2].map((i) => (
           <Skeleton key={i} height="2.25rem" style={{ display: "block" }} />
         ))}
       </div>

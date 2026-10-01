@@ -34,7 +34,7 @@ export function DigitalProductCard({
   }
 
   return (
-    <div>
+    <div className="contentCardNested">
       {product.coverImageUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- user-supplied URL, not an optimizable static asset
         <img
