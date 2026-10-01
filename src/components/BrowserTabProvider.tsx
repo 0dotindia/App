@@ -126,6 +126,22 @@ export function BrowserTabProvider({
     baseTitleRef.current = document.title;
   }, [pathname]);
 
+  // ThemeToggleLogo's href mode (MarketingNav/FrontPageNav's logo, which
+  // both navigates and toggles theme on the same click) writes the DOM
+  // attribute via persistTheme synchronously but deliberately skips calling
+  // this component's own setTheme in that same click — calling it there
+  // raced the Link's in-flight App Router transition and crashed React's
+  // committer (verified live: "Cannot read properties of null (reading
+  // 'removeChild')", reproducible even with the state update deferred a
+  // macrotask, since the RSC fetch can outlast one). Resyncing from the DOM
+  // on pathname change ties it to Next's own confirmed-navigation signal
+  // instead of guessing a delay, and no-ops (same string, no re-render) on
+  // every navigation that didn't touch the theme.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate: resyncs React state from an external write (persistTheme's DOM attribute) after navigation, same pattern as the other deliberate setState-in-effect call sites in this codebase.
+    setTheme(getEffectiveTheme());
+  }, [pathname]);
+
   useEffect(() => {
     const goOffline = () => setIsOffline(true);
     const goOnline = () => setIsOffline(false);

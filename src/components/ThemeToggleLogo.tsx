@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { getEffectiveTheme, persistTheme } from "@/lib/browser-tab";
 import { useBrowserTab } from "@/components/BrowserTabProvider";
 
@@ -8,28 +10,50 @@ export function ThemeToggleLogo({
   size = 32,
   priority = true,
   interactive = true,
+  href,
+  className,
 }: {
   size?: number;
   priority?: boolean;
-  // MarketingNav is the one caller that already wraps this in its own
-  // <Link href="/">: a <button> nested inside an <a> is invalid HTML and
-  // Lighthouse/axe flag it as a broken touch target (the anchor's own
-  // clickable box collapses to a few stray px around the button). There,
-  // pass false to render just the theme-aware image pair and let the Link
-  // be the only interactive element (losing click-to-toggle there, but the
-  // logo's "go home" affordance was the intended one — toggling was a side
-  // effect of reusing this component for its light/dark image swap).
   interactive?: boolean;
+  // MarketingNav/FrontPageNav want the logo to both go home and toggle the
+  // theme. Nesting a <button> inside their own <Link href="/"> is invalid
+  // HTML (Lighthouse/axe flag it as a broken touch target — the anchor's
+  // clickable box collapses to a few stray px around the button), so
+  // instead pass href here: renders a single <Link>, with the theme toggle
+  // wired to the same click, and takes precedence over `interactive`.
+  href?: string;
+  className?: string;
 }) {
   const { setTheme } = useBrowserTab();
+  const pathname = usePathname();
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
     const next = getEffectiveTheme() === "light" ? "dark" : "light";
+    // Always safe synchronously: a plain attribute write on <html>/
+    // localStorage, outside anything React or the Next router manages.
+    // This alone flips the page's whole visual theme (CSS keys off
+    // data-theme) — setTheme below is secondary, favicon-only state.
     persistTheme(next);
-    // BrowserTabProvider owns the actual favicon <link> writes (it also
-    // has to layer badges/dots on top), so this just reports the new theme
-    // rather than touching the DOM itself.
+
+    if (href && pathname !== href) {
+      // Cross-route click (e.g. MarketingNav's logo on /about): calling
+      // setTheme here raced the Link's in-flight App Router transition and
+      // crashed React's committer (verified live — "Cannot read properties
+      // of null (reading 'removeChild')" — even with the call deferred a
+      // macrotask, since the RSC fetch can outlast one). BrowserTabProvider
+      // resyncs its own theme state from the DOM once pathname actually
+      // changes, so skip it here rather than guess a delay.
+      return;
+    }
+    // Same-page (href === pathname, or no href at all): no pending
+    // navigation to race, so update the favicon-driving state immediately.
     setTheme(next);
+    if (href) {
+      // Already home — Link soft-navigating to the current route is a
+      // pure no-op (same RSC tree), just costs an unnecessary fetch.
+      e.preventDefault();
+    }
   };
 
   const images = (
@@ -52,6 +76,14 @@ export function ThemeToggleLogo({
       />
     </>
   );
+
+  if (href) {
+    return (
+      <Link href={href} prefetch={false} onClick={handleClick} className={className} aria-label="0dot home">
+        {images}
+      </Link>
+    );
+  }
 
   if (!interactive) {
     return <span style={{ display: "inline-flex", alignItems: "center" }}>{images}</span>;

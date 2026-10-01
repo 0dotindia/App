@@ -43,9 +43,7 @@ export function FrontPageNav({
   return (
     <header className={condensed ? "fpNav fpNavCondensed" : "fpNav"}>
       <div className="fpNavInner">
-        <Link href="/" prefetch={false} className="fpNavBrand" aria-label="0dot home">
-          <ThemeToggleLogo size={30} interactive={false} />
-        </Link>
+        <ThemeToggleLogo size={30} href="/" className="fpNavBrand" />
 
         <a href="#top" className="fpNavNameplate" aria-hidden={!condensed} tabIndex={condensed ? undefined : -1}>
           {nameplate}

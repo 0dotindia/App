@@ -22,10 +22,9 @@ export function MarketingNav() {
             together on the landing/login/signup pages — without it, a
             single anonymous page view fires this many concurrent RSC
             prefetches at once. Same DB-connection-burst-503 root cause
-            NavLinks.tsx's own comment documents; same fix. */}
-        <Link href="/" prefetch={false} className="marketingNavBrand" aria-label="0dot home">
-          <ThemeToggleLogo size={32} interactive={false} />
-        </Link>
+            NavLinks.tsx's own comment documents; same fix (ThemeToggleLogo
+            applies it internally when given href). */}
+        <ThemeToggleLogo size={32} href="/" className="marketingNavBrand" />
 
         <div className="marketingNavActions">
           <Link href="/login" prefetch={false} className="button buttonSecondary buttonSmall">
