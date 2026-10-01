@@ -87,13 +87,17 @@ function appendImage(form: FormData, field: string, image: LocalImage, index: nu
   // straight off the appended value), so wrapping the picked URI in one
   // is the fix, not a new upload mechanism.
   const file = new File(image.uri);
-  // File infers .type from the URI's own extension, which can be wrong or
-  // missing (e.g. a cropped/cached image with a generic filename) — when
-  // the picker told us the real mimeType, override the blob's type with it
-  // rather than trust the inferred one, since it's what actually reaches
-  // the server's declared-Content-Type check (commit 642fd17).
-  const blob = image.mimeType ? file.slice(0, undefined, image.mimeType) : (file as unknown as Blob);
-  form.append(field, blob, image.fileName ?? `${field}-${index}.jpg`);
+  // Previously tried overriding the inferred .type via
+  // `file.slice(0, undefined, mimeType)` when the picker's reported
+  // mimeType disagreed with the URI's extension — but that `slice()` path
+  // constructs its Blob from an ArrayBuffer/ArrayBufferView internally,
+  // which this Expo SDK's Blob implementation doesn't support and throws
+  // on synchronously ("Creating blobs from 'ArrayBuffer' and
+  // 'ArrayBufferView' are not supported"), before any request is even
+  // sent. Appending the File directly and trusting its own
+  // extension-based .type inference is the only working path today; the
+  // picker's URI already carries the right extension in the common case.
+  form.append(field, file, image.fileName ?? `${field}-${index}${file.extension || ".jpg"}`);
 }
 
 // apiError (api-auth.ts) always responds { error: string } on the server
@@ -432,8 +436,12 @@ export function sendConversationMessage(
   form.append("body", body);
   form.append("attachmentKind", attachment.kind);
   if (attachment.durationS != null) form.append("attachmentDurationS", String(attachment.durationS));
+  // See appendImage's comment above: slice(start, end, mimeType) throws
+  // ("Creating blobs from 'ArrayBuffer' and 'ArrayBufferView' are not
+  // supported") under this Expo SDK, so the File is appended directly
+  // rather than used to override its inferred .type.
   const file = new File(attachment.uri);
-  form.append("attachment", file.slice(0, undefined, attachment.mimeType), attachment.name);
+  form.append("attachment", file, attachment.name);
   return authorizedRequest(path, { method: "POST", body: form }, UPLOAD_TIMEOUT_MS);
 }
 
