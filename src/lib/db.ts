@@ -1,6 +1,18 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { logger } from "@/lib/logger";
+import { wrapLibsqlExecutor } from "@/lib/db-resilience";
+
+// Subclassed (rather than wrapping the PrismaLibSql instance itself) because
+// PrismaClient calls `createClient()` once per pooled connection it opens —
+// wrapping only the adapter-factory's own methods would miss every
+// connection the pool creates after the first. Overriding this one override
+// point covers all of them, including the shadow-DB client migrations use.
+class ResilientPrismaLibSql extends PrismaLibSql {
+  override createClient(config: Parameters<PrismaLibSql["createClient"]>[0]) {
+    return wrapLibsqlExecutor(super.createClient(config));
+  }
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -25,7 +37,7 @@ if (url.startsWith("libsql:") && !authToken) {
 }
 logger.info("db: connecting", undefined, { target: url.startsWith("file:") ? url : new URL(url).host });
 
-const adapter = new PrismaLibSql({ url, authToken });
+const adapter = new ResilientPrismaLibSql({ url, authToken });
 
 export const db = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 
