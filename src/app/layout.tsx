@@ -291,7 +291,7 @@ export default async function RootLayout({
                     reflowing when it arrives. */}
                 {showRail && (
                   <Suspense fallback={<ContextualRailSkeleton />}>
-                    <ContextualRail />
+                    <ContextualRail pathname={pathname} />
                   </Suspense>
                 )}
               </ToastProvider>

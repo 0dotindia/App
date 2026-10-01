@@ -169,7 +169,7 @@ function AuthorLine({
             (postAvatarProps below) so every post row leads with a consistent
             avatar column instead of a small inline mark on business posts
             only. */}
-        <Link href={`/b/${businessAuthor.slug}`} prefetch={false} style={{ fontWeight: 700 }}>
+        <Link href={`/b/${businessAuthor.slug}`} prefetch={false} style={{ fontWeight: 700, overflowWrap: "anywhere" }}>
           {businessAuthor.name}
         </Link>
         {/* Blue tick button, shown for every business post — single click
@@ -195,11 +195,11 @@ function AuthorLine({
   return (
     <div>
       {handle ? (
-        <Link href={`/${handle}`} prefetch={false} style={{ fontWeight: 700 }}>
+        <Link href={`/${handle}`} prefetch={false} style={{ fontWeight: 700, overflowWrap: "anywhere" }}>
           {displayName}
         </Link>
       ) : (
-        <span style={{ fontWeight: 700 }}>{displayName}</span>
+        <span style={{ fontWeight: 700, overflowWrap: "anywhere" }}>{displayName}</span>
       )}
       {/* Blue tick button, shown for every post — single click straight to
           the author's public profile. Same treatment as businessAuthor's
