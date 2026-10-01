@@ -73,6 +73,17 @@ export function BrowserTabProvider({
   );
   const [flashState, setFlashState] = useState<FlashState | null>(null);
   const baseTitleRef = useRef("");
+  // Tracks exactly what the write effect below last put in document.title,
+  // so the re-anchor effect can tell "Next.js/the server changed the title
+  // for a new route" apart from "I'm reading back my own last write". Without
+  // this, the re-anchor effect re-running a second time with the DOM
+  // untouched in between (React Strict Mode double-invokes every effect
+  // once on mount; a Suspense remount can do the same) captures our own
+  // already-prefixed title as the new "base" and the write effect stacks a
+  // second "(99+) " on top of it — reproduced live as "(99+) (99+) 0dot ·
+  // ZERO DOT" within ~400ms of any mount, world-class-pro-level pass,
+  // 2026-10-01.
+  const lastWrittenTitleRef = useRef<string | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashStateRef = useRef<FlashState | null>(null);
 
@@ -121,9 +132,16 @@ export function BrowserTabProvider({
 
   // Re-anchor the "resting" title to whatever the server/Next.js just
   // rendered for this route, so unread/unsaved prefixes stack on the real
-  // per-page title instead of on our own previous override.
+  // per-page title instead of on our own previous override. Guarded against
+  // re-reading our own last write (see lastWrittenTitleRef above): if
+  // document.title still equals the string the write effect below put
+  // there, nothing external changed it, so this effect running again
+  // (Strict Mode's mount double-invoke, a Suspense remount) must not
+  // re-capture the already-prefixed title as a new base.
   useEffect(() => {
-    baseTitleRef.current = document.title;
+    if (document.title !== lastWrittenTitleRef.current) {
+      baseTitleRef.current = document.title;
+    }
   }, [pathname]);
 
   // ThemeToggleLogo's href mode (MarketingNav/FrontPageNav's logo, which
@@ -175,6 +193,7 @@ export function BrowserTabProvider({
       flash: flashState,
     });
     document.title = resolved.title;
+    lastWrittenTitleRef.current = resolved.title;
 
     const baseHref = iconHrefFor(theme);
     if (resolved.favicon.kind === "normal") {
