@@ -26,6 +26,8 @@ export default function WalletTransactionsScreen() {
   const [error, setError] = useState<string | null>(null);
   // See index.tsx's feedGenerationRef comment — same race, same fix.
   const loadGenerationRef = useRef(0);
+  // See index.tsx's nextCursorRef comment — same gap, same fix.
+  const nextCursorRef = useRef<string | null>(null);
 
   const loadFirstPage = useCallback(async () => {
     setError(null);
@@ -34,6 +36,7 @@ export default function WalletTransactionsScreen() {
       const page = await getWalletTransactions();
       setEntries(page.entries);
       setNextCursor(page.nextCursor);
+      nextCursorRef.current = page.nextCursor;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load your activity.");
     }
@@ -59,12 +62,14 @@ export default function WalletTransactionsScreen() {
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
     const myGeneration = loadGenerationRef.current;
+    const cursorUsed = nextCursor;
     setLoadingMore(true);
     try {
-      const page = await getWalletTransactions({ cursor: nextCursor });
-      if (myGeneration !== loadGenerationRef.current) return;
+      const page = await getWalletTransactions({ cursor: cursorUsed });
+      if (myGeneration !== loadGenerationRef.current || nextCursorRef.current !== cursorUsed) return;
       setEntries((prev) => [...prev, ...page.entries]);
       setNextCursor(page.nextCursor);
+      nextCursorRef.current = page.nextCursor;
     } catch {
       // Best-effort, same posture as bookmarks.tsx's own onEndReached.
     } finally {

@@ -311,14 +311,19 @@ export default function ConversationScreen() {
             <View style={styles.recordingRow}>
               <View style={styles.recordingDot} />
               <Text style={styles.recordingText}>Recording… {Math.floor(voiceRecorder.durationMillis / 1000)}s</Text>
-              <Pressable onPress={onCancelRecording} accessibilityRole="button" accessibilityLabel="Cancel recording" hitSlop={8}>
+              {/* hitSlop 6, not 8, on both of these: recordingRow lays them
+                  out with `gap: theme.space[3]` (12px) — 8 a side would
+                  overlap (same bug class as Chip.tsx/GlassIconButton,
+                  caught by the same sweep), and a mis-tap here is a real
+                  consequence (discarding vs. stopping a recording). */}
+              <Pressable onPress={onCancelRecording} accessibilityRole="button" accessibilityLabel="Cancel recording" hitSlop={6}>
                 <Ionicons name="trash-outline" size={20} color={theme.colors.danger} />
               </Pressable>
               <Pressable
                 onPress={onStopRecording}
                 accessibilityRole="button"
                 accessibilityLabel="Stop recording"
-                hitSlop={8}
+                hitSlop={6}
                 style={styles.stopRecordingButton}
               >
                 <Ionicons name="stop" size={16} color={theme.colors.onAccent} />

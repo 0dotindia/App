@@ -27,6 +27,8 @@ export function FollowListScreen({ username, mode }: { username: string; mode: M
   const [error, setError] = useState<string | null>(null);
   // See index.tsx's feedGenerationRef comment — same race, same fix.
   const loadGenerationRef = useRef(0);
+  // See index.tsx's nextCursorRef comment — same gap, same fix.
+  const nextCursorRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -35,6 +37,7 @@ export function FollowListScreen({ username, mode }: { username: string; mode: M
       const res = await fetchPage(username);
       setItems(res.items);
       setNextCursor(res.nextCursor);
+      nextCursorRef.current = res.nextCursor;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load this list.");
     }
@@ -65,12 +68,14 @@ export function FollowListScreen({ username, mode }: { username: string; mode: M
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
     const myGeneration = loadGenerationRef.current;
+    const cursorUsed = nextCursor;
     setLoadingMore(true);
     try {
-      const res = await fetchPage(username, nextCursor);
-      if (myGeneration !== loadGenerationRef.current) return;
+      const res = await fetchPage(username, cursorUsed);
+      if (myGeneration !== loadGenerationRef.current || nextCursorRef.current !== cursorUsed) return;
       setItems((prev) => [...(prev ?? []), ...res.items]);
       setNextCursor(res.nextCursor);
+      nextCursorRef.current = res.nextCursor;
     } catch {
       // Best-effort, same posture as every other list screen's onEndReached.
     } finally {

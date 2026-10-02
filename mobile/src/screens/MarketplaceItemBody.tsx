@@ -108,7 +108,7 @@ export function MarketplaceItemBody({ category, id }: { category: string; id: st
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={[styles.content, maxWidth ? { maxWidth, alignSelf: "center", width: "100%" } : null]}>
         {item.coverImageUrl ? (
-          <Image source={{ uri: item.coverImageUrl }} style={styles.cover} contentFit="cover" alt={`${item.title} cover image`} />
+          <Image source={{ uri: item.coverImageUrl }} style={styles.cover} contentFit="cover" transition={150} alt={`${item.title} cover image`} />
         ) : null}
 
         <Text style={styles.categoryLabel}>{item.categoryLabel}</Text>

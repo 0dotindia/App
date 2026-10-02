@@ -49,7 +49,17 @@ export function StatButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={selected === undefined ? undefined : { selected }}
-      hitSlop={10}
+      // Asymmetric, not a uniform 14 (code review caught this): content
+      // height here is ~16px, so 14 top/bottom clears the 44×44px minimum
+      // touch target (ACCESSIBILITY.md) vertically — these are the single
+      // most-tapped controls in the app per this component's own comment.
+      // Left/right has to stay ≤10 though: both callers lay these out with
+      // a horizontal gap (PostRow's own statsRow: theme.space[5] = 20px;
+      // post/[id].tsx's statsRow: theme.space[6] = 24px) — the tighter of
+      // the two still only leaves 10px a side before two adjacent
+      // StatButtons' touch regions would overlap and a tap could land on
+      // the wrong one (confirmed: a uniform 14 did exactly that).
+      hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
       onPress={() => {
         haptics.light();
         onPress();

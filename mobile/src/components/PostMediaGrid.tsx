@@ -14,7 +14,14 @@ export function PostMediaGrid({ media, height = 160 }: { media: PostMedia[]; hei
   return (
     <View style={[styles.grid, { height, borderRadius: theme.radius.md, borderColor: theme.colors.border }]}>
       {media.map((item) => (
-        <Image key={item.position} source={{ uri: item.url }} style={styles.image} contentFit="cover" alt={`Post image ${item.position + 1}`} />
+        <Image
+          key={item.position}
+          source={{ uri: item.url }}
+          style={styles.image}
+          contentFit="cover"
+          transition={150}
+          alt={`Post image ${item.position + 1}`}
+        />
       ))}
     </View>
   );

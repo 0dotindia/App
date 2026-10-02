@@ -42,6 +42,8 @@ export default function CommunityScreen() {
 
   // See index.tsx's feedGenerationRef comment — same race, same fix.
   const loadGenerationRef = useRef(0);
+  // See index.tsx's nextCursorRef comment — same gap, same fix.
+  const nextCursorRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -54,9 +56,11 @@ export default function CommunityScreen() {
         const postsResult = await getCommunityPosts(slug);
         setPosts(postsResult.items);
         setNextCursor(postsResult.nextCursor);
+        nextCursorRef.current = postsResult.nextCursor;
       } else {
         setPosts([]);
         setNextCursor(null);
+        nextCursorRef.current = null;
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load this community.");
@@ -83,12 +87,14 @@ export default function CommunityScreen() {
   async function onEndReached() {
     if (!nextCursor || !community?.canViewContent) return;
     const myGeneration = loadGenerationRef.current;
+    const cursorUsed = nextCursor;
     try {
-      const result = await getCommunityPosts(slug, nextCursor);
-      if (myGeneration !== loadGenerationRef.current) return;
+      const result = await getCommunityPosts(slug, cursorUsed);
+      if (myGeneration !== loadGenerationRef.current || nextCursorRef.current !== cursorUsed) return;
       animateNextLayout();
       setPosts((prev) => [...prev, ...result.items]);
       setNextCursor(result.nextCursor);
+      nextCursorRef.current = result.nextCursor;
     } catch {
       // Best-effort, same posture as every other list screen's onEndReached.
     }
@@ -224,7 +230,7 @@ export default function CommunityScreen() {
             ListHeaderComponent={
               <View>
                 {community.coverUrl ? (
-                  <Image source={{ uri: community.coverUrl }} style={styles.cover} contentFit="cover" alt={`${community.name} cover photo`} />
+                  <Image source={{ uri: community.coverUrl }} style={styles.cover} contentFit="cover" transition={150} alt={`${community.name} cover photo`} />
                 ) : (
                   <View style={[styles.cover, { backgroundColor: theme.colors.surface }]} />
                 )}

@@ -138,7 +138,10 @@ export default function ComposeScreen() {
                   onPress={() => onRemoveImage(index)}
                   accessibilityRole="button"
                   accessibilityLabel="Remove image"
-                  hitSlop={8}
+                  // imageRemoveButton below is 22×22 — hitSlop 8 (the
+                  // previous value) only reached 38px total, still short of
+                  // the 44×44px minimum (ACCESSIBILITY.md); 12 clears it.
+                  hitSlop={12}
                   style={styles.imageRemoveButton}
                 >
                   <Ionicons name="close" size={14} color={theme.colors.onAccent} />
@@ -215,8 +218,14 @@ function createStyles(theme: Theme) {
     counter: { color: theme.colors.mutedForeground, fontSize: theme.text.xs },
     imageRow: { maxHeight: 96, paddingHorizontal: theme.space[4] },
     imageRowContent: { gap: theme.space[2] },
-    imageThumbWrap: { width: 84, height: 84, borderRadius: theme.radius.md, overflow: "hidden" },
-    imageThumb: { width: "100%", height: "100%" },
+    // Rounding lives on the image itself (expo-image clips its own content
+    // to its own borderRadius, same as RN's built-in Image), not on this
+    // wrapper — code review flagged that an overflow:"hidden" ancestor here
+    // risks clipping the remove button's hitSlop along with it on some
+    // platforms, which would silently shrink the touch target the hitSlop
+    // was added to fix. No clipping ancestor, no question to begin with.
+    imageThumbWrap: { width: 84, height: 84 },
+    imageThumb: { width: "100%", height: "100%", borderRadius: theme.radius.md },
     imageRemoveButton: {
       position: "absolute",
       top: 4,

@@ -47,6 +47,18 @@ export default function HomeScreen() {
   // pagination fetch still in flight when a full refresh replaces `posts`
   // can't then append its now-stale page onto the fresh list.
   const feedGenerationRef = useRef(0);
+  // Mirrors nextCursor, updated everywhere loadFirstPage/onEndReached update
+  // that state. Second line of defense for onEndReached specifically (same
+  // gap found and closed in explore.tsx's near-identical pattern): this
+  // screen has four separate triggers that can call loadFirstPage — if one
+  // starts while onEndReached is already in flight, both can share the
+  // generation number that was current when onEndReached captured it, so the
+  // generation check alone can't tell "loadFirstPage replaced the list out
+  // from under me" apart from "nothing happened." Comparing the cursor
+  // onEndReached actually paginated from against the current one catches
+  // that: loadFirstPage always moves this ref, even when the generation
+  // number happens to match.
+  const nextCursorRef = useRef<string | null>(null);
 
   // Phase 15 spec §5.2: read-time offline caching. A live fetch always
   // wins and refreshes the cache; the cache is only ever consulted after a
@@ -58,6 +70,7 @@ export default function HomeScreen() {
       const { items, nextCursor: cursor } = await getFeed();
       setPosts(items);
       setNextCursor(cursor);
+      nextCursorRef.current = cursor;
       setOfflineCachedAt(null);
       setCached(CACHE_KEY, items);
       newestPostId.current = items[0]?.id ?? null;
@@ -67,6 +80,7 @@ export default function HomeScreen() {
       if (cached && cached.value.length > 0) {
         setPosts(cached.value);
         setNextCursor(null);
+        nextCursorRef.current = null;
         setOfflineCachedAt(cached.cachedAt);
       } else {
         setError(err instanceof ApiError ? err.message : "Could not load your feed.");
@@ -143,15 +157,19 @@ export default function HomeScreen() {
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
     const myGeneration = feedGenerationRef.current;
+    const cursorUsed = nextCursor;
     setLoadingMore(true);
     try {
-      const { items, nextCursor: cursor } = await getFeed(nextCursor);
-      // A full refresh (focus/foreground/pull/new-posts-pill) replaced
-      // `posts` while this was in flight — its results are stale, drop them.
-      if (myGeneration !== feedGenerationRef.current) return;
+      const { items, nextCursor: cursor } = await getFeed(cursorUsed);
+      // Both checks, not just the generation — see nextCursorRef's own
+      // comment for why the generation check alone isn't enough here. A
+      // full refresh (focus/foreground/pull/new-posts-pill) replacing
+      // `posts` while this was in flight is what both guard against.
+      if (myGeneration !== feedGenerationRef.current || nextCursorRef.current !== cursorUsed) return;
       animateNextLayout();
       setPosts((prev) => [...prev, ...items]);
       setNextCursor(cursor);
+      nextCursorRef.current = cursor;
     } catch {
       // Best-effort — a failed "load more" shouldn't clear what's already
       // showing; the user can pull-to-refresh or scroll again to retry.

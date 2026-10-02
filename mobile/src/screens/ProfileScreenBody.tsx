@@ -119,6 +119,14 @@ export function ProfileScreenBody({
   // load() calls; without this guard, an older request's response arriving
   // after a newer one's would silently overwrite the fresher state.
   const loadRequestId = useRef(0);
+  // See (tabs)/index.tsx's nextCursorRef comment — same gap, same fix:
+  // onPostsEndReached can share loadRequestId's current value with an
+  // in-flight load() (refocus/refresh) that started after it captured that
+  // value, so the id check alone can't tell "load() replaced the list out
+  // from under me" apart from "nothing happened." Comparing the cursor
+  // onPostsEndReached actually paginated from against the current one
+  // catches that.
+  const postsNextCursorRef = useRef<string | null>(null);
   const load = useCallback(async () => {
     const requestId = ++loadRequestId.current;
     setError(null);
@@ -129,6 +137,7 @@ export function ProfileScreenBody({
       setProfile(profileResult);
       setPosts(postsResult.items);
       setPostsNextCursor(postsResult.nextCursor);
+      postsNextCursorRef.current = postsResult.nextCursor;
     } catch (err) {
       if (loadRequestId.current !== requestId) return;
       animateNextLayout();
@@ -166,16 +175,18 @@ export function ProfileScreenBody({
   async function onPostsEndReached() {
     if (!postsNextCursor || postsLoadingMore) return;
     const requestId = loadRequestId.current;
+    const cursorUsed = postsNextCursor;
     setPostsLoadingMore(true);
     try {
-      const result = await getUserPosts(username, postsNextCursor);
-      // A newer load() (refocus, pull-to-refresh, or a username change) ran
-      // while this was in flight — same guard load() uses on itself, extended
-      // to pagination so a stale page can't get appended onto fresher posts.
-      if (loadRequestId.current !== requestId) return;
+      const result = await getUserPosts(username, cursorUsed);
+      // Both checks, not just the request id: a newer load() (refocus,
+      // pull-to-refresh, or a username change) catches most cases, but see
+      // postsNextCursorRef's own comment for the gap that alone leaves open.
+      if (loadRequestId.current !== requestId || postsNextCursorRef.current !== cursorUsed) return;
       animateNextLayout();
       setPosts((prev) => [...prev, ...result.items]);
       setPostsNextCursor(result.nextCursor);
+      postsNextCursorRef.current = result.nextCursor;
     } catch {
       // Best-effort, same posture as the feed's own onEndReached.
     } finally {
@@ -377,6 +388,7 @@ export function ProfileScreenBody({
                     source={profile.coverUrl ? { uri: profile.coverUrl } : defaultCoverSource(theme.scheme)}
                     style={styles.cover}
                     contentFit="cover"
+                    transition={150}
                     alt="Cover photo"
                   />
                 </Animated.View>
@@ -519,7 +531,13 @@ function GlassIconButton({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
-      hitSlop={8}
+      // 4, not 8: headerButtons (below) renders up to two of these side by
+      // side with `gap: theme.space[2]` (8px) — 8 a side would make two
+      // adjacent buttons' touch regions overlap instead of meeting exactly
+      // at the gap's midpoint (same overlap bug Chip.tsx had, caught by the
+      // same sweep). 36×36 + 4 a side already clears the 44×44 minimum
+      // (ACCESSIBILITY.md) with no overlap risk.
+      hitSlop={4}
       style={[styles.headerButton, disabled && { opacity: 0.6 }]}
     >
       {/* Real frosted glass on iOS; on Android (no blur) the solid dark

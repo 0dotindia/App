@@ -45,6 +45,19 @@ export default function NotificationsScreen() {
   // triggers replaces `items` can't append its now-stale page onto the
   // fresh list.
   const notificationsGenerationRef = useRef(0);
+  // Mirrors nextCursor, updated everywhere loadFirstPage/onEndReached update
+  // that state. Second line of defense for onEndReached specifically (same
+  // gap found and closed in explore.tsx's near-identical pattern): this
+  // screen's loadFirstPage can be triggered far more often than a user
+  // manually refreshing (mount, a live `notification`/`resync` event,
+  // foreground, pull-to-refresh) — if one of those starts while onEndReached
+  // is already in flight, both share the generation number that was current
+  // when onEndReached captured it, so the generation check alone can't tell
+  // "loadFirstPage replaced the list out from under me" apart from "nothing
+  // happened." Comparing the cursor onEndReached actually paginated from
+  // against the current one catches that: loadFirstPage always moves this
+  // ref, even when the generation number happens to match.
+  const nextCursorRef = useRef<string | null>(null);
 
   const loadFirstPage = useCallback(async () => {
     setError(null);
@@ -53,6 +66,7 @@ export default function NotificationsScreen() {
       const { items: rows, nextCursor: cursor } = await getNotifications();
       setItems(rows);
       setNextCursor(cursor);
+      nextCursorRef.current = cursor;
       setOfflineCachedAt(null);
       setCached(CACHE_KEY, rows);
     } catch (err) {
@@ -60,6 +74,7 @@ export default function NotificationsScreen() {
       if (cached && cached.value.length > 0) {
         setItems(cached.value);
         setNextCursor(null);
+        nextCursorRef.current = null;
         setOfflineCachedAt(cached.cachedAt);
       } else {
         setError(err instanceof ApiError ? err.message : "Could not load your notifications.");
@@ -100,13 +115,17 @@ export default function NotificationsScreen() {
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
     const myGeneration = notificationsGenerationRef.current;
+    const cursorUsed = nextCursor;
     setLoadingMore(true);
     try {
-      const { items: rows, nextCursor: cursor } = await getNotifications(nextCursor);
-      if (myGeneration !== notificationsGenerationRef.current) return;
+      const { items: rows, nextCursor: cursor } = await getNotifications(cursorUsed);
+      // Both checks, not just the generation — see nextCursorRef's own
+      // comment for why the generation check alone isn't enough here.
+      if (myGeneration !== notificationsGenerationRef.current || nextCursorRef.current !== cursorUsed) return;
       animateNextLayout();
       setItems((prev) => [...prev, ...rows]);
       setNextCursor(cursor);
+      nextCursorRef.current = cursor;
     } catch {
       // Same best-effort posture as the feed's onEndReached.
     } finally {

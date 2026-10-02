@@ -42,6 +42,8 @@ export default function BookmarksScreen() {
   // again after awaiting, so a pagination fetch still in flight when a
   // focus/refresh replaces `posts` can't append its now-stale page onto it.
   const bookmarksGenerationRef = useRef(0);
+  // See index.tsx's nextCursorRef comment — same gap, same fix.
+  const nextCursorRef = useRef<string | null>(null);
 
   const loadFirstPage = useCallback(async () => {
     setError(null);
@@ -50,6 +52,7 @@ export default function BookmarksScreen() {
       const { items, nextCursor: cursor } = await getBookmarks();
       setPosts(items);
       setNextCursor(cursor);
+      nextCursorRef.current = cursor;
       setOfflineCachedAt(null);
       setCached(CACHE_KEY, items);
     } catch (err) {
@@ -57,6 +60,7 @@ export default function BookmarksScreen() {
       if (cached && cached.value.length > 0) {
         setPosts(cached.value);
         setNextCursor(null);
+        nextCursorRef.current = null;
         setOfflineCachedAt(cached.cachedAt);
       } else {
         setError(err instanceof ApiError ? err.message : "Could not load your bookmarks.");
@@ -85,13 +89,15 @@ export default function BookmarksScreen() {
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
     const myGeneration = bookmarksGenerationRef.current;
+    const cursorUsed = nextCursor;
     setLoadingMore(true);
     try {
-      const { items, nextCursor: cursor } = await getBookmarks(nextCursor);
-      if (myGeneration !== bookmarksGenerationRef.current) return;
+      const { items, nextCursor: cursor } = await getBookmarks(cursorUsed);
+      if (myGeneration !== bookmarksGenerationRef.current || nextCursorRef.current !== cursorUsed) return;
       animateNextLayout();
       setPosts((prev) => [...prev, ...items]);
       setNextCursor(cursor);
+      nextCursorRef.current = cursor;
     } catch {
       // Best-effort, same posture as the feed's own onEndReached.
     } finally {

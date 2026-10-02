@@ -24,6 +24,8 @@ export default function BlockedUsersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   // See index.tsx's feedGenerationRef comment — same race, same fix.
   const loadGenerationRef = useRef(0);
+  // See index.tsx's nextCursorRef comment — same gap, same fix.
+  const nextCursorRef = useRef<string | null>(null);
 
   const load = useCallback(() => {
     setError(null);
@@ -32,6 +34,7 @@ export default function BlockedUsersScreen() {
       .then((res) => {
         setItems(res.items);
         setNextCursor(res.nextCursor);
+        nextCursorRef.current = res.nextCursor;
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Could not load your blocked users."));
   }, []);
@@ -52,12 +55,14 @@ export default function BlockedUsersScreen() {
   async function onEndReached() {
     if (!nextCursor || loadingMore) return;
     const myGeneration = loadGenerationRef.current;
+    const cursorUsed = nextCursor;
     setLoadingMore(true);
     try {
-      const res = await getBlockedUsers(nextCursor);
-      if (myGeneration !== loadGenerationRef.current) return;
+      const res = await getBlockedUsers(cursorUsed);
+      if (myGeneration !== loadGenerationRef.current || nextCursorRef.current !== cursorUsed) return;
       setItems((prev) => [...(prev ?? []), ...res.items]);
       setNextCursor(res.nextCursor);
+      nextCursorRef.current = res.nextCursor;
     } catch {
       // Best-effort, matching ProfileScreenBody's own onPostsEndReached posture.
     } finally {

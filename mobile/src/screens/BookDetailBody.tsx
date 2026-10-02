@@ -59,7 +59,9 @@ export function BookDetailBody({ username, slug }: { username: string; slug: str
       style={styles.screen}
       contentContainerStyle={[styles.content, maxWidth ? { maxWidth, alignSelf: "center", width: "100%" } : null]}
     >
-      {book.coverImageUrl ? <Image source={{ uri: book.coverImageUrl }} style={styles.cover} contentFit="cover" alt="Cover photo" /> : null}
+      {book.coverImageUrl ? (
+        <Image source={{ uri: book.coverImageUrl }} style={styles.cover} contentFit="cover" transition={150} alt="Cover photo" />
+      ) : null}
 
       <Text style={styles.title}>{book.title}</Text>
       <Text style={styles.meta}>
