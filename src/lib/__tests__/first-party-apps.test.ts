@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { db } from "@/lib/db";
-import { ensureFirstPartyApps, isFirstPartyOwner } from "@/lib/first-party-apps";
+import { ensureFirstPartyApps, getFirstPartyClientIds, isFirstPartyOwner } from "@/lib/first-party-apps";
+import { generateClientCredentials } from "@/lib/developer-apps";
 import { resolveApprovableScopes } from "@/lib/oauth";
 import { createUser } from "@/test/factories";
 
@@ -69,5 +70,50 @@ describe("first-party app OAuth scope backfill", () => {
     await ensureFirstPartyApps();
     const stillBroken = await resolveApprovableScopes(thirdParty.id, JSON.stringify(["profile:write"]));
     expect("error" in stillBroken && stillBroken.error).toMatch(/isn't approved to request/);
+  });
+
+  // Regression coverage for the live "This app isn't approved to request:
+  // <every scope>" incident: DeveloperApp has no unique constraint on
+  // (ownerUserId, name), so two instances racing ensureFirstPartyApps' old
+  // findFirst-then-create on a cold boot could each create their own "0dot
+  // Android App" row — one with approved scopes, one a scope-less orphan —
+  // and getFirstPartyClientIds' name->clientId Map could then hand the
+  // orphan's client_id to the mobile app.
+  it("merges a race-created duplicate first-party app into the one with approved scopes", async () => {
+    await ensureFirstPartyApps();
+    const primary = await db.developerApp.findFirstOrThrow({ where: { name: "0dot Android App" } });
+
+    // Simulate the second instance's racing create(): same owner, same
+    // name, but never backfilled — exactly what the race leaves behind.
+    const { clientId: orphanClientId, clientSecretHash } = await generateClientCredentials();
+    const orphan = await db.developerApp.create({
+      data: {
+        ownerType: "user",
+        ownerUserId: primary.ownerUserId,
+        name: "0dot Android App",
+        description: primary.description,
+        clientId: orphanClientId,
+        clientSecretHash,
+        isPublicClient: true,
+        redirectUrisJson: primary.redirectUrisJson,
+      },
+    });
+
+    // Before self-healing: the orphan has zero approved scopes, so a
+    // client_id response pointed at it would hit the live bug.
+    const brokenViaOrphan = await resolveApprovableScopes(orphan.id, JSON.stringify(["profile:read"]));
+    expect("error" in brokenViaOrphan && brokenViaOrphan.error).toMatch(/isn't approved to request/);
+
+    const clientIds = await getFirstPartyClientIds();
+    expect(clientIds.android).toBe(primary.clientId);
+    expect(clientIds.android).not.toBe(orphanClientId);
+
+    // The orphan must be gone, not just ignored — ensureFirstPartyApps needs
+    // to stay a no-op on every subsequent boot, not re-merge the same
+    // leftover row forever.
+    await expect(db.developerApp.findUnique({ where: { id: orphan.id } })).resolves.toBeNull();
+    const remaining = await db.developerApp.findMany({ where: { ownerUserId: primary.ownerUserId, name: "0dot Android App" } });
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]?.id).toBe(primary.id);
   });
 });

@@ -74,10 +74,43 @@ export async function ensureFirstPartyApps(): Promise<void> {
 
   const appIds: string[] = [];
   for (const spec of FIRST_PARTY_APPS) {
-    const existing = await db.developerApp.findFirst({ where: { ownerUserId: platformUser.id, name: spec.name } });
+    // findMany, not findFirst: DeveloperApp has no unique constraint on
+    // (ownerUserId, name) (clientId is the only @unique column), so two
+    // instances racing this find-then-create on a cold Vercel scale-from-zero
+    // can each see no row and each `create()` their own — a second,
+    // orphaned "0dot Android App" row with its own clientId and zero
+    // DeveloperAppScope rows. getFirstPartyClientIds' name->clientId Map is
+    // then one bad write away from handing that empty-scopes orphan's
+    // clientId to the mobile app instead of the one this function actually
+    // backfilled scopes for, which is what "This app isn't approved to
+    // request: <every scope>" actually was — not a stale scope catalog.
+    const matches = await db.developerApp.findMany({
+      where: { ownerUserId: platformUser.id, name: spec.name },
+      orderBy: { createdAt: "asc" },
+    });
+
+    let primary = matches[0];
+    if (matches.length > 1) {
+      // Prefer whichever duplicate already has approved scopes — that's the
+      // one any already-issued client_id response may have pointed at —
+      // falling back to the oldest row if none do yet.
+      const approvedCounts = await db.developerAppScope.groupBy({
+        by: ["appId"],
+        where: { appId: { in: matches.map((m) => m.id) }, status: "approved" },
+        _count: { appId: true },
+      });
+      const approvedCountByAppId = new Map(approvedCounts.map((c) => [c.appId, c._count.appId]));
+      primary = [...matches].sort((a, b) => {
+        const byApprovedScopes = (approvedCountByAppId.get(b.id) ?? 0) - (approvedCountByAppId.get(a.id) ?? 0);
+        return byApprovedScopes !== 0 ? byApprovedScopes : a.createdAt.getTime() - b.createdAt.getTime();
+      })[0];
+      for (const dup of matches) {
+        if (dup.id !== primary.id) await mergeDuplicateFirstPartyApp(primary.id, dup.id);
+      }
+    }
 
     let appId: string;
-    if (existing) {
+    if (primary) {
       // Self-healing for rows created before isPublicClient existed, or with
       // the invalid "0dot-*" scheme (see FIRST_PARTY_APPS' comment above) —
       // same "runs on every server start, patches forward" idiom the rest of
@@ -85,12 +118,12 @@ export async function ensureFirstPartyApps(): Promise<void> {
       // backfill.
       const wantRedirectUris = JSON.stringify(spec.redirectUris);
       const patch: { isPublicClient?: true; redirectUrisJson?: string } = {};
-      if (!existing.isPublicClient) patch.isPublicClient = true;
-      if (existing.redirectUrisJson !== wantRedirectUris) patch.redirectUrisJson = wantRedirectUris;
+      if (!primary.isPublicClient) patch.isPublicClient = true;
+      if (primary.redirectUrisJson !== wantRedirectUris) patch.redirectUrisJson = wantRedirectUris;
       if (Object.keys(patch).length > 0) {
-        await db.developerApp.update({ where: { id: existing.id }, data: patch });
+        await db.developerApp.update({ where: { id: primary.id }, data: patch });
       }
-      appId = existing.id;
+      appId = primary.id;
     } else {
       const { clientId, clientSecretHash } = await generateClientCredentials();
       const app = await db.developerApp.create({
@@ -159,6 +192,58 @@ function isUniqueConstraintError(err: unknown): boolean {
   return typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === "P2002";
 }
 
+// Folds a race-created duplicate DeveloperApp row into the primary one and
+// removes it. In practice a duplicate first-party row is a pure orphan —
+// resolveApprovableScopes fails every authorize request closed before a
+// user could ever grant it access, since it has zero DeveloperAppScope rows
+// — but this merges rather than assumes that, in case some other process
+// (a webhook registration, a usage counter tick) attached to it in the
+// window before this ran.
+async function mergeDuplicateFirstPartyApp(primaryId: string, duplicateId: string): Promise<void> {
+  await db.oAuthAuthorizationCode.updateMany({ where: { appId: duplicateId }, data: { appId: primaryId } });
+  await db.webhookSubscription.updateMany({ where: { appId: duplicateId }, data: { appId: primaryId } });
+  await db.marketplaceListing.updateMany({ where: { developerAppId: duplicateId }, data: { developerAppId: primaryId } });
+
+  // appId+userId is @@unique on OAuthAuthorization — move what doesn't
+  // collide; where the primary already has a grant for that user, keep
+  // "active" over "revoked" rather than leave the duplicate's row to be
+  // silently cascade-deleted below.
+  const duplicateAuthorizations = await db.oAuthAuthorization.findMany({ where: { appId: duplicateId } });
+  for (const authorization of duplicateAuthorizations) {
+    try {
+      await db.oAuthAuthorization.update({ where: { id: authorization.id }, data: { appId: primaryId } });
+    } catch (err) {
+      if (!isUniqueConstraintError(err)) throw err;
+      if (authorization.status === "active") {
+        await db.oAuthAuthorization.updateMany({
+          where: { appId: primaryId, userId: authorization.userId },
+          data: { status: "active", grantedScopesJson: authorization.grantedScopesJson, revokedAt: null },
+        });
+      }
+    }
+  }
+
+  // appId+windowStart is @@unique on ApiUsageCounter — sum request counts
+  // into the primary's window rather than lose them.
+  const duplicateCounters = await db.apiUsageCounter.findMany({ where: { appId: duplicateId } });
+  for (const counter of duplicateCounters) {
+    const existing = await db.apiUsageCounter.findUnique({
+      where: { appId_windowStart: { appId: primaryId, windowStart: counter.windowStart } },
+    });
+    if (existing) {
+      await db.apiUsageCounter.update({ where: { id: existing.id }, data: { requestCount: existing.requestCount + counter.requestCount } });
+    } else {
+      await db.apiUsageCounter.update({ where: { id: counter.id }, data: { appId: primaryId } });
+    }
+  }
+
+  // DeveloperAppScope cascade-deletes with the row below — nothing to carry
+  // forward, since a duplicate only ever ends up with approved scopes if
+  // it was the one ensureFirstPartyApps' caller resolved as primary, which
+  // by construction is never the id passed in here as duplicateId.
+  await db.developerApp.delete({ where: { id: duplicateId } });
+}
+
 // phase-15 build plan step 3: client_id is generated randomly per
 // environment (generateClientCredentials, developer-apps.ts) rather than a
 // fixed constant a compiled app could hardcode — a mobile build needs a way
@@ -181,7 +266,15 @@ export async function getFirstPartyClientIds(): Promise<Record<FirstPartyPlatfor
   // too — ensureFirstPartyApps is the same idempotent call register()
   // already makes, just invoked lazily here as a fallback instead of only
   // trusted to have already succeeded.
-  if (FIRST_PARTY_APPS.some((spec) => !apps.some((a) => a.name === spec.name))) {
+  // Also re-runs when a name appears more than once, not only when one is
+  // missing — a race-created duplicate (see ensureFirstPartyApps) means the
+  // name IS present, just twice, and the Map below would otherwise pick
+  // whichever row happens to sort last with no guarantee it's the one that
+  // actually has approved scopes.
+  const names = apps.map((a) => a.name);
+  const hasMissingApp = FIRST_PARTY_APPS.some((spec) => !names.includes(spec.name));
+  const hasDuplicateApp = new Set(names).size !== names.length;
+  if (hasMissingApp || hasDuplicateApp) {
     await ensureFirstPartyApps();
     apps = await db.developerApp.findMany({ where: { ownerUserId: platformUser.id }, select: { name: true, clientId: true } });
   }
