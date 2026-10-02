@@ -57,7 +57,18 @@ export function ComposeBox({
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  useResetOnSuccess(formRef, pending, state, () => setFiles([]));
+  // Collapsed-until-focused (live-site QA pass, 2026-10-02): the fully expanded
+  // box — post-as select, 3-row textarea, visibility select, full action row —
+  // pushed the first real post below the fold on every /feed visit, even for a
+  // reader who never intends to post. Starts collapsed to a single-line prompt;
+  // expands on focus and stays expanded through the edit (never collapses back
+  // under someone mid-draft) until a successful post resets it, same
+  // falling-edge-of-pending signal useResetOnSuccess already uses for `files`.
+  const [expanded, setExpanded] = useState(false);
+  useResetOnSuccess(formRef, pending, state, () => {
+    setFiles([]);
+    setExpanded(false);
+  });
   // Derived during render, not via setState-in-effect (react-hooks/set-state-in-effect)
   // — the effect below only handles revoking the previous URLs, not computing state.
   const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files]);
@@ -93,6 +104,11 @@ export function ComposeBox({
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
+  // Anything that means there's real in-progress work (an attachment, an error
+  // to show, a submit in flight) forces the full chrome open even if `expanded`
+  // itself hasn't been set yet.
+  const showExpanded = expanded || files.length > 0 || pending || uploading || Boolean(uploadError) || Boolean(state?.error);
+
   return (
     <form
       ref={formRef}
@@ -125,7 +141,7 @@ export function ComposeBox({
       style={{ maxWidth: "none", marginBottom: "1.5rem" }}
     >
       {communityId && <input type="hidden" name="communityId" value={communityId} />}
-      {!communityId && postableBusinesses && postableBusinesses.length > 0 && (
+      {showExpanded && !communityId && postableBusinesses && postableBusinesses.length > 0 && (
         <select name="businessId" defaultValue="" className="textInput" style={{ marginBottom: "0.5rem" }} aria-label="Post as">
           <option value="">Post as myself</option>
           {postableBusinesses.map((b) => (
@@ -135,7 +151,7 @@ export function ComposeBox({
           ))}
         </select>
       )}
-      {communityId && flairs && flairs.length > 0 && (
+      {showExpanded && communityId && flairs && flairs.length > 0 && (
         <select name="flairId" defaultValue="" className="textInput" style={{ marginBottom: "0.5rem" }}>
           <option value="">No flair</option>
           {flairs.map((f) => (
@@ -150,11 +166,12 @@ export function ComposeBox({
         name="body"
         placeholder="What's happening?"
         maxLength={500}
-        rows={3}
+        rows={showExpanded ? 3 : 1}
         className="textInput"
+        onFocus={() => setExpanded(true)}
       />
 
-      {ownTiers && ownTiers.length > 0 && (
+      {showExpanded && ownTiers && ownTiers.length > 0 && (
         <select name="requiredTierId" defaultValue="" className="textInput" style={{ marginTop: "0.5rem" }}>
           <option value="">Visible to everyone</option>
           {ownTiers.map((t) => (
@@ -197,6 +214,7 @@ export function ComposeBox({
 
       {(uploadError || state?.error) && <p className="errorText">{uploadError ?? state?.error}</p>}
 
+      {showExpanded && (
       <div
         style={{
           display: "flex",
@@ -270,6 +288,7 @@ export function ComposeBox({
           {uploading ? "Uploading…" : pending ? "Posting…" : "Post"}
         </button>
       </div>
+      )}
     </form>
   );
 }

@@ -1842,6 +1842,13 @@ input[type="file"].textInput::-webkit-file-upload-button:hover {
 .searchFieldWrap .textInput {
   width: 100%;
   padding-left: 2.5rem;
+  padding-right: 2.75rem;
+}
+
+@media (pointer: coarse) {
+  .searchFieldWrap .textInput {
+    padding-right: 0.85rem;
+  }
 }
 
 .searchFieldIcon {
@@ -1852,6 +1859,28 @@ input[type="file"].textInput::-webkit-file-upload-button:hover {
   color: var(--foreground);
   opacity: 0.4;
   pointer-events: none;
+}
+
+/* ⌘K hint (CommandPalette.tsx discoverability — previously only visible on
+   the settings page's SettingsSearchTrigger). Touch devices get no benefit
+   from a keyboard-shortcut hint and have no spare width for it next to the
+   search icon, same "@media (pointer: coarse)" gate this file already uses
+   for other keyboard-only affordances. */
+.searchFieldKbdHint {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .searchFieldKbdHint {
+    display: none;
+  }
 }
 
 /* SearchBox.tsx swaps the static icon for this one while a debounced
@@ -2631,6 +2660,13 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .toast {
+  /* .toastStack is pointer-events:none so it never blocks clicks on the page
+     behind it — opt back in here so a toast's own action button (below) is
+     actually clickable. */
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border-radius: 10px;
   background: var(--surface);
@@ -2638,6 +2674,21 @@ input[type="time"]::-webkit-calendar-picker-indicator:hover {
   box-shadow: var(--shadow-md);
   font-size: var(--text-sm);
   font-weight: 500;
+}
+
+.toastAction {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.toastAction:hover {
+  color: var(--accent-strong);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -3321,6 +3372,10 @@ a.verifiedBadge:focus-visible {
 .profileMetaItem strong {
   font-weight: 700;
   color: var(--foreground);
+  /* Follower/following counts can change in place (Follow/Unfollow) without
+     a page reload — tabular figures keep digit width constant so the
+     surrounding layout doesn't shift when the count does. */
+  font-variant-numeric: tabular-nums;
 }
 
 a.profileMetaItem:hover {
@@ -3978,6 +4033,10 @@ a.profileMetaItem:hover {
   font: inherit;
   font-size: var(--text-xs-plus);
   font-weight: 600;
+  /* The like count updates optimistically in place (LikeButton.tsx's
+     useOptimistic) — tabular figures stop the digit changing width and
+     nudging the row's other actions sideways. */
+  font-variant-numeric: tabular-nums;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);

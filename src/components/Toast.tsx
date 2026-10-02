@@ -2,9 +2,11 @@
 
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 
-type Toast = { id: number; message: string };
+type ToastAction = { label: string; onClick: () => void };
+type Toast = { id: number; message: string; action?: ToastAction };
+type ShowToast = (message: string, action?: ToastAction) => void;
 
-const ToastContext = createContext<((message: string) => void) | null>(null);
+const ToastContext = createContext<ShowToast | null>(null);
 
 // Lightweight non-blocking feedback, complementing the existing
 // revalidatePath-driven full-rerender pattern (COMPONENT_LIBRARY.md:
@@ -15,9 +17,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(0);
 
-  const showToast = useCallback((message: string) => {
+  const showToast = useCallback<ShowToast>((message, action) => {
     const id = nextId.current++;
-    setToasts((current) => [...current, { id, message }]);
+    setToasts((current) => [...current, { id, message, action }]);
     setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
     }, 4000);
@@ -32,7 +34,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="toastStack" role="status" aria-live="polite">
         {toasts.map((toast) => (
           <div key={toast.id} className="toast">
-            {toast.message}
+            <span>{toast.message}</span>
+            {toast.action && (
+              <button
+                type="button"
+                className="toastAction"
+                onClick={() => {
+                  toast.action!.onClick();
+                  setToasts((current) => current.filter((t) => t.id !== toast.id));
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>

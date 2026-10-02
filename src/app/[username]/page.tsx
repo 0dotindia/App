@@ -30,7 +30,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { followUser, unfollowUser } from "@/app/actions/follow";
+import { FollowButton } from "@/components/FollowButton";
 import { blockUser, unblockUser } from "@/app/actions/block";
 import { ReportButton } from "@/components/ReportButton";
 import { isBlocked } from "@/lib/blocks";
@@ -312,12 +312,21 @@ export default async function ProfilePage({
   return (
     <div
       className="profileCard"
+      // "default" is a no-op passthrough (theme-presets.ts: accent values are
+      // literally the strings "var(--accent)" etc.) — emitting it as an inline
+      // style here would set e.g. "--accent: var(--accent)" on this element, a
+      // self-referential custom-property cycle that resolves to the CSS
+      // guaranteed-invalid value and breaks every .button-class descendant
+      // (Follow button, active profile tab) that reads var(--accent) for its
+      // background. Only real presets need the override.
       style={
-        {
-          "--accent": theme.accent,
-          "--accent-strong": theme.accentStrong,
-          "--accent-soft": theme.accentSoft,
-        } as CSSProperties
+        theme.key === "default"
+          ? undefined
+          : ({
+              "--accent": theme.accent,
+              "--accent-strong": theme.accentStrong,
+              "--accent-soft": theme.accentSoft,
+            } as CSSProperties)
       }
     >
       <div className="profileCover">
@@ -386,17 +395,7 @@ export default async function ProfilePage({
                 )}
                 {showViewerControls && (
                   <>
-                    <form action={isFollowing || isFollowRequestPending ? unfollowUser : followUser}>
-                      <input type="hidden" name="followeeId" value={username.userId} />
-                      <button
-                        type="submit"
-                        className={`button${isFollowing || isFollowRequestPending ? " buttonSecondary" : ""}`}
-                        aria-pressed={isFollowing}
-                        title={isFollowRequestPending ? "Cancel follow request" : undefined}
-                      >
-                        {isFollowing ? "Following" : isFollowRequestPending ? "Requested" : "Follow"}
-                      </button>
-                    </form>
+                    <FollowButton userId={username.userId} isFollowing={isFollowing} isFollowRequestPending={isFollowRequestPending} />
                     {/* Reachable regardless of follow state — this is the
                         entry point for phase-2 spec §5.2's "message
                         request" path (a DM to someone who doesn't follow

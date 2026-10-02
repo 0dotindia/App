@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { BadgeCheck } from "lucide-react";
-import { followUser, unfollowUser } from "@/app/actions/follow";
 import { Avatar } from "@/components/Avatar";
+import { FollowButton } from "@/components/FollowButton";
 
 // Shared row for any "list of users" surface (followers, following,
-// suggested users) — avatar/name/handle + an inline follow toggle, same
-// <form action={...}> pattern as PostCard's like button, no client JS.
+// suggested users) — avatar/name/handle + an inline follow toggle
+// (FollowButton.tsx, the one small client island this row needs).
 export function UserListItem({
   userId,
   handle,
@@ -65,13 +65,31 @@ export function UserListItem({
         <span style={{ minWidth: 0, overflow: "hidden" }}>
           <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
             <span
-              style={{
-                fontWeight: 600,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                minWidth: 0,
-              }}
+              style={
+                compact
+                  ? {
+                      // Compact rail contexts (D10) already shrink the avatar,
+                      // drop the badge, and shrink the Follow button — but a
+                      // non-shrinking Follow button still leaves too little
+                      // width for a single nowrap line with a normal-length
+                      // name ("Pooja Kulkarni" was clipping to "Pooja
+                      // Kulkar…"). Wrap to 2 lines instead of truncating to 1.
+                      fontWeight: 600,
+                      minWidth: 0,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      whiteSpace: "normal",
+                    }
+                  : {
+                      fontWeight: 600,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      minWidth: 0,
+                    }
+              }
             >
               {displayName}
             </span>
@@ -108,18 +126,13 @@ export function UserListItem({
       </Link>
       {trailing ??
         (showFollowButton && !isSelf && (
-          <form action={isFollowing || isFollowRequestPending ? unfollowUser : followUser}>
-            <input type="hidden" name="followeeId" value={userId} />
-            <button
-              type="submit"
-              className={`button${isFollowing || isFollowRequestPending ? " buttonSecondary" : ""}${compact ? " buttonSmall" : ""}`}
-              aria-pressed={isFollowing || isFollowRequestPending}
-              title={isFollowRequestPending ? "Cancel follow request" : undefined}
-              style={compact ? { flexShrink: 0 } : { padding: "0.4rem 0.85rem", fontSize: "0.85rem", flexShrink: 0 }}
-            >
-              {isFollowing ? "Following" : isFollowRequestPending ? "Requested" : "Follow"}
-            </button>
-          </form>
+          <FollowButton
+            userId={userId}
+            isFollowing={isFollowing}
+            isFollowRequestPending={isFollowRequestPending}
+            compact={compact}
+            style={compact ? { flexShrink: 0 } : { padding: "0.4rem 0.85rem", fontSize: "0.85rem", flexShrink: 0 }}
+          />
         ))}
     </div>
   );

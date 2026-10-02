@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import {
   BadgeCheck,
   Bookmark,
@@ -30,6 +29,7 @@ import { RepostButton } from "@/components/RepostButton";
 import { PollBlock } from "@/components/PollBlock";
 import { Avatar } from "@/components/Avatar";
 import { RelativeTime } from "@/components/RelativeTime";
+import { PostMediaGrid } from "@/components/PostMediaGrid";
 
 // Redesign Phase 1b: the avatar column for a post row. Resolves to the
 // business logo + business route when the post is attributed to a business
@@ -243,44 +243,6 @@ function PostBody({ body }: { body: string }) {
           {linkifyPostBody(rest)}
         </details>
       )}
-    </div>
-  );
-}
-
-// `priority`: only ever true for the very first image of the very first
-// post in a list (each caller passes it just for index === 0) — Lighthouse
-// confirmed live on 0dot.in/feed that this exact image is the page's LCP
-// element (largest-contentful-paint scored 0.26/1 — the single biggest
-// weighted metric in the Performance category), and a plain <img
-// loading="lazy"> actively deferred it despite already being above the
-// fold. next/image with `fill` (blob storage is already in next.config.ts's
-// images.remotePatterns) gets it a same-domain optimized/responsive
-// source, correct `loading`/`fetchPriority`, and no separate img-src
-// allowlist entry needed. `fill` needs a sized, positioned ancestor —
-// .postMediaItem already is one (fixed aspect-ratio, width:100%), moved
-// from the <img> itself to this wrapper.
-function PostMediaGrid({ media, authorName, priority = false }: { media: MediaItem[]; authorName: string; priority?: boolean }) {
-  if (media.length === 0) return null;
-  const columns = media.length === 1 ? 1 : 2;
-  return (
-    <div className="postMediaGrid" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
-      {media.map((item, index) => (
-        // No per-image caption exists in the data model yet (MediaItem is
-        // just {id, url}) — this generic description is meaningfully better
-        // than empty alt="" (which claims the image is decorative, when
-        // it's the actual content someone is looking at) without a data
-        // model change to add real author-authored captions.
-        <div key={item.id} className="postMediaItem" style={{ position: "relative" }}>
-          <Image
-            src={item.url}
-            alt={`Image ${index + 1} posted by ${authorName}`}
-            fill
-            sizes={columns === 1 ? "(max-width: 640px) 100vw, 640px" : "(max-width: 640px) 50vw, 320px"}
-            style={{ objectFit: "cover" }}
-            priority={priority && index === 0}
-          />
-        </div>
-      ))}
     </div>
   );
 }

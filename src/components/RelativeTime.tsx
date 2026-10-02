@@ -55,7 +55,7 @@ export function RelativeTime({
   }, [iso, withTime]);
 
   return (
-    <time dateTime={iso} className={className} suppressHydrationWarning>
+    <time dateTime={iso} className={className} title={text ? new Date(iso).toLocaleString() : undefined} suppressHydrationWarning>
       {text}
     </time>
   );

@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { Search, LoaderCircle, BadgeCheck } from "lucide-react";
+import { useKeyboardShortcuts } from "@/components/KeyboardShortcutProvider";
 
 const DEBOUNCE_MS = 300;
 
@@ -25,6 +26,11 @@ const EMPTY_SUGGESTIONS: Suggestions = { users: [], posts: [] };
 // submission as the fallback and the actual results page unchanged.
 export function SearchForm() {
   const listboxId = useId();
+  // CommandPalette's ⌘/Ctrl K jump-to-anywhere had no on-screen affordance
+  // outside the settings page (SettingsSearchTrigger.tsx) — the header
+  // search bar is the one surface present on every signed-in page, so the
+  // same <kbd className="kbd"> hint goes here too.
+  const { openPalette } = useKeyboardShortcuts();
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestions>(EMPTY_SUGGESTIONS);
   const [isOpen, setIsOpen] = useState(false);
@@ -121,6 +127,9 @@ export function SearchForm() {
             aria-controls={listboxId}
             aria-haspopup="listbox"
           />
+          <button type="button" className="searchFieldKbdHint" onClick={openPalette} aria-label="Open command palette">
+            <kbd className="kbd">⌘K</kbd>
+          </button>
         </div>
       </form>
 
