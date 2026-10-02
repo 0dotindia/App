@@ -1,5 +1,5 @@
+import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
-import { withSentryConfig } from "@sentry/nextjs";
 
 // Browser source maps are emitted ONLY when the Sentry build hook will
 // upload and then delete them (see `deleteSourcemapsAfterUpload` below,
@@ -132,24 +132,39 @@ const nextConfig: NextConfig = {
 // src/instrumentation-client.ts (Sentry.init called directly), not by this
 // wrapper.
 export default withSentryConfig(nextConfig, {
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  authToken: process.env.SENTRY_AUTH_TOKEN,
+  // For all available options, see:
+  // https://www.npmjs.com/package/@sentry/webpack-plugin#options
+
+  org: "dotindia",
+
+  project: "0dot",
+
+  // Only print logs for uploading source maps in CI
   silent: !process.env.CI,
-  sourcemaps: {
-    disable: !process.env.SENTRY_AUTH_TOKEN,
-    // productionBrowserSourceMaps above means Next now actually emits
-    // .js.map files (needed for Sentry's Turbopack upload step to find
-    // them at all — see that flag's comment). Without this, those maps
-    // would ship to every visitor, publicly exposing full source. Sentry's
-    // own runAfterProductionCompile hook uploads them first, then strips
-    // the maps and their `sourceMappingURL` comments from the shipped
-    // output — so production stays clean while Sentry still gets full
-    // stack-trace symbolication.
-    deleteSourcemapsAfterUpload: true,
+
+  // For all available options, see:
+  // https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/
+
+  // Upload a larger set of source maps for prettier stack traces (increases build time)
+  widenClientFileUpload: true,
+
+  // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
+  // This can increase your server load as well as your hosting bill.
+  // Note: Check that the configured route will not match with your Next.js middleware, otherwise reporting of client-
+  // side errors will fail.
+  tunnelRoute: "/monitoring",
+
+  webpack: {
+    // Enables automatic instrumentation of Vercel Cron Monitors. (Does not yet work with App Router route handlers.)
+    // See the following for more information:
+    // https://docs.sentry.io/product/crons/
+    // https://vercel.com/docs/cron-jobs
+    automaticVercelMonitors: true,
+
+    // Tree-shaking options for reducing bundle size
+    treeshake: {
+      // Automatically tree-shake Sentry logger statements to reduce bundle size
+      removeDebugLogging: true,
+    },
   },
-  // Sentry's own tunnelRoute is injected by its webpack plugin, which this
-  // Turbopack build never runs. The tunnel is hand-written instead at
-  // src/app/api/monitoring/route.ts (client SDK points at it via `tunnel`).
-  tunnelRoute: undefined,
 });

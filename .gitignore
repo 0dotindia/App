@@ -69,3 +69,6 @@ next-env.d.ts
 
 # local HTTPS dev certificates (mkcert) — never commit
 /certificates/
+
+# Sentry Config File
+.env.sentry-build-plugin
