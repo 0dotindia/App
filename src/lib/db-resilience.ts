@@ -43,12 +43,36 @@ function releaseSlot(): void {
   waitQueue.shift()?.();
 }
 
+// Connection-level failures below Turso's own HTTP layer — undici's fetch
+// throws a generic `TypeError: fetch failed` wrapping one of these as
+// `.cause`, so unlike SERVER_ERROR above there's no libsql error code to
+// check, only the underlying socket error's own `code`. Seen in production
+// runtime logs (connect ETIMEDOUT, "other side closed" / UND_ERR_SOCKET,
+// write ETIMEDOUT) as a week-long pattern of startup tasks like
+// ensureFirstPartyApps (first-party-apps.ts) failing outright on a transient
+// network blip to Turso's ap-south-1 endpoint — previously left unretried,
+// which for a fire-and-forget boot task meant the failure stuck until the
+// next cold start, rather than just slowing one request down.
+const TRANSIENT_NETWORK_ERROR_CODES = new Set([
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "EPIPE",
+  "EAI_AGAIN",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CONNECT_TIMEOUT",
+]);
+
 export function isTransientLibsqlError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const code = (error as { code?: string }).code;
   if (code === "SERVER_ERROR" || code === "HRANA_WEBSOCKET_ERROR" || code === "HRANA_CLOSED_ERROR") return true;
+  if (code && TRANSIENT_NETWORK_ERROR_CODES.has(code)) return true;
   const cause = (error as { cause?: unknown }).cause;
-  const status = cause && typeof cause === "object" ? (cause as { status?: number }).status : undefined;
+  if (!cause || typeof cause !== "object") return false;
+  const causeCode = (cause as { code?: string }).code;
+  if (causeCode && TRANSIENT_NETWORK_ERROR_CODES.has(causeCode)) return true;
+  const status = (cause as { status?: number }).status;
   return typeof status === "number" && status >= 500;
 }
 

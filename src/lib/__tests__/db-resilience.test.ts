@@ -28,6 +28,29 @@ describe("isTransientLibsqlError", () => {
   it("rejects non-Error values", () => {
     expect(isTransientLibsqlError("nope")).toBe(false);
   });
+
+  // Production shape: undici's fetch throws a generic TypeError wrapping the
+  // real socket error as .cause — no libsql error code to key off, unlike
+  // SERVER_ERROR above.
+  function fetchFailed(causeCode: string, causeMessage = causeCode) {
+    const cause = new Error(causeMessage) as Error & { code: string };
+    cause.code = causeCode;
+    const err = new TypeError("fetch failed") as TypeError & { cause: Error };
+    err.cause = cause;
+    return err;
+  }
+
+  it("recognizes a connect ETIMEDOUT wrapped in a fetch failed TypeError", () => {
+    expect(isTransientLibsqlError(fetchFailed("ETIMEDOUT", "connect ETIMEDOUT 13.207.22.218:443"))).toBe(true);
+  });
+
+  it("recognizes a socket reset (UND_ERR_SOCKET) wrapped in a fetch failed TypeError", () => {
+    expect(isTransientLibsqlError(fetchFailed("UND_ERR_SOCKET", "other side closed"))).toBe(true);
+  });
+
+  it("rejects a fetch failed TypeError whose cause isn't a known transient network code", () => {
+    expect(isTransientLibsqlError(fetchFailed("ERR_INVALID_URL"))).toBe(false);
+  });
 });
 
 describe("runWithDbResilience", () => {
